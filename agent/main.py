@@ -1,15 +1,15 @@
 """
 Alpha-Consumer Agent - Main Entry Point
-Uses Google Gemini API for AI intelligence and Crypto.com SDK for blockchain operations
+Uses Crypto.com AI Agent SDK with Google Gemini API for AI intelligence
+and Crypto.com Developer Platform for blockchain operations
 """
 
 import os
 import sys
 import time
 from dotenv import load_dotenv
-from crypto_com_agent_client import Agent
+from crypto_com_agent_client import Agent, SQLitePlugin, tool
 from tools import access_paid_api, check_market_conditions
-from wallet_manager import WalletManager
 
 # Load environment variables
 load_dotenv()
@@ -21,72 +21,75 @@ class AlphaConsumerAgent:
         # Validate environment variables
         self._validate_env()
         
-        # Gemini LLM Configuration
+        # LLM Configuration (Google Gemini)
         self.llm_config = {
             "provider": "GoogleGenAI",
-            "model": "gemini-1.5-flash",  # Fast, free-tier eligible
+            "model": "gemini-2.5-flash",  # Fast, free-tier eligible
             "provider-api-key": os.getenv("GEMINI_API_KEY"),
             "temperature": 0.0,  # Deterministic for financial decisions
-            "max_tokens": 8192,
         }
         
-        # Blockchain Configuration (Cronos Testnet)
+        # Blockchain Configuration (Cronos Testnet via Crypto.com Developer Platform)
         self.blockchain_config = {
-            "chain_id": int(os.getenv("CHAIN_ID", "338")),
-            "rpc_url": os.getenv("CRONOS_RPC_URL"),
-            "private_key": os.getenv("WALLET_PRIVATE_KEY"),
+            "api-key": os.getenv("CRYPTO_COM_API_KEY"),
+            "private-key": os.getenv("WALLET_PRIVATE_KEY"),
         }
-        
-        # Initialize wallet manager
-        self.wallet = WalletManager(
-            private_key=os.getenv("WALLET_PRIVATE_KEY"),
-            rpc_url=os.getenv("CRONOS_RPC_URL")
-        )
         
         print("🔧 Initializing Alpha-Consumer Agent...")
-        print(f"💰 Wallet Address: {self.wallet.address}")
-        print(f"🌐 Network: Cronos Testnet (Chain ID: {self.blockchain_config['chain_id']})")
+        print(f"🌐 Network: Cronos EVM")
         
-        # Check wallet balance
-        self._check_wallet_balance()
+        # Initialize storage for agent state persistence
+        custom_storage = SQLitePlugin(db_path="agent_state.db")
         
-        # Initialize the agent with custom tools
-        try:
-            self.agent = Agent.init(
-                llm_config=self.llm_config,
-                blockchain_config=self.blockchain_config
-            )
-            print("✅ Agent initialized successfully!")
-        except Exception as e:
-            print(f"❌ Failed to initialize agent: {e}")
-            sys.exit(1)
-            
-        # System prompt for the agent
-        self.system_prompt = """
+        # Agent personality and instructions
+        personality = {
+            "tone": "helpful and professional",
+            "language": "English",
+            "verbosity": "concise",
+        }
+        
+        instructions = """
 You are the Alpha-Consumer Agent, an autonomous AI agent specialized in:
 1. Discovering premium APIs and data sources
 2. Automatically handling payment negotiations (HTTP 402 errors)
 3. Making economic decisions based on market conditions
-4. Managing blockchain transactions using EIP-3009
+4. Managing blockchain transactions
 
 When you encounter a URL that requires payment:
 1. Use the access_paid_api tool to handle the payment automatically
-2. The tool will detect 402 errors, sign payment messages, and retry
+2. The tool will detect 402 errors and manage payment signing
 
 When making investment decisions:
 1. Check current market conditions first
 2. Evaluate if the premium data is worth the cost
 3. Only proceed with payment if conditions are favorable
 
-Always be transparent about costs and ask for confirmation on large purchases.
+Always be transparent about costs and confirm before making transactions.
 """
+        
+        # Initialize the agent with Crypto.com AI Agent SDK
+        try:
+            self.agent = Agent.init(
+                llm_config=self.llm_config,
+                blockchain_config=self.blockchain_config,
+                plugins={
+                    "personality": personality,
+                    "instructions": instructions,
+                    "tools": [access_paid_api, check_market_conditions],
+                    "storage": custom_storage,
+                },
+            )
+            print("✅ Agent initialized successfully!")
+        except Exception as e:
+            print(f"❌ Failed to initialize agent: {e}")
+            sys.exit(1)
     
     def _validate_env(self):
         """Validate required environment variables"""
         required_vars = [
             "GEMINI_API_KEY",
             "WALLET_PRIVATE_KEY",
-            "CRONOS_RPC_URL",
+            "CRYPTO_COM_API_KEY",
         ]
         
         missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -98,22 +101,6 @@ Always be transparent about costs and ask for confirmation on large purchases.
             print("\n💡 Please copy .env.example to .env and fill in your credentials")
             sys.exit(1)
     
-    def _check_wallet_balance(self):
-        """Check wallet balances for TCRO and USDC"""
-        print("\n💰 Checking wallet balances...")
-        
-        tcro_balance = self.wallet.get_tcro_balance()
-        usdc_balance = self.wallet.get_usdc_balance()
-        
-        print(f"   TCRO: {tcro_balance:.4f}")
-        print(f"   USDC: {usdc_balance:.2f}")
-        
-        if tcro_balance < 0.1:
-            print("⚠️  Low TCRO balance! Get more from: https://cronos.org/faucet")
-        
-        if usdc_balance < 1:
-            print("⚠️  Low USDC balance! You may not be able to pay for premium APIs")
-    
     def run_interactive(self):
         """Run the agent in interactive mode"""
         print("\n" + "="*60)
@@ -121,7 +108,6 @@ Always be transparent about costs and ask for confirmation on large purchases.
         print("="*60)
         print("\nCommands:")
         print("  - Type your request naturally")
-        print("  - 'balance' - Check wallet balance")
         print("  - 'market' - Check market conditions")
         print("  - 'exit' or 'quit' - Exit the agent")
         print("\nExample requests:")
@@ -142,16 +128,12 @@ Always be transparent about costs and ask for confirmation on large purchases.
                     break
                     
                 # Handle special commands
-                if user_input.lower() == "balance":
-                    self._check_wallet_balance()
-                    continue
-                    
                 if user_input.lower() == "market":
                     conditions = check_market_conditions()
                     print(f"\n📊 Market Conditions: {conditions}")
                     continue
                 
-                # Process with Gemini
+                # Process with Agent
                 print("\n🤖 Agent: ", end="", flush=True)
                 response = self._process_request(user_input)
                 print(response)
@@ -169,12 +151,8 @@ Always be transparent about costs and ask for confirmation on large purchases.
     def _process_request(self, user_input: str):
         """Process user request with the agent"""
         try:
-            # Combine system prompt with user input
-            full_prompt = f"{self.system_prompt}\n\nUser Request: {user_input}"
-            
-            # Run the agent
-            response = self.agent.run(full_prompt)
-            
+            # Use agent.interact() method from Crypto.com AI Agent SDK
+            response = self.agent.interact(user_input)
             return response
             
         except Exception as e:
