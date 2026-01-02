@@ -7,25 +7,29 @@ import os
 import json
 import time
 import requests
+from eth_account import Account
+from eth_account.messages import encode_typed_data
+from web3 import Web3
 from crypto_com_agent_client import tool
 
 
 @tool
 def access_paid_api(url: str):
     """
-    Accesses a URL that may require payment via HTTP 402 protocol.
+    Accesses a URL that may require payment via HTTP 402 protocol with x402 standard.
     
-    This tool automatically handles the HTTP 402 payment flow:
-    1. Makes initial request to the URL
-    2. If 402 Payment Required is returned, extracts payment instructions
-    3. Coordinates with Crypto.com Developer Platform for payment
-    4. Retries the request with the payment proof
+    This tool automatically handles the x402 payment flow:
+    1. Makes initial request to the URL (GET)
+    2. If 402 Payment Required is returned with instruction, extracts payment invoice
+    3. Signs EIP-712 TransferWithAuthorization message using agent wallet
+    4. Submits payment signature to payment endpoint (POST)
+    5. Returns protected data on successful verification
     
     Use this tool whenever you need to access premium APIs or data sources
     that may require payment.
     
     Args:
-        url: The URL to access (e.g., http://localhost:3000/buy-alpha)
+        url: The URL to access (e.g., http://localhost:3050/alpha/insight/CRO)
     
     Returns:
         dict or str: The response data if successful, error message otherwise
@@ -33,10 +37,10 @@ def access_paid_api(url: str):
     print(f"\n🔍 Attempting to access: {url}")
     
     try:
-        # 1. Initial Request
+        # 1. Initial Request (probe for invoice)
         response = requests.get(url, timeout=10)
         
-        # 2. Success Case
+        # 2. Success Case (no payment needed)
         if response.status_code == 200:
             print("✅ Access granted without payment!")
             try:
@@ -46,63 +50,203 @@ def access_paid_api(url: str):
         
         # 3. Handle Payment Request (HTTP 402)
         if response.status_code == 402:
-            print("💳 Payment Required (HTTP 402) - Processing payment...")
+            print("💳 Payment Required (HTTP 402) - Processing x402 payment...")
             
             try:
                 payment_data = response.json()
                 
                 if 'instruction' not in payment_data:
-                    return "Error: Invalid 402 response - missing payment instructions"
+                    return "Error: Invalid 402 response - missing payment instruction"
                 
                 instruction = payment_data['instruction']
                 
+                # Validate instruction has required fields
+                required = ['token', 'recipient', 'amount', 'eip712Domain', 'eip712Types', 'validAfter', 'validBefore']
+                missing = [f for f in required if f not in instruction]
+                if missing:
+                    return f"Error: Incomplete payment instruction (missing: {', '.join(missing)})"
+                
                 # Extract payment details
-                token_address = instruction.get('token')
-                recipient = instruction.get('recipient')
-                amount = instruction.get('amount')
+                token_address = instruction['token']
+                recipient = instruction['recipient']
+                amount_raw = str(instruction['amount'])
+                amount_readable = instruction.get('amountReadable', float(amount_raw) / 1e6)
+                valid_after = instruction['validAfter']
+                valid_before = instruction['validBefore']
                 
-                if not all([token_address, recipient, amount]):
-                    return "Error: Incomplete payment instructions"
-                
-                # Display payment details
-                amount_in_usdc = int(amount) / 1_000_000  # Assuming 6 decimals for USDC
-                
-                print(f"\n💰 Payment Details:")
+                print(f"\n💰 Payment Invoice:")
                 print(f"   Token: {token_address}")
                 print(f"   Recipient: {recipient}")
-                print(f"   Amount: {amount_in_usdc:.2f} USDC")
+                print(f"   Amount: {amount_readable} {instruction.get('tokenSymbol', 'USDC')}")
+                print(f"   Valid: {valid_after} → {valid_before}")
                 
-                # The Crypto.com AI Agent SDK will handle the payment signing
-                # through the blockchain_config credentials
-                print(f"\n🔐 Coordinating payment through Crypto.com Developer Platform...")
+                # Load wallet for signing
+                private_key = os.getenv("WALLET_PRIVATE_KEY")
+                if not private_key:
+                    return "Error: WALLET_PRIVATE_KEY not set in environment"
                 
-                # In production, the SDK would handle this automatically
-                # For now, we'll return a status message
-                print(f"✅ Payment coordination initiated")
+                account = Account.from_key(private_key)
+                payer_address = account.address
                 
-                # Retry with payment confirmation
-                headers = {
-                    "X-Payment-Status": "processing",
-                    "Content-Type": "application/json"
+                print(f"\n🔐 Signing with wallet: {payer_address}")
+                
+                # Generate unique nonce for this payment
+                nonce = '0x' + os.urandom(32).hex()
+                
+                # Build EIP-712 TypedData for TransferWithAuthorization
+                typed_data = {
+                    "domain": instruction['eip712Domain'],
+                    "types": instruction['eip712Types'],
+                    "primaryType": "TransferWithAuthorization",
+                    "message": {
+                        "from": payer_address,
+                        "to": recipient,
+                        "value": amount_raw,
+                        "validAfter": valid_after,
+                        "validBefore": valid_before,
+                        "nonce": nonce
+                    }
                 }
                 
-                retry_response = requests.get(url, headers=headers, timeout=10)
+                # Sign the typed data
+                encoded = encode_typed_data(full_message=typed_data)
+                signed = account.sign_message(encoded)
+                signature = signed.signature.hex()
                 
-                if retry_response.status_code == 200:
+                # Ensure signature has 0x prefix for ethers.js compatibility
+                if not signature.startswith('0x'):
+                    signature = '0x' + signature
+                
+                print(f"   ✅ Signature generated: {signature[:20]}...")
+                
+                # Execute on-chain transaction using transferWithAuthorization
+                print(f"\n💰 Executing on-chain payment...")
+                tx_hash = None
+                try:
+                    # Load Web3 and connect to Cronos
+                    rpc_url = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+                    w3 = Web3(Web3.HTTPProvider(rpc_url))
+                    
+                    if not w3.is_connected():
+                        print(f"   ⚠️  Could not connect to RPC, skipping on-chain tx")
+                    else:
+                        # Load USDC ABI
+                        abi_path = os.path.join(os.path.dirname(__file__), 'usdc_abi.json')
+                        with open(abi_path, 'r') as f:
+                            usdc_abi = json.load(f)
+                        
+                        # Get USDC contract
+                        usdc_contract = w3.eth.contract(
+                            address=w3.to_checksum_address(token_address),
+                            abi=usdc_abi
+                        )
+                        
+                        # Split signature into r, s, v components
+                        sig_bytes = bytes.fromhex(signature[2:])  # Remove 0x
+                        r = sig_bytes[:32]
+                        s = sig_bytes[32:64]
+                        v = sig_bytes[64]
+                        
+                        # Convert v to proper format (27 or 28)
+                        # eth_account already returns the correct v value
+                        v_int = int(v)
+                        
+                        # Call transferWithAuthorization on-chain
+                        print(f"   📡 Submitting to blockchain...")
+                        print(f"      From: {payer_address}")
+                        print(f"      To: {recipient}")
+                        print(f"      Amount: {amount_readable}")
+                        
+                        tx = usdc_contract.functions.transferWithAuthorization(
+                            w3.to_checksum_address(payer_address),  # from
+                            w3.to_checksum_address(recipient),      # to
+                            int(amount_raw),                        # value
+                            valid_after,                            # validAfter
+                            valid_before,                           # validBefore
+                            nonce if isinstance(nonce, bytes) else bytes.fromhex(nonce[2:] if nonce.startswith('0x') else nonce),  # nonce as bytes32
+                            v_int,                                  # v as uint8
+                            r,                                      # r as bytes32
+                            s                                       # s as bytes32
+                        ).build_transaction({
+                            'from': w3.to_checksum_address(payer_address),
+                            'gas': 200000,
+                            'gasPrice': w3.eth.gas_price,
+                            'nonce': w3.eth.get_transaction_count(w3.to_checksum_address(payer_address))
+                        })
+                        
+                        # Sign and send transaction
+                        signed_tx = account.sign_transaction(tx)
+                        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+                        tx_hash_hex = tx_hash.hex()
+                        
+                        print(f"   ✅ Transaction submitted: {tx_hash_hex}")
+                        print(f"   ⏳ Waiting for confirmation...")
+                        
+                        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+                        
+                        if receipt['status'] == 1:
+                            print(f"   ✅ Payment confirmed on-chain!")
+                            print(f"      Block: {receipt['blockNumber']}")
+                            print(f"      Gas used: {receipt['gasUsed']}")
+                        else:
+                            print(f"   ❌ Transaction failed on-chain")
+                            # Try to get revert reason
+                            try:
+                                failed_tx = w3.eth.get_transaction(tx_hash)
+                                w3.eth.call(failed_tx, block_identifier=receipt['blockNumber']-1)
+                            except Exception as revert_err:
+                                print(f"      Revert reason: {str(revert_err)}")
+                            print(f"   ℹ️  Continuing with off-chain verification...")
+                            tx_hash = None  # Don't return error, continue with off-chain
+                        
+                except Exception as tx_error:
+                    print(f"   ⚠️  On-chain execution failed: {str(tx_error)}")
+                    print(f"   ℹ️  Continuing with off-chain verification...")
+                
+                # Determine payment endpoint (try POST to same URL + /payment suffix first)
+                payment_url = url.rstrip('/') + '/payment'
+                
+                print(f"\n📤 Submitting payment proof to: {payment_url}")
+                
+                # Submit payment with signature and typedData
+                payment_payload = {
+                    "signature": signature,
+                    "typedData": typed_data
+                }
+                
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Payment": signature
+                }
+                
+                payment_response = requests.post(
+                    payment_url,
+                    json=payment_payload,
+                    headers=headers,
+                    timeout=10
+                )
+                
+                if payment_response.status_code == 200:
                     print("✅ Payment accepted! Access granted.")
                     try:
-                        result = retry_response.json()
-                        print(f"\n📦 Received data successfully")
+                        result = payment_response.json()
+                        print(f"\n📦 Received protected data successfully")
                         return result
                     except:
-                        return retry_response.text
+                        return payment_response.text
                 else:
-                    return f"Error: Could not complete payment. Status: {retry_response.status_code}"
+                    error_detail = ""
+                    try:
+                        error_detail = payment_response.json()
+                    except:
+                        error_detail = payment_response.text
+                    
+                    return f"Error: Payment rejected. Status: {payment_response.status_code}, Details: {error_detail}"
                 
             except json.JSONDecodeError:
                 return "Error: Invalid JSON in 402 response"
             except Exception as e:
-                return f"Error processing payment: {str(e)}"
+                return f"Error processing x402 payment: {str(e)}"
         
         # 4. Other Status Codes
         return f"Error: Received HTTP {response.status_code}: {response.text}"

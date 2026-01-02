@@ -24,7 +24,7 @@ class AlphaConsumerAgent:
         # LLM Configuration (Google Gemini)
         self.llm_config = {
             "provider": "GoogleGenAI",
-            "model": "gemini-2.5-flash",  # Fast, free-tier eligible
+            "model": "gemini-3-flash",  # Fast, free-tier eligible
             "provider-api-key": os.getenv("GEMINI_API_KEY"),
             "temperature": 0.0,  # Deterministic for financial decisions
         }
