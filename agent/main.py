@@ -22,9 +22,10 @@ class AlphaConsumerAgent:
         self._validate_env()
         
         # LLM Configuration (Google Gemini)
+        # Gemini model: use a supported model ID (v1beta list).
         self.llm_config = {
             "provider": "GoogleGenAI",
-            "model": "gemini-3-flash",  # Fast, free-tier eligible
+            "model": "gemini-2.5-flash-lite",  # Lightweight model with available quota
             "provider-api-key": os.getenv("GEMINI_API_KEY"),
             "temperature": 0.0,  # Deterministic for financial decisions
         }
