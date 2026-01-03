@@ -1,6 +1,12 @@
 [profile.default]
-solc = "0.6.6"
+solc = "0.8.19"
+optimizer = true
 optimizer_runs = 999999
+via_ir = true
 
 [rpc_endpoints]
 cronos_testnet = "https://evm-t3.cronos.org"
+testnet = "https://evm-t3.cronos.org"
+
+[networks.testnet]
+key = "WALLET_PRIVATE_KEY"

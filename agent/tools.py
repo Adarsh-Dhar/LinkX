@@ -29,10 +29,10 @@ from crypto_com_agent_client import tool
 # ===================================
 CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
 TRADING_SIGNALS_URL = os.getenv("TRADING_SIGNALS_URL", "http://localhost:3050")
-USDC_CONTRACT = os.getenv("USDC_CONTRACT", "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0")
-VVS_CONTRACT = os.getenv("VVS_CONTRACT", "0x5f307095E713b3eF9D0f49e4f8b0b98A7b5b8fF0")
-VVS_ROUTER = os.getenv("VVS_ROUTER", "0x145677FC4d9b8F19B4172A2b88f7fb1f02fdf220")
-WCRO_ADDRESS = os.getenv("WCRO_ADDRESS", "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23")
+USDC_CONTRACT = os.getenv("USDC_CONTRACT", "0x908059CF02cbb643Bc96C55e14Fb3699e632479f")
+VVS_CONTRACT = os.getenv("VVS_CONTRACT", "0xea59AC2CcEfe907e7F77B502e2C87aC929832bfF")
+VVS_ROUTER = os.getenv("VVS_ROUTER", "0x3bc8a2c283751Adf1E3FAc823B6Cb0056f9f86C8")
+WCRO_ADDRESS = os.getenv("WCRO_ADDRESS", "0x9005E37cDfc4361491996aD7d546fC15AC9aAD9A")
 
 # Token symbol to address mapping
 TOKEN_MAP = {
@@ -640,10 +640,11 @@ def estimate_swap_output(token_in: str, token_out: str, amount_in: float, chain:
                             print(f"   ⚠️  Mainnet price fetch failed: {e}")
                 
                 # Fallback to estimated rates if mainnet lookup fails
-                print(f"   ℹ️  Using estimated mainnet rates")
+                print(f"   ℹ️  Using hardcoded testnet rates (Mock DEX)")
+                # HARDCODED RATES FROM MOCK DEX: 1 USDC = 55 VVS
                 estimated_rates = {
-                    ("usdc", "vvs"): 502402.85,   # Real mainnet approximate rates
-                    ("vvs", "usdc"): 1/502402.85,
+                    ("usdc", "vvs"): 55.0,   # Mock DEX hardcoded rate
+                    ("vvs", "usdc"): 1/55.0,
                     ("cro", "usdc"): 0.12,
                     ("usdc", "cro"): 8.33,
                     ("wcro", "usdc"): 0.15,
@@ -723,7 +724,7 @@ def estimate_swap_output(token_in: str, token_out: str, amount_in: float, chain:
 
 
 @tool
-def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0, chain: str = "cronos_mainnet"):
+def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0, chain: str = "cronos_testnet"):
     """
     Executes a token swap on VVS Finance (Uniswap V2 fork).
     Automatically handles token approval if required.
@@ -769,7 +770,7 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         
         print(f"   👤 Wallet: {my_address}")
         
-        # Load Router Address from .env
+        # Load Router Address from .env (testnet mock router)
         ROUTER_ADDRESS = Web3.to_checksum_address(VVS_ROUTER)
         WCRO_ADDRESS_LOCAL = Web3.to_checksum_address(WCRO_ADDRESS)
         
@@ -785,11 +786,19 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
             
             if allowance < amount_in_wei:
                 print(f"   🔐 Approving Router to spend tokens...")
+                try:
+                    gas_price = w3.eth.gas_price
+                except:
+                    gas_price = w3.to_wei(5, 'gwei')  # Fallback gas price
+                try:
+                    nonce = w3.eth.get_transaction_count(my_address)
+                except:
+                    nonce = 0
                 approve_tx = token_contract.functions.approve(ROUTER_ADDRESS, 2**256 - 1).build_transaction({
                     'from': my_address,
-                    'nonce': w3.eth.get_transaction_count(my_address),
+                    'nonce': nonce,
                     'gas': 100000,
-                    'gasPrice': w3.eth.gas_price
+                    'gasPrice': gas_price
                 })
                 signed_app = w3.eth.account.sign_transaction(approve_tx, private_key)
                 tx_hash = w3.eth.send_raw_transaction(signed_app.raw_transaction)
@@ -806,19 +815,12 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         else:
             amount_in_wei = w3.to_wei(amount_in, 'ether')
 
-        # 3. Estimate output and get slippage-protected minimum
+        # 3. Estimate output and get slippage-protected minimum (hardcoded rate)
         router = w3.eth.contract(address=ROUTER_ADDRESS, abi=ROUTER_ABI)
         
-        # Determine path
-        if token_in_addr.lower() == "cro":
-            path = [WCRO_ADDRESS_LOCAL, token_out_addr]
-            path_display = ["WCRO", token_out[:10]]
-        elif token_out_addr.lower() == "cro":
-            path = [token_in_addr, WCRO_ADDRESS_LOCAL]
-            path_display = [token_in[:10], "WCRO"]
-        else:
-            path = [token_in_addr, token_out_addr]
-            path_display = [token_in[:10], token_out[:10]]
+        # Determine path (mock router supports direct pairs)
+        path = [token_in_addr, token_out_addr]
+        path_display = [token_in[:10], token_out[:10]]
         
         # Get amounts out
         amounts = router.functions.getAmountsOut(amount_in_wei, path).call()
@@ -838,115 +840,68 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         print(f"   💹 Expected: {amount_out_expected:.6f}")
         print(f"   🛡️  Minimum ({max_slippage}% slippage): {amount_out_min:.6f}")
         
-        # 4. Execute Swap
-        # Check if testnet - if so, use mock transaction
-        is_testnet = w3.eth.chain_id == 338
+        # 4. Execute Swap on TESTNET (real tx against mock router)
+        deadline = int(time.time()) + 900  # 15 minute deadline
         
-        if is_testnet:
-            # TESTNET MODE: Mock transaction with real mainnet pricing
-            print(f"   🎭 TESTNET MODE - Simulating swap with real mainnet prices")
-            
-            # Generate a realistic mock transaction hash
-            import hashlib
-            mock_tx_input = f"{my_address}{amount_in}{token_in}{token_out}{time.time()}"
-            mock_hash = hashlib.sha256(mock_tx_input.encode()).hexdigest()
-            tx_hash_hex = "0x" + mock_hash[:64]
-            
-            # Simulate gas cost (typical VVS swap: ~100k-150k gas)
-            estimated_gas = 120000
-            gas_price_gwei = w3.eth.gas_price / (10**9)
-            gas_cost = (estimated_gas * gas_price_gwei) / 1e9  # Convert to CRO
-            
-            print(f"   ✅ Mock swap simulated!")
-            print(f"      Hash: {tx_hash_hex[:30]}...")
-            print(f"      ✅ Swap confirmed (mock)")
-            print(f"      Block: 123456789 (simulated)")
-            print(f"      Gas cost: {gas_cost:.6f} CRO (estimated)")
-            
-            return {
-                "status": "success_mock",
-                "mode": "testnet_mock_with_mainnet_pricing",
-                "tx_hash": tx_hash_hex,
-                "block_number": 123456789,
-                "amount_in": amount_in,
-                "amount_out_expected": amount_out_expected,
-                "amount_out_minimum": amount_out_min,
-                "gas_cost_cro": gas_cost,
-                "path": path_display,
-                "note": "Mock transaction with real mainnet pricing - switch to mainnet for real execution",
-                "explorer": f"https://cronoscan.com/tx/{tx_hash_hex}"
-            }
+        print(f"   🚀 Sending swap transaction on Cronos Testnet...")
         
-        # MAINNET MODE: Real transaction execution
-        deadline = int(time.time()) + 300  # 5 minute deadline
+        # Get current gas price with fallback
+        try:
+            gas_price = w3.eth.gas_price
+        except:
+            gas_price = w3.to_wei(5, 'gwei')  # Fallback gas price on testnet
         
-        print(f"   🚀 Sending real swap transaction to mainnet...")
+        # Get nonce with fallback
+        try:
+            nonce = w3.eth.get_transaction_count(my_address)
+        except:
+            nonce = 0  # Fallback nonce
         
         # Determine swap function based on inputs/outputs
-        if token_in_addr.lower() == "cro":
-            # swapExactETHForTokens
-            swap_tx = router.functions.swapExactETHForTokens(
-                amount_out_min_wei,
-                path,
-                my_address,
-                deadline
-            ).build_transaction({
-                'from': my_address,
-                'value': amount_in_wei,
-                'gas': 300000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(my_address)
-            })
-        elif token_out_addr.lower() == "cro":
-            # swapExactTokensForETH
-            swap_tx = router.functions.swapExactTokensForETH(
-                amount_in_wei,
-                amount_out_min_wei,
-                path,
-                my_address,
-                deadline
-            ).build_transaction({
-                'from': my_address,
-                'gas': 300000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(my_address)
-            })
-        else:
-            # swapExactTokensForTokens
-            swap_tx = router.functions.swapExactTokensForTokens(
-                amount_in_wei,
-                amount_out_min_wei,
-                path,
-                my_address,
-                deadline
-            ).build_transaction({
-                'from': my_address,
-                'gas': 300000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(my_address)
-            })
+        # For mock router, we only support tokens (no native CRO paths); use swapExactTokensForTokens
+        swap_tx = router.functions.swapExactTokensForTokens(
+            amount_in_wei,
+            amount_out_min_wei,
+            path,
+            my_address,
+            deadline
+        ).build_transaction({
+            'from': my_address,
+            'gas': 300000,
+            'gasPrice': gas_price,
+            'nonce': nonce
+        })
 
         # Sign and broadcast
-        signed_swap = w3.eth.account.sign_transaction(swap_tx, private_key)
-        tx_hash = w3.eth.send_raw_transaction(signed_swap.raw_transaction)
-        tx_hash_hex = tx_hash.hex()
+        try:
+            signed_swap = w3.eth.account.sign_transaction(swap_tx, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed_swap.raw_transaction)
+            tx_hash_hex = tx_hash.hex()
+            
+            print(f"   ✅ Swap submitted!")
+            print(f"      Hash: {tx_hash_hex[:30]}...")
+            print(f"      ⏳ Waiting for confirmation...")
+            
+            # Wait for confirmation
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+        except Exception as e:
+            import traceback
+            print(f"   ❌ Transaction error: {str(e)}")
+            traceback.print_exc()
+            return {"error": f"Transaction failed: {str(e)}"}
         
-        print(f"   ✅ Swap submitted!")
-        print(f"      Hash: {tx_hash_hex[:30]}...")
-        print(f"      ⏳ Waiting for confirmation...")
-        
-        # Wait for confirmation
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
         
         if receipt['status'] == 1:
-            gas_cost = receipt['gasUsed'] * receipt['gasPrice'] / (10 ** 18)
+            # Calculate gas cost using the transaction's gasPrice, not receipt
+            tx_info = w3.eth.get_transaction(tx_hash)
+            gas_cost = receipt['gasUsed'] * tx_info['gasPrice'] / (10 ** 18)
             print(f"   ✅ Swap confirmed!")
             print(f"      Block: {receipt['blockNumber']}")
             print(f"      Gas cost: {gas_cost:.6f} CRO")
             
             return {
                 "status": "success",
-                "mode": "mainnet_real",
+                "mode": "cronos_testnet_mock_router",
                 "tx_hash": tx_hash_hex,
                 "block_number": receipt['blockNumber'],
                 "amount_in": amount_in,
@@ -954,14 +909,16 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
                 "amount_out_minimum": amount_out_min,
                 "gas_cost_cro": gas_cost,
                 "path": path_display,
-                "explorer": f"https://cronoscan.com/tx/{tx_hash_hex}"
+                "explorer": f"https://testnet.cronoscan.com/tx/{tx_hash_hex}"
             }
         else:
             return {"error": "Swap transaction failed on-chain", "tx_hash": tx_hash_hex}
         
     except Exception as e:
+        import traceback
         error_msg = str(e)
         print(f"   ❌ Error: {error_msg}")
+        traceback.print_exc()
         return {"error": error_msg}
 
 
