@@ -9,6 +9,5 @@ google-generativeai>=0.3.0
 # Web3 dependencies (for wallet and blockchain interaction)
 web3>=7.0.0
 eth-account>=0.13.0
-# Optional: For enhanced features
-# colorama==0.4.6  # Colored terminal output
-# rich==13.7.0     # Rich terminal formatting
+eth-keys>=0.5.0
+eth-typing>=3.0.0
