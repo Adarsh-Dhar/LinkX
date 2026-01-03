@@ -1,0 +1,6 @@
+[profile.default]
+solc = "0.6.6"
+optimizer_runs = 999999
+
+[rpc_endpoints]
+cronos_testnet = "https://evm-t3.cronos.org"

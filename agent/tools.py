@@ -67,6 +67,16 @@ ROUTER_ABI = [
     {
         "inputs": [
             {"internalType": "uint256", "name": "amountIn", "type": "uint256"},
+            {"internalType": "address[]", "name": "path", "type": "address[]"}
+        ],
+        "name": "getAmountsOut",
+        "outputs": [{"internalType": "uint256[]", "name": "amounts", "type": "uint256[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "amountIn", "type": "uint256"},
             {"internalType": "uint256", "name": "amountOutMin", "type": "uint256"},
             {"internalType": "address[]", "name": "path", "type": "address[]"},
             {"internalType": "address", "name": "to", "type": "address"},
@@ -572,6 +582,95 @@ def estimate_swap_output(token_in: str, token_out: str, amount_in: float, chain:
         if not w3.is_connected():
             return {"error": "Could not connect to RPC"}
         
+        # Check if on testnet without VVS contracts
+        is_testnet = w3.eth.chain_id == 338
+        
+        if is_testnet:
+            # Fetch real mainnet pricing for testnet (mock transaction)
+            print(f"   ℹ️  Running on testnet - fetching real mainnet pricing")
+            
+            try:
+                # Connect to mainnet to get real prices
+                mainnet_rpc = "https://rpc.cronos.org"
+                mainnet_w3 = Web3(Web3.HTTPProvider(mainnet_rpc))
+                
+                if mainnet_w3.is_connected():
+                    # Try to get real mainnet pricing
+                    mainnet_router = mainnet_w3.eth.contract(
+                        address=Web3.to_checksum_address("0x145677FC4d9b8F19B4172A2b88f7fb1f02fdf220"),
+                        abi=ROUTER_ABI
+                    )
+                    
+                    # Standard token addresses on mainnet
+                    mainnet_token_map = {
+                        "usdc": "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                        "vvs": "0x2D03bECE6747ADC00E1a131BBA1469C15fD11e03",
+                        "wcro": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+                    }
+                    
+                    token_in_addr = mainnet_token_map.get(token_in.lower(), token_in)
+                    token_out_addr = mainnet_token_map.get(token_out.lower(), token_out)
+                    
+                    if token_in_addr and token_out_addr:
+                        try:
+                            # Get real mainnet pricing via router
+                            amounts_out = mainnet_router.functions.getAmountsOut(
+                                int(amount_in * 10**6),  # USDC has 6 decimals
+                                [Web3.to_checksum_address(token_in_addr), 
+                                 Web3.to_checksum_address(token_out_addr)]
+                            ).call()
+                            
+                            amount_out_wei = amounts_out[-1]
+                            # Most tokens have 18 decimals
+                            amount_out_readable = amount_out_wei / (10**18)
+                            rate = amount_out_readable / amount_in
+                            
+                            result = {
+                                "amount_in": amount_in,
+                                "amount_out_estimated": amount_out_readable,
+                                "amount_out_min_with_slippage": amount_out_readable * 0.99,
+                                "fee_percent": 0.3,
+                                "exchange_rate": rate,
+                                "note": "Real mainnet pricing (mock transaction - testnet)"
+                            }
+                            
+                            print(f"   ✅ Real mainnet price: {amount_out_readable:.2f}")
+                            return result
+                        except Exception as e:
+                            print(f"   ⚠️  Mainnet price fetch failed: {e}")
+                
+                # Fallback to estimated rates if mainnet lookup fails
+                print(f"   ℹ️  Using estimated mainnet rates")
+                estimated_rates = {
+                    ("usdc", "vvs"): 502402.85,   # Real mainnet approximate rates
+                    ("vvs", "usdc"): 1/502402.85,
+                    ("cro", "usdc"): 0.12,
+                    ("usdc", "cro"): 8.33,
+                    ("wcro", "usdc"): 0.15,
+                    ("usdc", "wcro"): 6.67,
+                }
+                
+                key = (token_in.lower(), token_out.lower())
+                rate = estimated_rates.get(key, 1.0)
+                amount_out_readable = amount_in * rate
+                
+                result = {
+                    "amount_in": amount_in,
+                    "amount_out_estimated": amount_out_readable,
+                    "amount_out_min_with_slippage": amount_out_readable * 0.99,
+                    "fee_percent": 0.3,
+                    "exchange_rate": rate,
+                    "note": "Estimated mainnet pricing (mock transaction - testnet)"
+                }
+                
+                print(f"   ✅ Estimated mainnet price: {amount_out_readable:.2f}")
+                return result
+                
+            except Exception as e:
+                print(f"   ❌ Pricing error: {e}")
+                return {"error": f"Could not estimate price: {e}"}
+        
+        # Real mainnet swap estimation
         router = w3.eth.contract(address=Web3.to_checksum_address(VVS_ROUTER), abi=ROUTER_ABI)
         
         # Get token decimals
@@ -740,9 +839,48 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         print(f"   🛡️  Minimum ({max_slippage}% slippage): {amount_out_min:.6f}")
         
         # 4. Execute Swap
+        # Check if testnet - if so, use mock transaction
+        is_testnet = w3.eth.chain_id == 338
+        
+        if is_testnet:
+            # TESTNET MODE: Mock transaction with real mainnet pricing
+            print(f"   🎭 TESTNET MODE - Simulating swap with real mainnet prices")
+            
+            # Generate a realistic mock transaction hash
+            import hashlib
+            mock_tx_input = f"{my_address}{amount_in}{token_in}{token_out}{time.time()}"
+            mock_hash = hashlib.sha256(mock_tx_input.encode()).hexdigest()
+            tx_hash_hex = "0x" + mock_hash[:64]
+            
+            # Simulate gas cost (typical VVS swap: ~100k-150k gas)
+            estimated_gas = 120000
+            gas_price_gwei = w3.eth.gas_price / (10**9)
+            gas_cost = (estimated_gas * gas_price_gwei) / 1e9  # Convert to CRO
+            
+            print(f"   ✅ Mock swap simulated!")
+            print(f"      Hash: {tx_hash_hex[:30]}...")
+            print(f"      ✅ Swap confirmed (mock)")
+            print(f"      Block: 123456789 (simulated)")
+            print(f"      Gas cost: {gas_cost:.6f} CRO (estimated)")
+            
+            return {
+                "status": "success_mock",
+                "mode": "testnet_mock_with_mainnet_pricing",
+                "tx_hash": tx_hash_hex,
+                "block_number": 123456789,
+                "amount_in": amount_in,
+                "amount_out_expected": amount_out_expected,
+                "amount_out_minimum": amount_out_min,
+                "gas_cost_cro": gas_cost,
+                "path": path_display,
+                "note": "Mock transaction with real mainnet pricing - switch to mainnet for real execution",
+                "explorer": f"https://cronoscan.com/tx/{tx_hash_hex}"
+            }
+        
+        # MAINNET MODE: Real transaction execution
         deadline = int(time.time()) + 300  # 5 minute deadline
         
-        print(f"   🚀 Sending swap transaction...")
+        print(f"   🚀 Sending real swap transaction to mainnet...")
         
         # Determine swap function based on inputs/outputs
         if token_in_addr.lower() == "cro":
@@ -808,6 +946,7 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
             
             return {
                 "status": "success",
+                "mode": "mainnet_real",
                 "tx_hash": tx_hash_hex,
                 "block_number": receipt['blockNumber'],
                 "amount_in": amount_in,
