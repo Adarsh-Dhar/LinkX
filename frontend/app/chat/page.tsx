@@ -109,21 +109,43 @@ export default function ChatPage() {
     }
 
     setMessages((prev) => [...prev, userMsg])
+    const userInput = input
     setInput("")
     setIsLoading(true)
 
-    // Simulate agent thinking time
-    setTimeout(() => {
-      const agentResponse = generateAgentResponse(input)
+    try {
+      // Call the agent API
+      const response = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userInput }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: "agent",
-        content: agentResponse,
+        content: data.response || "No response from agent",
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, agentMsg])
+    } catch (error) {
+      console.error("Error calling agent API:", error)
+      // Fallback to mock response if API fails
+      const agentMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "agent",
+        content: `⚠️ Agent API unavailable. Please ensure the agent is running on port 8000.\n\nTo start the agent:\n  cd agent\n  uvicorn api:app --reload --port 8000\n\nMock response: ${generateAgentResponse(userInput)}`,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, agentMsg])
+    } finally {
       setIsLoading(false)
-    }, 600)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {

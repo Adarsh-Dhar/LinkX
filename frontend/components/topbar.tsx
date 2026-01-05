@@ -1,8 +1,12 @@
 "use client"
 
-import { Zap, Wifi } from "lucide-react"
+import { Zap, Wifi, Wallet } from "lucide-react"
+import { useWallet } from "@/hooks/use-wallet"
 
 export default function TopBar() {
+  const { isConnected, isConnecting, shortAddress, balance, usdcBalance, connect, disconnect } =
+    useWallet()
+
   return (
     <div className="h-16 glass border-b border-border/30 px-6 flex items-center justify-between">
       <div className="flex items-center gap-6">
@@ -21,10 +25,32 @@ export default function TopBar() {
         </div>
       </div>
 
-      <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-accent hover:shadow-lg hover:shadow-primary/30 transition-all text-white font-medium text-sm">
-        <Zap size={16} />
-        Connect: 0x123...abc
-      </button>
+      {isConnected ? (
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">Balance</div>
+            <div className="text-sm font-semibold">
+              {parseFloat(balance || "0").toFixed(2)} CRO • {parseFloat(usdcBalance || "0").toFixed(2)} USDC
+            </div>
+          </div>
+          <button
+            onClick={disconnect}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-accent hover:shadow-lg hover:shadow-primary/30 transition-all text-white font-medium text-sm"
+          >
+            <Wallet size={16} />
+            {shortAddress}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={connect}
+          disabled={isConnecting}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-accent hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 transition-all text-white font-medium text-sm"
+        >
+          <Zap size={16} />
+          {isConnecting ? "Connecting..." : "Connect Wallet"}
+        </button>
+      )}
     </div>
   )
 }

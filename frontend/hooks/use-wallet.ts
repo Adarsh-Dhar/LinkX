@@ -1,0 +1,174 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { ethers } from "ethers"
+
+interface WalletState {
+  address: string | null
+  balance: string | null
+  usdcBalance: string | null
+  isConnected: boolean
+  isConnecting: boolean
+  chainId: number | null
+}
+
+const USDC_ADDRESS = "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59" // Cronos Mainnet
+const CRONOS_MAINNET_CHAIN_ID = 25
+const USDC_ABI = [
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+]
+
+export function useWallet() {
+  const [state, setState] = useState<WalletState>({
+    address: null,
+    balance: null,
+    usdcBalance: null,
+    isConnected: false,
+    isConnecting: false,
+    chainId: null,
+  })
+
+  const connect = async () => {
+    if (typeof window.ethereum === "undefined") {
+      alert("Please install MetaMask to use this feature!")
+      return
+    }
+
+    setState((prev) => ({ ...prev, isConnecting: true }))
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const accounts = await provider.send("eth_requestAccounts", [])
+      const address = accounts[0]
+      const network = await provider.getNetwork()
+      const chainId = Number(network.chainId)
+
+      // Get CRO balance
+      const balance = await provider.getBalance(address)
+      const balanceFormatted = ethers.formatEther(balance)
+
+      // Get USDC balance
+      let usdcBalance = "0"
+      try {
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider)
+        const usdcBalanceRaw = await usdcContract.balanceOf(address)
+        usdcBalance = ethers.formatUnits(usdcBalanceRaw, 6) // USDC has 6 decimals
+      } catch (error) {
+        console.error("Error fetching USDC balance:", error)
+      }
+
+      setState({
+        address,
+        balance: balanceFormatted,
+        usdcBalance,
+        isConnected: true,
+        isConnecting: false,
+        chainId,
+      })
+
+      // Check if on correct network
+      if (chainId !== CRONOS_MAINNET_CHAIN_ID) {
+        console.warn(
+          `Connected to chain ${chainId}. Please switch to Cronos Mainnet (${CRONOS_MAINNET_CHAIN_ID})`
+        )
+      }
+    } catch (error) {
+      console.error("Failed to connect wallet:", error)
+      setState((prev) => ({ ...prev, isConnecting: false }))
+    }
+  }
+
+  const disconnect = () => {
+    setState({
+      address: null,
+      balance: null,
+      usdcBalance: null,
+      isConnected: false,
+      isConnecting: false,
+      chainId: null,
+    })
+  }
+
+  const refreshBalances = async () => {
+    if (!state.address || typeof window.ethereum === "undefined") return
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+
+      // Get CRO balance
+      const balance = await provider.getBalance(state.address)
+      const balanceFormatted = ethers.formatEther(balance)
+
+      // Get USDC balance
+      let usdcBalance = "0"
+      try {
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider)
+        const usdcBalanceRaw = await usdcContract.balanceOf(state.address)
+        usdcBalance = ethers.formatUnits(usdcBalanceRaw, 6)
+      } catch (error) {
+        console.error("Error fetching USDC balance:", error)
+      }
+
+      setState((prev) => ({ ...prev, balance: balanceFormatted, usdcBalance }))
+    } catch (error) {
+      console.error("Failed to refresh balances:", error)
+    }
+  }
+
+  // Listen for account changes
+  useEffect(() => {
+    if (typeof window.ethereum === "undefined") return
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        disconnect()
+      } else if (accounts[0] !== state.address) {
+        // Account changed, reconnect
+        connect()
+      }
+    }
+
+    const handleChainChanged = () => {
+      // Reload the page when chain changes
+      window.location.reload()
+    }
+
+    window.ethereum.on("accountsChanged", handleAccountsChanged)
+    window.ethereum.on("chainChanged", handleChainChanged)
+
+    return () => {
+      window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
+      window.ethereum.removeListener("chainChanged", handleChainChanged)
+    }
+  }, [state.address])
+
+  // Auto-connect if previously connected
+  useEffect(() => {
+    if (typeof window.ethereum === "undefined") return
+
+    const checkConnection = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const accounts = await provider.send("eth_accounts", [])
+        if (accounts.length > 0) {
+          connect()
+        }
+      } catch (error) {
+        console.error("Failed to check connection:", error)
+      }
+    }
+
+    checkConnection()
+  }, [])
+
+  return {
+    ...state,
+    connect,
+    disconnect,
+    refreshBalances,
+    shortAddress: state.address
+      ? `${state.address.slice(0, 6)}...${state.address.slice(-4)}`
+      : null,
+  }
+}
