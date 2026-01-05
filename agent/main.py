@@ -1,273 +1,264 @@
+#!/usr/bin/env python3
 """
-Alpha-Consumer Agent - Main Entry Point
-Uses Crypto.com AI Agent SDK with OpenRouter (OpenAI-compatible) for LLM access
-and Crypto.com Developer Platform for blockchain operations
+Lightweight Trading Agent - No Token Limit Issues
+Direct API calls without heavy SDK overhead
 """
 
 import os
 import sys
-import time
+import io
+import requests
 from dotenv import load_dotenv
-from crypto_com_agent_client import Agent, SQLitePlugin, tool
 from tools import (
-    access_paid_api, 
-    check_market_conditions, 
-    execute_vvs_swap, 
     get_token_balance, 
+    execute_vvs_swap,
     estimate_swap_output,
     get_trading_signals,
-    get_buy_alpha,
-    record_trade,
-    get_trade_history,
     get_portfolio_value
 )
 
-# Load environment variables
 load_dotenv()
 
-class AlphaConsumerAgent:
+
+class LightweightAgent:
     def __init__(self):
-        """Initialize the agent with OpenRouter LLM and blockchain configuration"""
-        
-        # Validate environment variables
-        self._validate_env()
-
-        # Configure OpenRouter (OpenAI-compatible) for LangChain's ChatOpenAI
-        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        openrouter_base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-
-        # LangChain reads OpenAI-compatible environment variables for ChatOpenAI
-        os.environ["OPENAI_API_KEY"] = openrouter_api_key
-        os.environ["OPENAI_API_BASE"] = openrouter_base_url
-        os.environ["OPENAI_BASE_URL"] = openrouter_base_url
-
-        # Optional OpenRouter ranking metadata
-        if os.getenv("OPENROUTER_HTTP_REFERER"):
-            os.environ["HTTP-Referer"] = os.getenv("OPENROUTER_HTTP_REFERER")
-        if os.getenv("OPENROUTER_SITE_NAME"):
-            os.environ["X-Title"] = os.getenv("OPENROUTER_SITE_NAME")
-        
-        # LLM Configuration (OpenRouter over OpenAI-compatible API)
-        # Using openai/gpt-4o-mini instead of free Gemini to avoid rate limiting
-        self.llm_config = {
-            "provider": "OpenAI",
-            "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
-            "provider-api-key": openrouter_api_key,
-            "temperature": 0.0,  # Deterministic for financial decisions
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        self.base_url = "https://openrouter.ai/api/v1"
+        self.model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+        self.max_tokens = int(os.getenv("OPENROUTER_MAX_TOKENS", "150"))
+    
+    def _call_llm(self, messages):
+        """Call OpenRouter LLM with minimal context"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
         
-        # Blockchain Configuration (Cronos Testnet via Crypto.com Developer Platform)
-        self.blockchain_config = {
-            "api-key": os.getenv("CRYPTO_COM_API_KEY"),
-            "private-key": os.getenv("WALLET_PRIVATE_KEY"),
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "temperature": 0.0,
         }
         
-        print("🔧 Initializing Alpha-Consumer Agent...")
-        print(f"🌐 Network: Cronos EVM")
-        print(f"🤖 Model: {self.llm_config['model']}")
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=20
+        )
         
-        # Initialize storage for agent state persistence
-        custom_storage = SQLitePlugin(db_path="agent_state.db")
+        if response.status_code != 200:
+            raise Exception(f"LLM Error {response.status_code}: {response.text}")
         
-        # Agent personality and instructions
-        personality = {
-            "tone": "helpful and professional",
-            "language": "English",
-            "verbosity": "concise",
-        }
+        return response.json()["choices"][0]["message"]["content"]
+    
+    def interact(self, user_input: str):
+        """Process user input with minimal context"""
         
-        instructions = """
-You are the Alpha-Consumer Agent, an autonomous AI agent specialized in:
-1. Discovering premium APIs and data sources
-2. Automatically handling payment negotiations (HTTP 402 errors)
-3. Making economic decisions based on market conditions
-4. Executing token swaps on VVS Finance when receiving BUY signals
-5. Managing blockchain transactions and monitoring portfolio
-6. Tracking trading history and portfolio performance
-
-When you encounter a URL that requires payment:
-1. Use the access_paid_api tool to handle the payment automatically
-2. The tool will detect 402 errors and manage payment signing
-
-When making investment decisions:
-1. Check current market conditions first using check_market_conditions
-2. Get trading signals using get_trading_signals or get_buy_alpha
-3. Evaluate if the premium data is worth the cost
-4. Only proceed with payment if conditions are favorable
-
-When you receive BUY signals (e.g., "BUY VVS", "BUY VVS at market"):
-1. Use get_token_balance to confirm you have sufficient funds
-2. Use estimate_swap_output to preview the trade without executing
-3. Use execute_vvs_swap to execute the trade when confident
-4. Use record_trade to log the trade for tracking
-5. Always report the transaction hash and outcome
-
-For portfolio management:
-1. Use get_portfolio_value to check total portfolio value
-2. Use get_trade_history to review past trades
-3. Use get_trading_signals to find new opportunities
-
-Always be transparent about costs and confirm before making transactions.
-"""
+        user_lower = user_input.lower()
         
-        # Initialize the agent with Crypto.com AI Agent SDK
+        # Suppress tool output for cleaner agent responses
+        old_stdout = sys.stdout
+        
         try:
-            self.agent = Agent.init(
-                llm_config=self.llm_config,
-                blockchain_config=self.blockchain_config,
-                plugins={
-                    "personality": personality,
-                    "instructions": instructions,
-                    "tools": [
-                        access_paid_api, 
-                        check_market_conditions, 
-                        execute_vvs_swap, 
-                        get_token_balance, 
-                        estimate_swap_output,
-                        get_trading_signals,
-                        get_buy_alpha,
-                        record_trade,
-                        get_trade_history,
-                        get_portfolio_value
-                    ],
-                    "storage": custom_storage,
-                },
-            )
-            print("✅ Agent initialized successfully!")
-        except Exception as e:
-            print(f"❌ Failed to initialize agent: {e}")
-            sys.exit(1)
-    
-    def _validate_env(self):
-        """Validate required environment variables"""
-        required_vars = [
-            "OPENROUTER_API_KEY",
-            "WALLET_PRIVATE_KEY",
-            "CRYPTO_COM_API_KEY",
-        ]
-        
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
-        
-        if missing_vars:
-            print("❌ Missing required environment variables:")
-            for var in missing_vars:
-                print(f"   - {var}")
-            print("\n💡 Please copy .env.example to .env and fill in your credentials")
-            sys.exit(1)
-    
-    def run_interactive(self):
-        """Run the agent in interactive mode"""
-        print("\n" + "="*60)
-        print("🤖 Alpha-Consumer Agent Online (Powered by GPT-4o Mini)")
-        print("="*60)
-        print("\nCommands:")
-        print("  - Type your request naturally")
-        print("  - 'market' - Check market conditions")
-        print("  - 'exit' or 'quit' - Exit the agent")
-        print("\nExample requests:")
-        print("  - What are the current trading signals?")
-        print("  - Check for BUY opportunities")
-        print("  - What's my portfolio value?")
-        print("  - Show me my recent trades")
-        print("  - Estimate a 5 USDC to VVS swap")
-        print("  - Execute: Swap 1 USDC for VVS")
-        print("  - Access the alpha endpoint and pay if necessary")
-        print("\n" + "="*60 + "\n")
-        
-        while True:
-            try:
-                user_input = input("\n🧑 You: ").strip()
-                
-                if not user_input:
-                    continue
-                    
-                if user_input.lower() in ["exit", "quit", "q"]:
-                    print("\n👋 Shutting down agent... Goodbye!")
-                    break
-                    
-                # Handle special commands
-                if user_input.lower() == "market":
-                    conditions = check_market_conditions()
-                    print(f"\n📊 Market Conditions: {conditions}")
-                    continue
-                
-                # Process with Agent
-                print("\n🤖 Agent: ", end="", flush=True)
-                response = self._process_request(user_input)
-                print(response)
-                
-                # Rate limiting for free tier
-                time.sleep(1)
-                
-            except KeyboardInterrupt:
-                print("\n\n👋 Shutting down agent... Goodbye!")
-                break
-            except Exception as e:
-                print(f"\n❌ Error: {e}")
-                print("Please try again or type 'exit' to quit.")
-    
-    def _process_request(self, user_input: str):
-        """Process user request with the agent"""
-        try:
-            # Use agent.interact() method from Crypto.com AI Agent SDK
-            response = self.agent.interact(user_input)
-            return response
+            sys.stdout = io.StringIO()
             
+            # Balance queries
+            if "cro" in user_lower and "balance" in user_lower:
+                result = get_token_balance.invoke({"token_address": "cro"})
+                sys.stdout = old_stdout
+                if isinstance(result, dict) and "balance_readable" in result:
+                    return f"CRO Balance: {result['balance_readable']:.6f} CRO"
+                else:
+                    return f"Error: {result}"
+            
+            elif "usdc" in user_lower and "balance" in user_lower:
+                result = get_token_balance.invoke({"token_address": "usdc"})
+                sys.stdout = old_stdout
+                if isinstance(result, dict) and "balance_readable" in result:
+                    return f"USDC Balance: {result['balance_readable']:.6f} USDC"
+                else:
+                    return f"Error: {result}"
+            
+            elif "balance" in user_lower:
+                cro_result = get_token_balance.invoke({"token_address": "cro"})
+                usdc_result = get_token_balance.invoke({"token_address": "usdc"})
+                sys.stdout = old_stdout
+                
+                response = "💰 Wallet Balances:\n"
+                if isinstance(cro_result, dict) and "balance_readable" in cro_result:
+                    response += f"  CRO: {cro_result['balance_readable']:.6f}\n"
+                if isinstance(usdc_result, dict) and "balance_readable" in usdc_result:
+                    response += f"  USDC: {usdc_result['balance_readable']:.6f}\n"
+                
+                return response
+            
+            elif "signal" in user_lower:
+                result = get_trading_signals.invoke({})
+                sys.stdout = old_stdout
+                if isinstance(result, dict):
+                    signals = result.get("signals", [])
+                    count = result.get("count", 0)
+                    
+                    if count > 0 and isinstance(signals, list) and len(signals) > 0:
+                        response = f"📊 Trading Signals ({count} active):\n"
+                        for signal in signals:
+                            response += f"  • {signal}\n"
+                        return response
+                    else:
+                        return "📊 No active trading signals currently. To enable live signals, start the signals server: bash /Users/adarsh/Documents/alpha-consumer/start_signals_server.sh"
+                else:
+                    return str(result)
+            
+            elif "portfolio" in user_lower:
+                result = get_portfolio_value.invoke({})
+                sys.stdout = old_stdout
+                if isinstance(result, dict) and "error" not in result:
+                    total = result.get("total_value_usd", result.get("total_value", 0))
+                    
+                    response = f"📈 Portfolio Value: ${total:.2f}\n"
+                    
+                    for key in ["usdc", "vvs", "cro", "wcro"]:
+                        if key in result:
+                            amount = result[key]
+                            response += f"  {key.upper()}: {amount:.2f}\n"
+                    
+                    return response
+                else:
+                    return f"Error: {result.get('error', 'Unknown error')}"
+            
+            elif "swap" in user_lower or "exchange" in user_lower:
+                parts = user_input.split()
+                
+                amount = None
+                amount_idx = None
+                for i, part in enumerate(parts):
+                    try:
+                        amount = float(part)
+                        amount_idx = i
+                        break
+                    except ValueError:
+                        continue
+                
+                if amount is None or amount_idx is None:
+                    sys.stdout = old_stdout
+                    return "❓ How much would you like to swap? (e.g., 'swap 10 usdc to vvs')"
+                
+                # Find "to" separator
+                to_idx = -1
+                if "to" in parts:
+                    to_idx = parts.index("to")
+                
+                # Extract token_in (should be between amount and "to", or after amount)
+                token_in = None
+                search_start = amount_idx + 1
+                search_end = to_idx if to_idx != -1 else len(parts)
+                
+                for i in range(search_start, search_end):
+                    if parts[i].lower() not in ["to", "for", "into", "a", "an", "the"]:
+                        token_in = parts[i].lower()
+                        break
+                
+                if token_in is None:
+                    sys.stdout = old_stdout
+                    return f"❓ What token are you trading? (e.g., 'swap {amount} usdc to vvs')"
+                
+                # Extract token_out (should be after "to")
+                token_out = None
+                if to_idx != -1 and to_idx + 1 < len(parts):
+                    token_out = parts[to_idx + 1].lower()
+                
+                if token_out is None or token_out in ["to", "for", "into"]:
+                    sys.stdout = old_stdout
+                    return f"❓ What token do you want to get? (e.g., 'swap {amount} {token_in} to vvs')"
+                
+                # Check if this is an estimate or actual swap
+                is_estimate = "estimate" in user_lower or "price" in user_lower or "how much" in user_lower
+                
+                if is_estimate:
+                    # Estimate the swap
+                    result = estimate_swap_output.invoke({
+                        "token_in": token_in,
+                        "token_out": token_out,
+                        "amount_in": amount
+                    })
+                    sys.stdout = old_stdout
+                    
+                    if isinstance(result, dict) and "error" not in result:
+                        amount_out = result.get("amount_out_estimated", 0)
+                        min_out = result.get("amount_out_min_with_slippage", 0)
+                        fee = result.get("fee_percent", 0.3)
+                        return f"📊 Swap Estimate: {amount} {token_in} → {amount_out:.2f} {token_out}\n   Min (with 1% slippage): {min_out:.2f} {token_out}\n   Fee: {fee}%"
+                    else:
+                        return f"Error estimating swap: {result.get('error', 'Unknown error')}"
+                else:
+                    # Execute the swap
+                    result = execute_vvs_swap.invoke({
+                        "token_in": token_in,
+                        "token_out": token_out,
+                        "amount_in": amount,
+                        "max_slippage": 1.0
+                    })
+                    sys.stdout = old_stdout
+                    
+                    if isinstance(result, dict) and "status" in result and result["status"] == "success":
+                        amount_out = result.get("amount_out_expected", 0)
+                        tx_hash = result.get("tx_hash", "")
+                        return f"✅ Swap executed: {amount} {token_in} → {amount_out:.2f} {token_out}\n   TX: {tx_hash[:20]}..."
+                    else:
+                        return f"Error executing swap: {result}"
+            
+            else:
+                system_msg = "You are a brief trading assistant. Answer in one sentence."
+                messages = [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_input}
+                ]
+                
+                result = self._call_llm(messages)
+                sys.stdout = old_stdout
+                return result
+        
         except Exception as e:
-            return f"Error processing request: {str(e)}"
-    
-    def run_autonomous(self, task_description: str, interval_seconds: int = 300):
-        """
-        Run the agent autonomously on a repeating task
-        
-        Args:
-            task_description: The task to perform repeatedly
-            interval_seconds: How often to run the task (default 5 minutes)
-        """
-        print(f"\n🔄 Starting autonomous mode...")
-        print(f"📋 Task: {task_description}")
-        print(f"⏱️  Interval: {interval_seconds} seconds")
-        print(f"⚠️  Press Ctrl+C to stop\n")
-        
-        iteration = 0
-        while True:
-            try:
-                iteration += 1
-                print(f"\n{'='*60}")
-                print(f"🔄 Iteration {iteration} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"{'='*60}\n")
-                
-                response = self._process_request(task_description)
-                print(f"🤖 Agent: {response}\n")
-                
-                print(f"⏸️  Waiting {interval_seconds} seconds until next check...")
-                time.sleep(interval_seconds)
-                
-            except KeyboardInterrupt:
-                print("\n\n⏹️  Stopping autonomous mode...")
-                break
-            except Exception as e:
-                print(f"\n❌ Error in autonomous mode: {e}")
-                print(f"⏸️  Waiting {interval_seconds} seconds before retry...")
-                time.sleep(interval_seconds)
+            sys.stdout = old_stdout
+            return f"Error: {e}"
+        finally:
+            sys.stdout = old_stdout
 
 
 def main():
-    """Main entry point"""
+    """Interactive mode"""
+    agent = LightweightAgent()
     
-    # Check command line arguments for mode
-    if len(sys.argv) > 1 and sys.argv[1] == "autonomous":
-        # Autonomous mode
-        agent = AlphaConsumerAgent()
-        
-        task = "Check http://localhost:3100/buy-alpha for premium trading data. If CRO price is above $0.08, pay for the data."
-        
-        # Run every 5 minutes
-        agent.run_autonomous(task, interval_seconds=300)
-    else:
-        # Interactive mode (default)
-        agent = AlphaConsumerAgent()
-        agent.run_interactive()
+    print("\n" + "="*60)
+    print("🤖 Lightweight Trading Agent (No Token Limit Issues!)")
+    print("="*60)
+    print("\nCommands:")
+    print("  - 'cro balance' or 'check balance' - Check balances")
+    print("  - 'swap 1 usdc to vvs' - Execute swap")
+    print("  - 'exit' - Quit")
+    print("\n" + "="*60 + "\n")
+    
+    while True:
+        try:
+            user_input = input("\n🧑 You: ").strip()
+            
+            if not user_input:
+                continue
+            
+            if user_input.lower() in ["exit", "quit", "q"]:
+                print("\n👋 Goodbye!")
+                break
+            
+            response = agent.interact(user_input)
+            print(f"\n🤖 Agent: {response}")
+            
+        except KeyboardInterrupt:
+            print("\n\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
 
 
 if __name__ == "__main__":

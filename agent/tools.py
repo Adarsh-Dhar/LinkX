@@ -155,25 +155,7 @@ ERC20_ABI = [
 
 @tool
 def access_paid_api(url: str):
-    """
-    Accesses a URL that may require payment via HTTP 402 protocol with x402 standard.
-    
-    This tool automatically handles the x402 payment flow:
-    1. Makes initial request to the URL (GET)
-    2. If 402 Payment Required is returned with instruction, extracts payment invoice
-    3. Signs EIP-712 TransferWithAuthorization message using agent wallet
-    4. Submits payment signature to payment endpoint (POST)
-    5. Returns protected data on successful verification
-    
-    Use this tool whenever you need to access premium APIs or data sources
-    that may require payment.
-    
-    Args:
-        url: The URL to access (e.g., http://localhost:3050/alpha/insight/CRO)
-    
-    Returns:
-        dict or str: The response data if successful, error message otherwise
-    """
+    """Access URL with x402 payment handling."""
     print(f"\n🔍 Attempting to access: {url}")
     
     try:
@@ -402,13 +384,7 @@ def access_paid_api(url: str):
 @tool
 def check_market_conditions():
     """
-    Checks current market conditions for CRO and other relevant tokens.
-    
-    This tool helps the agent make informed decisions about whether
-    to purchase premium data based on market conditions.
-    
-    Returns:
-        dict: Current market data including prices and trends
+    Get CRO price and 24h change.
     """
     print("\n📊 Checking market conditions...")
     
@@ -490,16 +466,7 @@ def estimate_payment_cost(amount: int, token: str = "USDC"):
 
 @tool
 def get_token_balance(token_address: str, chain: str = "cronos_mainnet"):
-    """
-    Retrieves the token balance of the agent's wallet.
-    
-    Args:
-        token_address: Address of the token contract (or 'CRO' for native token)
-        chain: 'cronos_mainnet' or 'cronos_testnet'
-    
-    Returns:
-        dict: Token balance information
-    """
+    """Get wallet balance. Use 'cro' for native token."""
     print(f"\n💰 Checking balance of {token_address[:10]}...")
     
     try:
@@ -552,20 +519,7 @@ def get_token_balance(token_address: str, chain: str = "cronos_mainnet"):
 
 @tool
 def estimate_swap_output(token_in: str, token_out: str, amount_in: float, chain: str = "cronos_mainnet"):
-    """
-    Estimates the expected output of a swap without executing it.
-    
-    This helps the agent understand slippage and fair pricing.
-    
-    Args:
-        token_in: Symbol (USDC, VVS, CRO) or address of input token
-        token_out: Symbol (USDC, VVS, CRO) or address of output token
-        amount_in: Amount of token_in to swap (human readable)
-        chain: 'cronos_mainnet' or 'cronos_testnet'
-    
-    Returns:
-        dict: Estimated output amount and price impact
-    """
+    """Estimate swap output without executing."""
     print(f"\n📊 Estimating swap: {amount_in} {token_in}... → {token_out}...")
     
     try:
@@ -725,20 +679,7 @@ def estimate_swap_output(token_in: str, token_out: str, amount_in: float, chain:
 
 @tool
 def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0, chain: str = "cronos_testnet"):
-    """
-    Executes a token swap on VVS Finance (Uniswap V2 fork).
-    Automatically handles token approval if required.
-    
-    Args:
-        token_in: Symbol (USDC, VVS, CRO) or address of token to sell
-        token_out: Symbol (USDC, VVS, CRO) or address of token to buy
-        amount_in: Amount of token_in to swap (in human readable units)
-        max_slippage: Maximum acceptable slippage as percentage (default 1.0%)
-        chain: 'cronos_mainnet' or 'cronos_testnet'
-    
-    Returns:
-        dict: Swap confirmation with transaction hash and final amounts
-    """
+    """Execute token swap on VVS Finance."""
     print(f"\n🔄 Initiating VVS Swap: {amount_in} {token_in}... → {token_out}...")
     
     try:
@@ -925,15 +866,7 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
 @tool
 def get_trading_signals(server_url: str = None):
     """
-    Fetches active trading signals from the analyst server.
-    
-    Returns BUY/SELL signals with confidence levels and reasoning.
-    
-    Args:
-        server_url: Base URL of the analyst server (uses TRADING_SIGNALS_URL from .env if not provided)
-    
-    Returns:
-        dict: Trading signals with recommendations
+    Fetch trading signals (BUY/SELL) from server.
     """
     if server_url is None:
         server_url = TRADING_SIGNALS_URL
@@ -948,25 +881,26 @@ def get_trading_signals(server_url: str = None):
             print(f"   ✅ Found {data.get('count', 0)} active signals")
             return data
         else:
-            return {"error": f"Failed to fetch signals: HTTP {response.status_code}"}
+            print(f"   ⚠️  Signal server returned HTTP {response.status_code}, using fallback")
+            return {
+                "count": 0,
+                "signals": [],
+                "note": "Fallback: signal server unavailable"
+            }
     
     except Exception as e:
-        return {"error": str(e)}
+        print(f"   ⚠️  Signal fetch error: {e}, using fallback")
+        return {
+            "count": 0,
+            "signals": [],
+            "note": "Fallback: signal server unreachable"
+        }
 
 
 @tool
 def get_buy_alpha(server_url: str = None):
     """
-    Gets actionable BUY signals from the free /buy-alpha endpoint.
-    
-    This is a convenience tool for quickly checking if there are any
-    tokens to buy right now without needing to pay.
-    
-    Args:
-        server_url: Base URL of the analyst server (uses TRADING_SIGNALS_URL from .env if not provided)
-    
-    Returns:
-        dict: BUY signals ready for execution
+    Get actionable BUY signals from /buy-alpha endpoint.
     """
     if server_url is None:
         server_url = TRADING_SIGNALS_URL
@@ -988,27 +922,24 @@ def get_buy_alpha(server_url: str = None):
             
             return data
         else:
-            return {"error": f"Failed to fetch BUY signals: HTTP {response.status_code}"}
+            print(f"   ⚠️  BUY alpha server returned HTTP {response.status_code}, using fallback")
+            return {
+                "signals": [],
+                "note": "Fallback: buy-alpha server unavailable"
+            }
     
     except Exception as e:
-        return {"error": str(e)}
+        print(f"   ⚠️  BUY alpha fetch error: {e}, using fallback")
+        return {
+            "signals": [],
+            "note": "Fallback: buy-alpha server unreachable"
+        }
 
 
 @tool
 def record_trade(ticker: str, action: str, amount: float, tx_hash: str = None, status: str = "success", server_url: str = None):
     """
-    Records a completed trade to the server for tracking and analytics.
-    
-    Args:
-        ticker: Token symbol (e.g., "VVS", "CRO")
-        action: Trade action ("BUY" or "SELL")
-        amount: Amount traded (in USDC or token units)
-        tx_hash: Transaction hash (optional)
-        status: Trade status ("success", "failed", "pending")
-        server_url: Base URL of the analyst server (uses TRADING_SIGNALS_URL from .env if not provided)
-    
-    Returns:
-        dict: Confirmation of recorded trade
+    Record a completed trade to server.
     """
     if server_url is None:
         server_url = TRADING_SIGNALS_URL
@@ -1043,14 +974,7 @@ def record_trade(ticker: str, action: str, amount: float, tx_hash: str = None, s
 @tool
 def get_trade_history(limit: int = 10, server_url: str = None):
     """
-    Retrieves recent trade history from the server.
-    
-    Args:
-        limit: Number of recent trades to fetch (default: 10)
-        server_url: Base URL of the analyst server (uses TRADING_SIGNALS_URL from .env if not provided)
-    
-    Returns:
-        dict: Recent trades with details
+    Get recent trade history.
     """
     if server_url is None:
         server_url = TRADING_SIGNALS_URL
@@ -1077,14 +1001,7 @@ def get_trade_history(limit: int = 10, server_url: str = None):
 @tool
 def get_portfolio_value(wallet_address: str = None, server_url: str = None):
     """
-    Gets the current portfolio value for the agent's wallet.
-    
-    Args:
-        wallet_address: Leave empty to use agent's wallet (recommended). Do not provide placeholder addresses.
-        server_url: Base URL of the analyst server (uses TRADING_SIGNALS_URL from .env if not provided)
-    
-    Returns:
-        dict: Portfolio balances and total value
+    Get current portfolio value.
     """
     if server_url is None:
         server_url = TRADING_SIGNALS_URL
@@ -1112,7 +1029,53 @@ def get_portfolio_value(wallet_address: str = None, server_url: str = None):
             print(f"   ✅ Portfolio value: ${total_value:.2f}")
             return data
         else:
-            return {"error": f"Failed to fetch portfolio value: HTTP {response.status_code}"}
+            print(f"   ⚠️  Portfolio server returned HTTP {response.status_code}, using fallback")
+            # Fallback: compute rough value from on-chain balances with fixed prices
+            return _fallback_portfolio(wallet_address)
     
     except Exception as e:
-        return {"error": str(e)}
+        print(f"   ⚠️  Portfolio fetch error: {e}, using fallback")
+        return _fallback_portfolio(wallet_address)
+
+
+def _fallback_portfolio(wallet_address: str):
+    """Fallback portfolio estimation using on-chain balances and fixed prices."""
+    try:
+        rpc_url = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        if not w3.is_connected():
+            return {"error": "RPC unavailable for fallback"}
+        # Prices (mock): USDC=$1, VVS=$0.018, CRO=$0.09
+        price_usdc = 1.0
+        price_vvs = 0.018
+        price_cro = 0.09
+        # CRO balance
+        cro_wei = w3.eth.get_balance(wallet_address)
+        cro = w3.from_wei(cro_wei, 'ether')
+        cro_usd = float(cro) * price_cro
+        # USDC balance
+        usdc_addr = Web3.to_checksum_address(os.getenv("USDC_CONTRACT", USDC_CONTRACT))
+        usdc_contract = w3.eth.contract(address=usdc_addr, abi=ERC20_ABI)
+        usdc_raw = usdc_contract.functions.balanceOf(wallet_address).call()
+        usdc = usdc_raw / (10 ** usdc_contract.functions.decimals().call())
+        usdc_usd = usdc * price_usdc
+        # VVS balance
+        vvs_addr = Web3.to_checksum_address(os.getenv("VVS_CONTRACT", VVS_CONTRACT))
+        vvs_contract = w3.eth.contract(address=vvs_addr, abi=ERC20_ABI)
+        vvs_raw = vvs_contract.functions.balanceOf(wallet_address).call()
+        vvs = vvs_raw / (10 ** vvs_contract.functions.decimals().call())
+        vvs_usd = vvs * price_vvs
+        total = cro_usd + usdc_usd + vvs_usd
+        print(f"   ℹ️  Fallback portfolio: CRO ${cro_usd:.2f}, USDC ${usdc_usd:.2f}, VVS ${vvs_usd:.2f}")
+        return {
+            "address": wallet_address,
+            "total_value_usd": total,
+            "positions": {
+                "CRO": {"amount": float(cro), "value_usd": cro_usd},
+                "USDC": {"amount": usdc, "value_usd": usdc_usd},
+                "VVS": {"amount": vvs, "value_usd": vvs_usd},
+            },
+            "note": "Fallback: portfolio service unavailable"
+        }
+    except Exception as e:
+        return {"error": f"Fallback portfolio failed: {e}"}
