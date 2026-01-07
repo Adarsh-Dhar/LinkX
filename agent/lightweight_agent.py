@@ -8,7 +8,7 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
-from tools import get_token_balance, execute_vvs_swap
+from tools import get_token_balance, execute_vvs_swap, access_paid_api
 
 load_dotenv()
 
@@ -23,6 +23,7 @@ class LightweightAgent:
         self.tools = {
             "get_token_balance": get_token_balance,
             "execute_vvs_swap": execute_vvs_swap,
+            "access_paid_api": access_paid_api,
         }
         
         # Minimal conversation history
@@ -63,9 +64,71 @@ class LightweightAgent:
         tool_desc += "- 'cro balance' or 'check balance' → calls get_token_balance(token_address='cro')\n"
         tool_desc += "- 'usdc balance' → calls get_token_balance(token_address='usdc')\n"
         tool_desc += "- 'swap X usdc to vvs' → calls execute_vvs_swap\n"
+        tool_desc += "- 'buy alpha' or 'buy alpha for CRO' → calls access_paid_api to purchase premium insights\n"
         
         # Detect intent and call tools directly (rule-based to avoid token overhead)
         user_lower = user_input.lower()
+        
+        # Buy alpha data detection
+        if ("buy" in user_lower and "alpha" in user_lower) or ("purchase" in user_lower and "alpha" in user_lower) or ("get" in user_lower and "alpha" in user_lower and "insight" in user_lower):
+            # Extract ticker from user input (default to CRO)
+            ticker = "CRO"  # Default
+            ticker_keywords = ["cro", "vvs", "usdc"]
+            for keyword in ticker_keywords:
+                if keyword in user_lower:
+                    ticker = keyword.upper()
+                    break
+            
+            print("💰 Agent is buying alpha...")
+            api_url = f"http://localhost:3050/alpha/insight/{ticker}"
+            
+            try:
+                # This tool handles the x402 payment automatically
+                alpha_data = access_paid_api.invoke(api_url)
+                
+                # Parse the data and suggest trading action
+                if isinstance(alpha_data, dict):
+                    # Check if we got the data directly or wrapped in a 'data' field
+                    data = alpha_data.get("data", alpha_data)
+                    
+                    if isinstance(data, dict):
+                        signal = data.get("recommended_action") or data.get("signal", "")
+                        sentiment = data.get("sentiment", "")
+                        confidence = data.get("confidence", 0)
+                        
+                        # Build response with purchased data
+                        response = f"✅ **Alpha Purchased for {ticker}:**\n\n"
+                        response += f"📊 Sentiment: {sentiment}\n"
+                        response += f"🎯 Signal: {signal}\n"
+                        if confidence > 0:
+                            response += f"📈 Confidence: {confidence*100:.0f}%\n"
+                        
+                        # Extract additional fields if available
+                        if "price_target" in data:
+                            response += f"🎯 Price Target: ${data['price_target']:.4f}\n"
+                        if "stop_loss" in data:
+                            response += f"🛑 Stop Loss: ${data['stop_loss']:.4f}\n"
+                        if "reason" in data:
+                            response += f"💡 Reason: {data['reason']}\n"
+                        
+                        response += "\n"
+                        
+                        # AUTOMATIC ACTION: Parse the data and Trade
+                        if signal == "ACCUMULATE" or signal == "BUY" or data.get("signal") == "BUY":
+                            # Determine token to swap to (use ticker or default to VVS)
+                            token = ticker if ticker != "USDC" else "VVS"
+                            response += f"🚀 **Action:** The signal is BUY. I recommend swapping USDC for {token}.\n"
+                            response += f"💬 Type 'swap 10 usdc to {token.lower()}' to execute."
+                        else:
+                            response += f"🛑 **Action:** Signal is {signal}. No trade recommended at this time."
+                        
+                        return response
+                    else:
+                        return f"✅ **Alpha Purchased:** {json.dumps(alpha_data, indent=2)}\n\n⚠️ Unexpected data format received."
+                else:
+                    return f"✅ **Alpha Purchased:** {alpha_data}"
+            except Exception as e:
+                return f"❌ Error purchasing alpha data: {str(e)}\n\nMake sure the server is running on port 3050."
         
         # Balance queries
         if "cro" in user_lower and "balance" in user_lower:
@@ -141,6 +204,7 @@ def main():
     print("\nCommands:")
     print("  - 'cro balance' or 'check balance' - Check balances")
     print("  - 'swap 1 usdc to vvs' - Execute swap")
+    print("  - 'buy alpha' or 'buy alpha for CRO' - Purchase premium alpha insights")
     print("  - 'exit' - Quit")
     print("\n" + "="*60 + "\n")
     
