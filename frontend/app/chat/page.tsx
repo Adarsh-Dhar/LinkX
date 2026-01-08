@@ -136,12 +136,16 @@ export default function ChatPage() {
       
       // DISPATCH ALPHA EVENT IF ALPHA WAS PURCHASED
       if (data.response && data.response.includes("Alpha Purchased")) {
+        console.log("🚀 Triggering Prediction Mode...");
+        
+        // This event tells the Chart component to switch to "Prediction Mode"
+        // We simulate a 5% gain for the demo visual
         const event = new CustomEvent("alpha-purchased", { 
           detail: { 
             prediction: [
-              { price: 0.10 * 1.01 },   // +1%
-              { price: 0.10 * 1.03 },   // +3%
-              { price: 0.10 * 1.05 }    // +5%
+              { price: 0.12 }, // Simulated future price points
+              { price: 0.13 }, // Chart component handles the smoothing
+              { price: 0.14 }  // and displays the purple prediction line
             ]
           } 
         });
