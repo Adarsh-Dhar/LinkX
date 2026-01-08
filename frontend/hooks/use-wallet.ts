@@ -12,8 +12,8 @@ interface WalletState {
   chainId: number | null
 }
 
-const USDC_ADDRESS = "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59" // Cronos Mainnet
-const CRONOS_MAINNET_CHAIN_ID = 25
+const USDC_ADDRESS = "0x908059CF02cbb643Bc96C55e14Fb3699e632479f" // Cronos Testnet
+const CRONOS_TESTNET_CHAIN_ID = 338
 const USDC_ABI = [
   "function balanceOf(address account) view returns (uint256)",
   "function decimals() view returns (uint8)",
@@ -55,7 +55,8 @@ export function useWallet() {
         const usdcBalanceRaw = await usdcContract.balanceOf(address)
         usdcBalance = ethers.formatUnits(usdcBalanceRaw, 6) // USDC has 6 decimals
       } catch (error) {
-        console.error("Error fetching USDC balance:", error)
+        console.warn("Error fetching USDC balance (this is normal if contract not on chain):", error)
+        usdcBalance = "0"
       }
 
       setState({
@@ -68,9 +69,9 @@ export function useWallet() {
       })
 
       // Check if on correct network
-      if (chainId !== CRONOS_MAINNET_CHAIN_ID) {
+      if (chainId !== CRONOS_TESTNET_CHAIN_ID) {
         console.warn(
-          `Connected to chain ${chainId}. Please switch to Cronos Mainnet (${CRONOS_MAINNET_CHAIN_ID})`
+          `Connected to chain ${chainId}. Please switch to Cronos Testnet (${CRONOS_TESTNET_CHAIN_ID})`
         )
       }
     } catch (error) {
