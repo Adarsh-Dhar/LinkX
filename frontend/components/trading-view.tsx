@@ -1,87 +1,128 @@
 "use client"
 
-import { useState } from "react"
-import { ArrowRightLeft, Zap } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Badge } from "@/components/ui/badge"
 
-export default function TradingView() {
-  const [fromAmount, setFromAmount] = useState("10")
-  const [toAmount, setToAmount] = useState("150")
+export function TradingView() {
+  const [ticker, setTicker] = useState("CRO")
+  const [currentPrice, setCurrentPrice] = useState(0)
+  const [chartData, setChartData] = useState<any[]>([])
+  const [predictionData, setPredictionData] = useState<any[]>([])
+  const [isLive, setIsLive] = useState(true)
+
+  // 1. LIVE DATA POLLING
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`http://localhost:3050/market/price/${ticker}`)
+        const data = await res.json()
+        
+        setCurrentPrice(data.price)
+        
+        // Add point to chart
+        const now = new Date()
+        const timeStr = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
+        
+        setChartData(prev => {
+            const newData = [...prev, { time: timeStr, price: data.price, type: "history" }]
+            if (newData.length > 30) newData.shift() // Keep last 30 points
+            return newData
+        })
+      } catch (e) {
+        console.error("Fetch error:", e)
+      }
+    }
+
+    // Initial fetch
+    fetchData()
+    // Poll every 5 seconds
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
+  }, [ticker])
+
+  // 2. LISTEN FOR "ALPHA BOUGHT" EVENTS (To show prediction)
+  // In a real app, use a Context or Redux. For Hackathon, we can use a simple event listener
+  useEffect(() => {
+    const handleAlpha = (e: any) => {
+        const prediction = e.detail?.prediction || []
+        // Format prediction data to match chart
+        // This is a simplified visual hack for the demo
+        if (prediction.length > 0) {
+           // We stop live updates to show the "Simulation" clearly
+           setIsLive(false)
+           // Merge current data with prediction
+           const lastPoint = chartData[chartData.length - 1]
+           const predPoints = prediction.map((p: any, i: number) => ({
+               time: `Future +${i}m`,
+               price: p.price,
+               type: "prediction"
+           }))
+           setChartData([...chartData, ...predPoints])
+        }
+    }
+
+    window.addEventListener("alpha-purchased", handleAlpha)
+    return () => window.removeEventListener("alpha-purchased", handleAlpha)
+  }, [chartData])
 
   return (
-    <div className="p-8 flex flex-col items-center justify-start">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-2">Trading View</h2>
-        <p className="text-muted-foreground">Auto-execute trading strategies</p>
-      </div>
-
-      <div className="w-full max-w-md space-y-6">
-        {/* Swap Interface */}
-        <div className="glass glow-primary p-8 rounded-lg border border-border/30">
-          {/* From */}
-          <div className="mb-4">
-            <label className="text-xs text-muted-foreground block mb-2">From</label>
-            <div className="glass border border-border/30 rounded-lg p-4 flex items-center justify-between">
-              <input
-                type="number"
-                value={fromAmount}
-                onChange={(e) => setFromAmount(e.target.value)}
-                className="bg-transparent text-2xl font-bold text-foreground outline-none w-full"
+    <Card className="col-span-4 border-zinc-800 bg-zinc-950/50">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+            <CardTitle className="text-zinc-100">Live Market: {ticker}/USDC</CardTitle>
+            <p className="text-2xl font-bold text-emerald-400">${currentPrice.toFixed(4)}</p>
+        </div>
+        {isLive ? (
+            <Badge variant="outline" className="animate-pulse border-emerald-500 text-emerald-500">● LIVE</Badge>
+        ) : (
+            <Badge variant="outline" className="border-purple-500 text-purple-500">🔮 PREDICTION MODE</Badge>
+        )}
+      </CardHeader>
+      <CardContent className="pl-0">
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorPred" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              
+              <XAxis dataKey="time" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis 
+                stroke="#52525b" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+                domain={['auto', 'auto']}
+                tickFormatter={(val) => `$${val}`} 
               />
-              <span className="text-lg font-bold text-foreground ml-2">USDC</span>
-            </div>
-          </div>
-
-          {/* Swap Button */}
-          <div className="flex justify-center mb-4">
-            <button className="p-3 bg-gradient-to-r from-primary to-accent rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all">
-              <ArrowRightLeft size={20} className="text-white" />
-            </button>
-          </div>
-
-          {/* To */}
-          <div className="mb-6">
-            <label className="text-xs text-muted-foreground block mb-2">To</label>
-            <div className="glass border border-border/30 rounded-lg p-4 flex items-center justify-between">
-              <input
-                type="number"
-                value={toAmount}
-                onChange={(e) => setToAmount(e.target.value)}
-                className="bg-transparent text-2xl font-bold text-foreground outline-none w-full"
+              <Tooltip 
+                contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a" }}
+                labelStyle={{ color: "#a1a1aa" }}
               />
-              <span className="text-lg font-bold text-secondary ml-2">VVS</span>
-            </div>
-          </div>
-
-          {/* Execution Button */}
-          <button className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-lg bg-gradient-to-r from-primary via-accent to-secondary hover:shadow-2xl hover:shadow-primary/40 transition-all text-white font-bold text-lg">
-            <Zap size={24} />
-            Auto-Execute Strategy
-          </button>
+              
+              {/* Historical Data (Green) */}
+              <Area 
+                type="monotone" 
+                dataKey="price" 
+                stroke="#10b981" 
+                strokeWidth={2}
+                fill="url(#colorPrice)" 
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-
-        {/* Chart Placeholder */}
-        <div className="glass glow-accent p-6 rounded-lg border border-border/30">
-          <h3 className="text-sm font-semibold text-foreground mb-4">VVS Price Action</h3>
-          <div className="w-full h-64 bg-black/40 rounded-lg border border-secondary/30 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm">📊 Chart visualization</p>
-              <p className="text-muted-foreground text-xs mt-2">Current: $0.0234</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="glass p-4 rounded-lg border border-border/30">
-            <p className="text-xs text-muted-foreground mb-2">24H Change</p>
-            <p className="text-xl font-bold text-secondary">+8.5%</p>
-          </div>
-          <div className="glass p-4 rounded-lg border border-border/30">
-            <p className="text-xs text-muted-foreground mb-2">Volume</p>
-            <p className="text-xl font-bold text-primary">2.3M</p>
-          </div>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
+
+export default TradingView

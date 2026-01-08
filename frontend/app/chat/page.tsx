@@ -133,6 +133,20 @@ export default function ChatPage() {
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, agentMsg])
+      
+      // DISPATCH ALPHA EVENT IF ALPHA WAS PURCHASED
+      if (data.response && data.response.includes("Alpha Purchased")) {
+        const event = new CustomEvent("alpha-purchased", { 
+          detail: { 
+            prediction: [
+              { price: 0.10 * 1.01 },   // +1%
+              { price: 0.10 * 1.03 },   // +3%
+              { price: 0.10 * 1.05 }    // +5%
+            ]
+          } 
+        });
+        window.dispatchEvent(event);
+      }
     } catch (error) {
       console.error("Error calling agent API:", error)
       // Fallback to mock response if API fails
