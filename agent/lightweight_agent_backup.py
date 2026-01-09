@@ -2,7 +2,6 @@
 """
 Lightweight trading agent - bypasses heavy SDK to avoid token limits
 Uses OpenRouter directly with minimal context
-Integrated with 48-Node Ecosystem via SmartRouter
 """
 
 import os
@@ -10,7 +9,6 @@ import json
 import requests
 from dotenv import load_dotenv
 from tools import get_token_balance, execute_vvs_swap, access_paid_api
-from smart_router import SmartRouter
 
 load_dotenv()
 
@@ -27,10 +25,6 @@ class LightweightAgent:
             "execute_vvs_swap": execute_vvs_swap,
             "access_paid_api": access_paid_api,
         }
-        
-        # Initialize the Smart Router for 48-node ecosystem
-        print("\n🔌 Initializing Smart Router for 48-Node Ecosystem...")
-        self.router = SmartRouter()
         
         # Minimal conversation history
         self.history = []
@@ -65,69 +59,17 @@ class LightweightAgent:
     def interact(self, user_input: str):
         """Process user input with minimal context"""
         
+        # Build minimal tool descriptions
+        tool_desc = "Available commands:\n"
+        tool_desc += "- 'cro balance' or 'check balance' → calls get_token_balance(token_address='cro')\n"
+        tool_desc += "- 'usdc balance' → calls get_token_balance(token_address='usdc')\n"
+        tool_desc += "- 'swap X usdc to vvs' → calls execute_vvs_swap\n"
+        tool_desc += "- 'buy alpha' or 'buy alpha for CRO' → calls access_paid_api to purchase premium insights\n"
+        
         # Detect intent and call tools directly (rule-based to avoid token overhead)
         user_lower = user_input.lower()
         
-        # Check specialized data nodes (48-node ecosystem)
-        if ("check" in user_lower or "analyze" in user_lower or "get" in user_lower or "find" in user_lower or "query" in user_lower) and (
-            "whale" in user_lower or "sentiment" in user_lower or "rsi" in user_lower or 
-            "price" in user_lower or "volume" in user_lower or "spread" in user_lower or
-            "depth" in user_lower or "tvl" in user_lower or "dev" in user_lower or
-            "social" in user_lower or "inflow" in user_lower or "tech" in user_lower or
-            "premium" in user_lower or "data" in user_lower or "correlation" in user_lower or
-            "burn" in user_lower or "active" in user_lower or "order book" in user_lower
-        ):
-            print(f"\n🧠 Agent analyzing intent: '{user_input}'")
-            
-            # A. FIND PROVIDERS (Scans the 48 nodes)
-            candidates = self.router.find_providers(user_input)
-            
-            if not candidates:
-                return "❌ No specialized data node found for that request."
-            
-            # B. EXECUTE COMPETITION (Selects the best one)
-            # We default to 'cheap' to save money, or 'premium' if user asks
-            strategy = "premium" if "premium" in user_lower else "cheap"
-            chosen_node = self.router.select_best_provider(candidates, strategy)
-            
-            if not chosen_node:
-                return "❌ Could not select a provider node."
-            
-            # C. BUY DATA (Simulate x402 flow with the ecosystem node)
-            print(f"💰 Connecting to {chosen_node['url']}...")
-            try:
-                # Fetch data from the chosen node
-                response = requests.get(chosen_node['url'])
-                
-                if response.status_code == 402:
-                    # Payment required - simulate payment
-                    invoice = response.json()
-                    print(f"💳 Invoice: {invoice['invoice']['amount']} USDC to {invoice['invoice']['to']}")
-                    
-                    # Simulate payment and fetch actual data
-                    payment_response = requests.post(
-                        f"http://localhost:{chosen_node['port']}/data/payment",
-                        json={"signature": "simulated_payment"}
-                    )
-                    
-                    if payment_response.status_code == 200:
-                        data = payment_response.json()
-                        return (
-                            f"✅ **Data Acquired from:** {chosen_node['name']}\n"
-                            f"💸 **Cost:** ${chosen_node['price']} USDC\n"
-                            f"🔗 **Provider:** {data['provider']}\n"
-                            f"📊 **Data:**\n{json.dumps(data['data'], indent=2)}\n\n"
-                            f"💡 The agent selected this node based on your '{strategy}' preference."
-                        )
-                    else:
-                        return f"❌ Payment failed: {payment_response.text}"
-                else:
-                    return f"❌ Unexpected response: {response.status_code}"
-                    
-            except Exception as e:
-                return f"❌ Error accessing data node: {str(e)}\n\nMake sure 'node ecosystem.js' is running."
-        
-        # Buy alpha data detection (legacy for backward compatibility)
+        # Buy alpha data detection
         if ("buy" in user_lower and "alpha" in user_lower) or ("purchase" in user_lower and "alpha" in user_lower) or ("get" in user_lower and "alpha" in user_lower and "insight" in user_lower):
             # Extract ticker from user input (default to CRO)
             ticker = "CRO"  # Default
@@ -256,22 +198,15 @@ def main():
     """Interactive mode"""
     agent = LightweightAgent()
     
-    print("\n" + "="*70)
-    print("🤖 Lightweight Trading Agent + 48-Node Ecosystem")
-    print("="*70)
-    print("\n📡 **Data Queries (48-Node Ecosystem):**")
-    print("    - 'check whale transactions'")
-    print("    - 'check premium sentiment'")
-    print("    - 'analyze rsi'")
-    print("    - 'get tvl data'")
-    print("    - 'find social volume'")
-    print("    - 'query correlation'")
-    print("\n💰 **Wallet Commands:**")
-    print("    - 'cro balance' or 'check balance' - Check balances")
-    print("    - 'swap 1 usdc to vvs' - Execute swap")
-    print("    - 'buy alpha' - Purchase premium alpha insights")
-    print("\n    - 'exit' - Quit")
-    print("\n" + "="*70 + "\n")
+    print("\n" + "="*60)
+    print("🤖 Lightweight Trading Agent (No Token Limit Issues!)")
+    print("="*60)
+    print("\nCommands:")
+    print("  - 'cro balance' or 'check balance' - Check balances")
+    print("  - 'swap 1 usdc to vvs' - Execute swap")
+    print("  - 'buy alpha' or 'buy alpha for CRO' - Purchase premium alpha insights")
+    print("  - 'exit' - Quit")
+    print("\n" + "="*60 + "\n")
     
     while True:
         try:
