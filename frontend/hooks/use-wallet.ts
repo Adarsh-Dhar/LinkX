@@ -30,7 +30,15 @@ export function useWallet() {
   })
 
   const connect = async () => {
-    if (typeof window.ethereum === "undefined") {
+    // Check for MetaMask specifically
+    let ethereum = window.ethereum
+    
+    // If multiple wallets are installed, try to get MetaMask specifically
+    if (window.ethereum?.providers?.length) {
+      ethereum = window.ethereum.providers.find((provider: any) => provider.isMetaMask)
+    }
+    
+    if (!ethereum) {
       alert("Please install MetaMask to use this feature!")
       return
     }
@@ -38,7 +46,7 @@ export function useWallet() {
     setState((prev) => ({ ...prev, isConnecting: true }))
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
+      const provider = new ethers.BrowserProvider(ethereum)
       const accounts = await provider.send("eth_requestAccounts", [])
       const address = accounts[0]
       const network = await provider.getNetwork()
@@ -92,10 +100,18 @@ export function useWallet() {
   }
 
   const refreshBalances = async () => {
-    if (!state.address || typeof window.ethereum === "undefined") return
+    if (!state.address) return
+    
+    // Get MetaMask provider specifically
+    let ethereum = window.ethereum
+    if (window.ethereum?.providers?.length) {
+      ethereum = window.ethereum.providers.find((provider: any) => provider.isMetaMask)
+    }
+    
+    if (!ethereum) return
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
+      const provider = new ethers.BrowserProvider(ethereum)
 
       // Get CRO balance
       const balance = await provider.getBalance(state.address)
@@ -119,7 +135,13 @@ export function useWallet() {
 
   // Listen for account changes
   useEffect(() => {
-    if (typeof window.ethereum === "undefined") return
+    // Get MetaMask provider specifically
+    let ethereum = window.ethereum
+    if (window.ethereum?.providers?.length) {
+      ethereum = window.ethereum.providers.find((provider: any) => provider.isMetaMask)
+    }
+    
+    if (!ethereum) return
 
     const handleAccountsChanged = (accounts: string[]) => {
       if (accounts.length === 0) {
@@ -135,22 +157,28 @@ export function useWallet() {
       window.location.reload()
     }
 
-    window.ethereum.on("accountsChanged", handleAccountsChanged)
-    window.ethereum.on("chainChanged", handleChainChanged)
+    ethereum.on("accountsChanged", handleAccountsChanged)
+    ethereum.on("chainChanged", handleChainChanged)
 
     return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
-      window.ethereum.removeListener("chainChanged", handleChainChanged)
+      ethereum.removeListener("accountsChanged", handleAccountsChanged)
+      ethereum.removeListener("chainChanged", handleChainChanged)
     }
   }, [state.address])
 
   // Auto-connect if previously connected
   useEffect(() => {
-    if (typeof window.ethereum === "undefined") return
+    // Get MetaMask provider specifically
+    let ethereum = window.ethereum
+    if (window.ethereum?.providers?.length) {
+      ethereum = window.ethereum.providers.find((provider: any) => provider.isMetaMask)
+    }
+    
+    if (!ethereum) return
 
     const checkConnection = async () => {
       try {
-        const provider = new ethers.BrowserProvider(window.ethereum)
+        const provider = new ethers.BrowserProvider(ethereum)
         const accounts = await provider.send("eth_accounts", [])
         if (accounts.length > 0) {
           connect()

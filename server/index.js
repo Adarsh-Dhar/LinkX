@@ -3,12 +3,33 @@ import cors from "cors";
 import { ethers } from "ethers";
 import "dotenv/config";
 import fetch from "node-fetch";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 1. LOAD CONFIGURATION FROM providers.json
+const providersPath = path.join(__dirname, 'providers.json');
+const providers = JSON.parse(fs.readFileSync(providersPath, 'utf8'));
+
+// Check which provider identity to load (from Environment Variable)
+// Default to 'default' if not specified
+const PROVIDER_ID = process.env.PROVIDER_ID || 'default';
+const CONFIG = providers[PROVIDER_ID];
+
+if (!CONFIG) {
+    console.error(`❌ Error: Provider ID '${PROVIDER_ID}' not found in providers.json`);
+    process.exit(1);
+}
 
 const app = express();
-const PORT = process.env.PORT || 3050;
+const PORT = CONFIG.port;
+const SELLER_WALLET = CONFIG.wallet || process.env.WALLET_ADDRESS;
+const PRICE_COST = CONFIG.price;
+const PROVIDER_NAME = CONFIG.name;
+const PROVIDER_BIAS = CONFIG.bias;
 
-// --- CONFIGURATION ---
-const SELLER_WALLET = process.env.WALLET_ADDRESS || "0xYourWalletAddressHere";
 // Use a free CoinGecko Demo Key if you have one, or leave blank for public rate limits
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || ""; 
 
@@ -79,11 +100,12 @@ app.get('/market/price/:ticker', async (req, res) => {
 // 3. ENDPOINT: The "Alpha" Signal (Paid Data)
 // For the demo, we simply simulate the alpha response:
 app.get('/alpha/insight/:ticker', (req, res) => {
-    // 402 Paywall Logic (Simulated for brevity in this step)
+    // 402 Paywall Logic with Dynamic Pricing
     res.status(402).json({
         error: "Payment Required",
+        provider: PROVIDER_NAME,
         invoice: {
-            amount: "0.1",
+            amount: PRICE_COST,
             currency: "USDC",
             to: SELLER_WALLET,
             chainId: 338
@@ -94,18 +116,25 @@ app.get('/alpha/insight/:ticker', (req, res) => {
 app.post('/alpha/insight/:ticker/payment', (req, res) => {
     // Payment Verification Logic
     // In a real demo, verify signature here. 
-    // For now, we return the "Future Prediction" data.
+    // For now, we return the "Future Prediction" data with bias-based direction.
+    
+    // Simulate Prediction logic based on Provider Bias
+    const currentPrice = priceCache['CRO'].value;
+    const direction = PROVIDER_BIAS === 'bullish' ? 1 : -1;
+    const volatility = PRICE_COST > 0.5 ? 0.03 : 0.08; // Premium providers are more conservative
+    
     res.json({
         success: true,
         data: {
-            sentiment: "bullish",
-            recommended_action: "BUY",
+            source: PROVIDER_NAME,
+            sentiment: PROVIDER_BIAS,
+            recommended_action: PROVIDER_BIAS === 'bullish' ? "BUY" : "SELL",
             // SIMULATED FUTURE DATA FOR THE CHART
             prediction: [
-                { time: "Now", price: priceCache['CRO'].value },
-                { time: "+1m", price: priceCache['CRO'].value * 1.02 },
-                { time: "+2m", price: priceCache['CRO'].value * 1.05 },
-                { time: "+3m", price: priceCache['CRO'].value * 1.08 } // 8% gain predicted
+                { time: "Now", price: currentPrice },
+                { time: "+1m", price: currentPrice * (1 + (volatility * 0.25 * direction)) },
+                { time: "+2m", price: currentPrice * (1 + (volatility * 0.60 * direction)) },
+                { time: "+3m", price: currentPrice * (1 + (volatility * 1.0 * direction)) }
             ]
         }
     });
@@ -113,13 +142,25 @@ app.post('/alpha/insight/:ticker/payment', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+        status: 'ok',
+        provider: PROVIDER_ID,
+        providerName: PROVIDER_NAME,
+        timestamp: new Date().toISOString()
+    });
 });
 
 app.listen(PORT, () => {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 Data Server with Real Price Feed`);
-    console.log(`${'='.repeat(60)}`);
+    console.log(`\n${'='.repeat(70)}`);
+    console.log(`⚙️  PROVIDER IDENTITY LOADED: ${PROVIDER_ID.toUpperCase()}`);
+    console.log(`${'='.repeat(70)}`);
+    console.log(`\n🎯 Provider Configuration:`);
+    console.log(`   Name:     ${PROVIDER_NAME}`);
+    console.log(`   Bias:     ${PROVIDER_BIAS.toUpperCase()}`);
+    console.log(`   Price:    ${PRICE_COST} USDC per signal`);
+    console.log(`   Wallet:   ${SELLER_WALLET}`);
+    console.log(`\n🚀 Data Server with Real Price Feed`);
+    console.log(`${'='.repeat(70)}`);
     console.log(`\n📡 Server: http://localhost:${PORT}`);
     console.log(`\n📊 Market Endpoints:`);
     console.log(`   GET  /market/price/:ticker       - Get live price (CRO, VVS, USDC)`);
@@ -131,5 +172,5 @@ app.listen(PORT, () => {
     console.log(`\n📌 Examples:`);
     console.log(`   curl http://localhost:${PORT}/market/price/CRO`);
     console.log(`   curl http://localhost:${PORT}/market/price/VVS`);
-    console.log(`\n${'='.repeat(60)}\n`);
+    console.log(`\n${'='.repeat(70)}\n`);
 });
