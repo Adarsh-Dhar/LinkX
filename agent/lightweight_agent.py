@@ -3,14 +3,17 @@
 Lightweight trading agent - bypasses heavy SDK to avoid token limits
 Uses OpenRouter directly with minimal context
 Integrated with 48-Node Ecosystem via SmartRouter
+Powered by Neural Network Brain for AI-driven decisions
 """
 
 import os
 import json
 import requests
+import numpy as np
 from dotenv import load_dotenv
 from tools import get_token_balance, execute_vvs_swap, access_paid_api
 from smart_router import SmartRouter
+from brain import RLAgent
 
 load_dotenv()
 
@@ -31,6 +34,20 @@ class LightweightAgent:
         # Initialize the Smart Router for 48-node ecosystem
         print("\n🔌 Initializing Smart Router for 48-Node Ecosystem...")
         self.router = SmartRouter()
+        
+        # Initialize the Neural Network Brain
+        print("🧠 Initializing Neural Network Brain...")
+        try:
+            self.brain = RLAgent(model_path="agent/brain.pth")
+            print("✅ Neural Network loaded successfully")
+        except Exception as e:
+            print(f"⚠️  Brain initialization warning: {e}")
+            print("   Continuing in non-neural mode...")
+            self.brain = None
+        
+        # Data accumulator for neural network (48 features)
+        self.market_state = np.zeros(48, dtype=np.float32)
+        self.feature_index = 0  # Track which feature slot to fill next
         
         # Minimal conversation history
         self.history = []
@@ -62,11 +79,159 @@ class LightweightAgent:
         
         return response.json()["choices"][0]["message"]["content"]
     
+    def _vectorize_market_data(self, data_dict, category="market"):
+        """
+        Convert raw market data from providers into neural network input format.
+        The brain expects a 48-dimensional vector.
+        """
+        try:
+            # Extract numeric value from data
+            if isinstance(data_dict, dict):
+                # Try common keys
+                value = (
+                    data_dict.get('value') or 
+                    data_dict.get('price') or 
+                    data_dict.get('sentiment') or 
+                    data_dict.get('volume') or 
+                    data_dict.get('count') or 
+                    data_dict.get('score') or 
+                    0
+                )
+                
+                # Handle nested data structures
+                if isinstance(value, dict):
+                    value = list(value.values())[0] if value else 0
+                    
+                value = float(value)
+            else:
+                value = float(data_dict)
+            
+            # Store in the appropriate feature slot
+            if self.feature_index < 48:
+                self.market_state[self.feature_index] = value
+                self.feature_index = (self.feature_index + 1) % 48
+            
+            # Normalize based on category
+            if category == "sentiment":
+                value = max(0, min(1, value))  # Clamp to [0,1]
+            elif category == "price":
+                value = value / 100 if value > 1 else value  # Scale down large prices
+            elif category == "volume":
+                value = np.log1p(value) / 20  # Log scale for volumes
+            
+            # Fill remaining slots with derived features (prevent all zeros)
+            if self.feature_index < 47:
+                self.market_state[self.feature_index:self.feature_index+3] = [
+                    value * 1.1,  # Slightly adjusted versions
+                    value * 0.9,
+                    value ** 2 if abs(value) < 10 else value
+                ]
+                self.feature_index = min(self.feature_index + 3, 47)
+            
+            return value
+        except Exception as e:
+            print(f"⚠️  Vectorization warning: {e}")
+            return 0.0
+    
+    def _get_neural_prediction(self):
+        """
+        Get AI prediction from the neural network based on accumulated market data.
+        """
+        if self.brain is None:
+            return None
+        
+        try:
+            # Ensure the state vector is properly normalized
+            state = self.market_state.copy()
+            
+            # Min-max normalization
+            state_min = state.min()
+            state_max = state.max()
+            if state_max - state_min > 0:
+                state = (state - state_min) / (state_max - state_min)
+            
+            # Get prediction from brain
+            action, confidence, probabilities = self.brain.get_action(state, epsilon=0.05)
+            
+            return {
+                'action': action,
+                'confidence': confidence,
+                'probabilities': probabilities
+            }
+        except Exception as e:
+            print(f"⚠️  Neural prediction error: {e}")
+            return None
+    
     def interact(self, user_input: str):
         """Process user input with minimal context"""
         
         # Detect intent and call tools directly (rule-based to avoid token overhead)
         user_lower = user_input.lower()
+        
+        # === NEURAL PREDICTION COMMAND ===
+        if any(phrase in user_lower for phrase in [
+            "neural predict", "ai predict", "brain predict", 
+            "run prediction", "activate neural", "neural mode",
+            "what does the brain think", "ai analysis"
+        ]):
+            print("\n🧠 Activating Neural Network Prediction...")
+            
+            if self.brain is None:
+                return "❌ Neural Network not available. Brain failed to initialize."
+            
+            # Get current market state prediction
+            neural_result = self._get_neural_prediction()
+            
+            if neural_result:
+                brain_stats = self.brain.get_stats()
+                
+                response = (
+                    f"{'='*70}\n"
+                    f"🧠 **NEURAL NETWORK PREDICTION**\n"
+                    f"{'='*70}\n\n"
+                    f"**Market State Analysis:**\n"
+                    f"   • Features Analyzed: {48} data points\n"
+                    f"   • Data Quality: {(self.feature_index/48)*100:.0f}% populated\n\n"
+                    f"**AI Decision:**\n"
+                    f"   🎯 **Action:** {neural_result['action']}\n"
+                    f"   📊 **Confidence:** {neural_result['confidence']*100:.1f}%\n\n"
+                    f"**Probability Distribution:**\n"
+                )
+                
+                # Visual probability bars
+                for action, prob in neural_result['probabilities'].items():
+                    bar_length = int(prob * 50)
+                    bar = '█' * bar_length + '░' * (50 - bar_length)
+                    response += f"   {action:5s} [{bar}] {prob*100:.1f}%\n"
+                
+                response += (
+                    f"\n**Agent Intelligence Metrics:**\n"
+                    f"   • Total Trades: {brain_stats['total_trades']}\n"
+                    f"   • Win Rate: {brain_stats['win_rate']:.1f}%\n"
+                    f"   • Performance Score: {brain_stats['cumulative_reward']:+.2f}\n"
+                    f"   • Memory: {brain_stats['memory_size']}/1000 experiences\n\n"
+                )
+                
+                # Actionable recommendation
+                if neural_result['action'] == 'BUY' and neural_result['confidence'] > 0.70:
+                    response += (
+                        f"🚀 **RECOMMENDATION:** Strong BUY signal ({neural_result['confidence']*100:.0f}% confidence)\n"
+                        f"   Suggested action: 'swap 10 usdc to cro'\n"
+                    )
+                elif neural_result['action'] == 'SELL' and neural_result['confidence'] > 0.70:
+                    response += (
+                        f"📉 **RECOMMENDATION:** Strong SELL signal ({neural_result['confidence']*100:.0f}% confidence)\n"
+                        f"   Suggested action: 'swap 10 cro to usdc'\n"
+                    )
+                else:
+                    response += (
+                        f"⏸️  **RECOMMENDATION:** HOLD current positions\n"
+                        f"   Confidence below threshold ({neural_result['confidence']*100:.0f}% < 70%)\n"
+                    )
+                
+                return response
+            else:
+                return "❌ Could not generate neural prediction. Insufficient market data."
         
         # Check specialized data nodes (48-node ecosystem)
         if ("check" in user_lower or "analyze" in user_lower or "get" in user_lower or "find" in user_lower or "query" in user_lower) and (
@@ -112,13 +277,59 @@ class LightweightAgent:
                     
                     if payment_response.status_code == 200:
                         data = payment_response.json()
-                        return (
+                        market_data = data.get('data', {})
+                        
+                        # === NEURAL BRAIN INTEGRATION ===
+                        # 1. Vectorize the acquired data for neural network
+                        category = "market"  # Default
+                        if "whale" in user_lower or "transaction" in user_lower:
+                            category = "onchain"
+                        elif "sentiment" in user_lower or "social" in user_lower:
+                            category = "sentiment"
+                        elif "price" in user_lower or "volume" in user_lower:
+                            category = "price"
+                        
+                        extracted_value = self._vectorize_market_data(market_data, category)
+                        
+                        # 2. Get AI prediction from the brain
+                        neural_result = self._get_neural_prediction()
+                        
+                        # 3. Build response with both raw data AND neural analysis
+                        response = (
                             f"✅ **Data Acquired from:** {chosen_node['name']}\n"
                             f"💸 **Cost:** ${chosen_node['price']} USDC\n"
                             f"🔗 **Provider:** {data['provider']}\n"
-                            f"📊 **Data:**\n{json.dumps(data['data'], indent=2)}\n\n"
-                            f"💡 The agent selected this node based on your '{strategy}' preference."
+                            f"📊 **Raw Data:**\n{json.dumps(market_data, indent=2)}\n"
                         )
+                        
+                        # Add neural network analysis if available
+                        if neural_result:
+                            response += (
+                                f"\n{'='*60}\n"
+                                f"🧠 **NEURAL NETWORK ANALYSIS:**\n"
+                                f"{'='*60}\n"
+                                f"   🎯 **Decision:** {neural_result['action']}\n"
+                                f"   📊 **Confidence:** {neural_result['confidence']*100:.1f}%\n"
+                                f"   📈 **Probability Distribution:**\n"
+                                f"      • BUY:  {neural_result['probabilities']['BUY']*100:.0f}%\n"
+                                f"      • HOLD: {neural_result['probabilities']['HOLD']*100:.0f}%\n"
+                                f"      • SELL: {neural_result['probabilities']['SELL']*100:.0f}%\n"
+                                f"\n"
+                            )
+                            
+                            # Add actionable recommendation
+                            if neural_result['action'] == 'BUY' and neural_result['confidence'] > 0.70:
+                                response += "🚀 **Recommendation:** Strong BUY signal detected. Consider entering a position.\n"
+                            elif neural_result['action'] == 'SELL' and neural_result['confidence'] > 0.70:
+                                response += "📉 **Recommendation:** Strong SELL signal detected. Consider exiting positions.\n"
+                            else:
+                                response += "⏸️  **Recommendation:** Signal is weak. HOLD current positions.\n"
+                        else:
+                            response += "\n⚠️  Neural analysis unavailable (brain not initialized)\n"
+                        
+                        response += f"\n💡 Provider selected based on '{strategy}' preference."
+                        
+                        return response
                     else:
                         return f"❌ Payment failed: {payment_response.text}"
                 else:
@@ -257,8 +468,12 @@ def main():
     agent = LightweightAgent()
     
     print("\n" + "="*70)
-    print("🤖 Lightweight Trading Agent + 48-Node Ecosystem")
+    print("🤖 AI-Powered Trading Agent + 48-Node Ecosystem + Neural Brain")
     print("="*70)
+    print("\n🧠 **Neural Network Commands:**")
+    print("    - 'neural predict' or 'ai predict' - Get AI trading decision")
+    print("    - 'activate neural mode' - Run brain analysis")
+    print("    - 'what does the brain think' - Neural market analysis")
     print("\n📡 **Data Queries (48-Node Ecosystem):**")
     print("    - 'check whale transactions'")
     print("    - 'check premium sentiment'")
