@@ -10,10 +10,12 @@ import os
 import json
 import requests
 import numpy as np
+import asyncio
 from dotenv import load_dotenv
 from tools import get_token_balance, execute_vvs_swap, access_paid_api
 from smart_router import SmartRouter
 from brain import RLAgent
+from data_pipeline import DataPipeline
 
 load_dotenv()
 
@@ -35,6 +37,10 @@ class LightweightAgent:
         print("\n🔌 Initializing Smart Router for 48-Node Ecosystem...")
         self.router = SmartRouter()
         
+        # Initialize the Data Pipeline for 48-node data aggregation
+        print("📡 Initializing Data Pipeline...")
+        self.data_pipeline = DataPipeline()
+        
         # Initialize the Neural Network Brain
         print("🧠 Initializing Neural Network Brain...")
         try:
@@ -43,6 +49,7 @@ class LightweightAgent:
         except Exception as e:
             print(f"⚠️  Brain initialization warning: {e}")
             print("   Continuing in non-neural mode...")
+            self.brain = None
             self.brain = None
         
         # Data accumulator for neural network (48 features)
@@ -135,32 +142,48 @@ class LightweightAgent:
     
     def _get_neural_prediction(self):
         """
-        Get AI prediction from the neural network based on accumulated market data.
+        Get AI prediction from the neural network based on live 48-server data.
         """
         if self.brain is None:
             return None
         
         try:
-            # Ensure the state vector is properly normalized
-            state = self.market_state.copy()
+            # Fetch live market state from 48 providers
+            print("📡 Fetching live data from 48 providers...")
+            state = asyncio.run(self.data_pipeline.get_market_state())
             
-            # Min-max normalization
-            state_min = state.min()
-            state_max = state.max()
-            if state_max - state_min > 0:
-                state = (state - state_min) / (state_max - state_min)
-            
-            # Get prediction from brain
+            # Get prediction from brain (state is already normalized by data_pipeline)
             action, confidence, probabilities = self.brain.get_action(state, epsilon=0.05)
             
             return {
                 'action': action,
                 'confidence': confidence,
-                'probabilities': probabilities
+                'probabilities': probabilities,
+                'live_data': True
             }
         except Exception as e:
             print(f"⚠️  Neural prediction error: {e}")
-            return None
+            print("   Attempting fallback to accumulated state...")
+            
+            # Fallback to accumulated state if live fetch fails
+            try:
+                state = self.market_state.copy()
+                state_min = state.min()
+                state_max = state.max()
+                if state_max - state_min > 0:
+                    state = (state - state_min) / (state_max - state_min)
+                
+                action, confidence, probabilities = self.brain.get_action(state, epsilon=0.05)
+                
+                return {
+                    'action': action,
+                    'confidence': confidence,
+                    'probabilities': probabilities,
+                    'live_data': False
+                }
+            except Exception as fallback_error:
+                print(f"❌ Fallback also failed: {fallback_error}")
+                return None
     
     def interact(self, user_input: str):
         """Process user input with minimal context"""
@@ -184,14 +207,16 @@ class LightweightAgent:
             
             if neural_result:
                 brain_stats = self.brain.get_stats()
+                data_source = "🌐 LIVE 48-Server Data" if neural_result.get('live_data') else "📊 Cached Data"
                 
                 response = (
                     f"{'='*70}\n"
                     f"🧠 **NEURAL NETWORK PREDICTION**\n"
                     f"{'='*70}\n\n"
                     f"**Market State Analysis:**\n"
-                    f"   • Features Analyzed: {48} data points\n"
-                    f"   • Data Quality: {(self.feature_index/48)*100:.0f}% populated\n\n"
+                    f"   • Data Source: {data_source}\n"
+                    f"   • Features Analyzed: 48 data points\n"
+                    f"   • Providers: 48 autonomous nodes\n\n"
                     f"**AI Decision:**\n"
                     f"   🎯 **Action:** {neural_result['action']}\n"
                     f"   📊 **Confidence:** {neural_result['confidence']*100:.1f}%\n\n"

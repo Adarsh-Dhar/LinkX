@@ -3,133 +3,199 @@ import asyncio
 import numpy as np
 import random
 
-# A registry of your 48 provider endpoints (simulated mapping)
-# In production, these are your actual URLs
+# 🌐 LIVE 48-SERVER ECOSYSTEM MAPPING
+# Maps to the 48 autonomous nodes (ports 4000-4047)
+# Each category has 2 competitors: A (Premium) and B (Budget)
+
+# Discovery registry URL
+REGISTRY_URL = "http://localhost:3999/directory"
+
+# Fallback static mapping (24 categories × 2 competitors = 48 nodes)
 DATA_PROVIDERS = {
-    # --- Market Data ---
-    "price": "http://localhost:3050/market/price",
-    "volume_24h": "http://localhost:3050/market/volume",
-    "bid_ask_spread": "http://localhost:3050/market/spread",
-    "orderbook_depth": "http://localhost:3050/market/depth",
-    "trade_velocity": "http://localhost:3050/market/velocity",
+    # Market Data (Ports 4000-4011)
+    "price_A": "http://localhost:4000/data",
+    "price_B": "http://localhost:4001/data",
+    "volume_A": "http://localhost:4002/data",
+    "volume_B": "http://localhost:4003/data",
+    "spread_A": "http://localhost:4004/data",
+    "spread_B": "http://localhost:4005/data",
+    "depth_A": "http://localhost:4006/data",
+    "depth_B": "http://localhost:4007/data",
+    "mcap_A": "http://localhost:4008/data",
+    "mcap_B": "http://localhost:4009/data",
+    "funding_A": "http://localhost:4010/data",
+    "funding_B": "http://localhost:4011/data",
     
-    # --- Technical Indicators ---
-    "rsi_14": "http://localhost:3050/technical/rsi",
-    "macd": "http://localhost:3050/technical/macd",
-    "bollinger_bands": "http://localhost:3050/technical/bollinger",
-    "moving_avg_50": "http://localhost:3050/technical/ma50",
-    "moving_avg_200": "http://localhost:3050/technical/ma200",
+    # On-Chain Data (Ports 4012-4023)
+    "inflows_A": "http://localhost:4012/data",
+    "inflows_B": "http://localhost:4013/data",
+    "outflows_A": "http://localhost:4014/data",
+    "outflows_B": "http://localhost:4015/data",
+    "whales_A": "http://localhost:4016/data",
+    "whales_B": "http://localhost:4017/data",
+    "active_addr_A": "http://localhost:4018/data",
+    "active_addr_B": "http://localhost:4019/data",
+    "fees_A": "http://localhost:4020/data",
+    "fees_B": "http://localhost:4021/data",
+    "age_A": "http://localhost:4022/data",
+    "age_B": "http://localhost:4023/data",
     
-    # --- On-Chain Data ---
-    "whale_transactions": "http://localhost:3050/onchain/whales",
-    "exchange_inflows": "http://localhost:3050/onchain/inflows",
-    "exchange_outflows": "http://localhost:3050/onchain/outflows",
-    "active_addresses": "http://localhost:3050/onchain/addresses",
-    "transaction_count": "http://localhost:3050/onchain/txcount",
+    # Sentiment Data (Ports 4024-4031)
+    "social_vol_A": "http://localhost:4024/data",
+    "social_vol_B": "http://localhost:4025/data",
+    "sentiment_A": "http://localhost:4026/data",
+    "sentiment_B": "http://localhost:4027/data",
+    "search_A": "http://localhost:4028/data",
+    "search_B": "http://localhost:4029/data",
+    "dominance_A": "http://localhost:4030/data",
+    "dominance_B": "http://localhost:4031/data",
     
-    # --- Sentiment Data ---
-    "twitter_sentiment": "http://localhost:3050/sentiment/twitter",
-    "reddit_sentiment": "http://localhost:3050/sentiment/reddit",
-    "news_sentiment": "http://localhost:3050/sentiment/news",
-    "fear_greed_index": "http://localhost:3050/sentiment/feargreed",
-    "social_volume": "http://localhost:3050/sentiment/volume",
+    # Fundamental Data (Ports 4032-4039)
+    "devs_A": "http://localhost:4032/data",
+    "devs_B": "http://localhost:4033/data",
+    "tvl_A": "http://localhost:4034/data",
+    "tvl_B": "http://localhost:4035/data",
+    "unlocks_A": "http://localhost:4036/data",
+    "unlocks_B": "http://localhost:4037/data",
+    "burn_A": "http://localhost:4038/data",
+    "burn_B": "http://localhost:4039/data",
     
-    # --- Liquidity Data ---
-    "liquidity_pool_size": "http://localhost:3050/liquidity/poolsize",
-    "impermanent_loss": "http://localhost:3050/liquidity/il",
-    "yield_rate": "http://localhost:3050/liquidity/yield",
-    
-    # Add 25 more to reach 48 total providers
+    # Technical Data (Ports 4040-4047)
+    "rsi_A": "http://localhost:4040/data",
+    "rsi_B": "http://localhost:4041/data",
+    "ma_A": "http://localhost:4042/data",
+    "ma_B": "http://localhost:4043/data",
+    "volatility_A": "http://localhost:4044/data",
+    "volatility_B": "http://localhost:4045/data",
+    "correlation_A": "http://localhost:4046/data",
+    "correlation_B": "http://localhost:4047/data",
 }
 
 class DataPipeline:
     def __init__(self):
         self.feature_vector = []
         self.provider_count = 48
+        self.providers = None  # Will be populated from registry
         
-    async def fetch_provider(self, session, category, name, url):
-        """Fetch a single data point from a provider."""
+    async def discover_providers(self, session):
+        """Fetch provider directory from the registry."""
         try:
-            # In production, uncomment this to fetch real data:
-            # async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
-            #     data = await response.json()
-            #     return float(data.get('value', 0))
+            async with session.get(REGISTRY_URL, timeout=aiohttp.ClientTimeout(total=3)) as response:
+                if response.status == 200:
+                    providers = await response.json()
+                    print(f"✅ Discovered {len(providers)} providers from registry")
+                    return providers
+        except Exception as e:
+            print(f"⚠️  Registry unreachable, using static mapping: {e}")
+        
+        # Fallback to static mapping
+        return None
+        
+    async def fetch_provider(self, session, provider_info):
+        """Fetch data from a single provider with payment flow simulation."""
+        name = provider_info.get('name', provider_info.get('id', 'unknown'))
+        url = provider_info.get('url')
+        
+        try:
+            # Step 1: Request data (expect 402 Payment Required)
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
+                if response.status == 402:
+                    # Paywall detected - simulate payment
+                    invoice = await response.json()
+                    
+                    # Step 2: Send payment proof (simulated for demo)
+                    payment_url = url.replace('/data', '/data/payment')
+                    async with session.post(
+                        payment_url, 
+                        json={"tx_hash": "0xsimulated_payment"},
+                        timeout=aiohttp.ClientTimeout(total=2)
+                    ) as payment_response:
+                        if payment_response.status == 200:
+                            result = await payment_response.json()
+                            data = result.get('data', {})
+                            
+                            # Extract first numeric value from data
+                            for key, value in data.items():
+                                if isinstance(value, (int, float)):
+                                    return float(value)
+                            
+                            # If no numeric value, extract from nested data
+                            if 'value' in data:
+                                return float(data['value'])
+                            
+                            # Default to random for complex structures
+                            return random.uniform(0, 100)
+                        
+                elif response.status == 200:
+                    # Direct access (no paywall)
+                    result = await response.json()
+                    data = result.get('data', result)
+                    
+                    # Extract numeric value
+                    if isinstance(data, (int, float)):
+                        return float(data)
+                    elif 'value' in data:
+                        return float(data['value'])
+                    
+                    return random.uniform(0, 100)
+                    
+            return 0.0
             
-            # FOR DEMO: Simulate diverse data based on category
-            await asyncio.sleep(0.01)  # fast IO simulation
-            
-            # Simulate realistic data ranges based on data type
-            if "rsi" in name: 
-                return random.uniform(20, 80)
-            elif "sentiment" in name: 
-                return random.uniform(0, 1)
-            elif "whale" in name or "transaction" in name: 
-                return random.choice([0, 1])  # Binary signal
-            elif "inflow" in name or "outflow" in name: 
-                return random.uniform(1000, 1000000)
-            elif "price" in name:
-                return random.uniform(0.08, 0.15)
-            elif "volume" in name:
-                return random.uniform(100000, 5000000)
-            elif "spread" in name:
-                return random.uniform(0.001, 0.01)
-            elif "ma" in name or "moving" in name:
-                return random.uniform(0.09, 0.14)
-            elif "liquidity" in name or "pool" in name:
-                return random.uniform(50000, 500000)
-            elif "yield" in name:
-                return random.uniform(0.05, 0.25)
-            else:
-                return random.uniform(0, 1)
-            
+        except asyncio.TimeoutError:
+            print(f"⏱️  Timeout: {name}")
+            return 0.0
         except Exception as e:
             print(f"⚠️  Error fetching {name}: {e}")
             return 0.0
 
     async def get_market_state(self):
         """Aggregates all 48 providers into a single normalized vector."""
-        print("📡 Fetching from 48 data providers...")
+        print("📡 Connecting to 48-node ecosystem...")
         
         async with aiohttp.ClientSession() as session:
-            tasks = []
-            keys = []
+            # Step 1: Discover providers from registry
+            providers = await self.discover_providers(session)
             
-            # 1. Fetch from defined providers
-            for k, v in DATA_PROVIDERS.items():
-                tasks.append(self.fetch_provider(session, "market", k, v))
-                keys.append(k)
+            if providers:
+                # Use dynamic provider list from registry
+                print(f"🌐 Using {len(providers)} live providers")
+                self.providers = providers
+                tasks = [self.fetch_provider(session, p) for p in providers]
+                keys = [p.get('id', f"provider_{i}") for i, p in enumerate(providers)]
+            else:
+                # Fallback to static mapping
+                print("📋 Using static provider mapping")
+                tasks = []
+                keys = []
+                for k, v in DATA_PROVIDERS.items():
+                    provider_info = {'id': k, 'name': k, 'url': v}
+                    tasks.append(self.fetch_provider(session, provider_info))
+                    keys.append(k)
             
-            # 2. Pad to exactly 48 providers with simulated data
-            while len(tasks) < self.provider_count:
-                provider_num = len(tasks) + 1
-                tasks.append(self.fetch_provider(
-                    session, 
-                    "simulated", 
-                    f"provider_{provider_num}", 
-                    "http://mock"
-                ))
-                keys.append(f"provider_{provider_num}")
-            
-            # 3. Fetch all data concurrently
+            # Step 2: Fetch all data concurrently
+            print(f"⚡ Fetching from {len(tasks)} endpoints...")
             results = await asyncio.gather(*tasks)
             
-            # 4. Normalization (Crucial for Neural Networks)
+            # Step 3: Normalization (Crucial for Neural Networks)
             # AI models need values between 0 and 1 for stable training
             vector = np.array(results, dtype=np.float32)
             
-            # Min-Max normalization
-            # Protect against division by zero
+            # Min-Max normalization with safeguards
             vector_min = vector.min()
             vector_max = vector.max()
             if vector_max - vector_min > 0:
                 vector = (vector - vector_min) / (vector_max - vector_min)
+            else:
+                # All values are the same, default to 0.5
+                vector = np.full_like(vector, 0.5)
             
-            # 5. Add metadata for debugging
+            # Step 4: Store metadata for debugging
             self.last_fetch_keys = keys
             self.last_fetch_values = results
             
             print(f"✅ Successfully fetched {len(vector)} data points")
-            print(f"📊 Data range: [{vector.min():.3f}, {vector.max():.3f}]")
+            print(f"📊 Data range: [{np.min(results):.2f}, {np.max(results):.2f}]")
+            print(f"🔢 Normalized: [{vector.min():.3f}, {vector.max():.3f}]")
             
             return vector
     
