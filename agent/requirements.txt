@@ -1,0 +1,14 @@
+torch
+numpy
+pandas
+scikit-learn
+aiohttp
+langchain-community
+langchain-openai
+web3
+eth-account
+python-dotenv
+requests
+fastapi
+uvicorn
+anthropic
