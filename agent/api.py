@@ -42,16 +42,33 @@ async def startup_event():
         agent = LightweightAgent()
         print("✅ Agent initialized successfully")
         
-        # Initialize node connector
+        # Initialize node connector (now connects to 48 simulated servers via registry)
         connector = await get_connector()
-        print(f"✅ Node connector initialized with {len(connector.nodes)} nodes")
+        nodes_status = connector.get_nodes_status()
+        print(f"✅ Node connector initialized with {nodes_status['total_nodes']} nodes")
+        print(f"   📡 Registry loaded: {connector.registry_loaded}")
+        print(f"   🟢 Online nodes: {nodes_status['connected_nodes']}/{nodes_status['total_nodes']}")
+        
+        # Verify NodeConnector is discovering local simulated servers
+        sample_nodes = nodes_status['nodes'][:3]
+        print(f"   Sample nodes:")
+        for node in sample_nodes:
+            print(f"     • {node['name']:30s} [{node['provider_type']:6s}] @ {node['rpc_url']}")
+        
+        # Log data source confirmation
+        print(f"\n✨ DATA SOURCE CONFIGURATION:")
+        print(f"   Shopping World:  48 simulated servers (localhost:4000-4047)")
+        print(f"   Registry:        localhost:3999/directory")
+        print(f"   Neural Network:  Using simulated server data via NodeConnector")
         
         # Initialize simulation service
         sim_service = get_simulation_service()
-        print("✅ Simulation service initialized")
+        print("\n✅ Simulation service initialized")
         
     except Exception as e:
         print(f"❌ Failed to initialize agent: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
@@ -259,46 +276,28 @@ async def get_nodes_status():
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
-        nodes_data = []
+        # Get node info from NodeConnector (which now manages the 48 simulated servers)
+        connector = await get_connector()
+        connector_status = connector.get_nodes_status()
         
-        # Get node info from SmartRouter
-        if hasattr(agent, 'smart_router'):
-            router = agent.smart_router
-            
-            # Get all nodes from registry
-            if hasattr(router, 'nodes'):
-                for node_id, node_info in router.nodes.items():
-                    port = 4000 + node_id
-                    nodes_data.append(NodeStatus(
-                        node_id=node_id,
-                        port=port,
-                        category=node_info.get('category', 'Unknown'),
-                        provider_type=node_info.get('type', 'budget'),
-                        status="online" if node_info.get('healthy', True) else "offline",
-                        last_updated=datetime.now().isoformat(),
-                        data_freshness_ms=node_info.get('latency_ms', 0)
-                    ))
-        
-        # Fallback: assume all nodes online if SmartRouter not fully initialized
-        if not nodes_data:
-            for i in range(48):
-                provider_type = "premium" if i % 2 == 0 else "budget"
-                category = ["Market Data", "On-Chain", "Sentiment", "Fundamentals", "Technical"][i % 5]
-                nodes_data.append(NodeStatus(
-                    node_id=i,
-                    port=4000 + i,
-                    category=category,
-                    provider_type=provider_type,
-                    status="online",
-                    last_updated=datetime.now().isoformat(),
-                    data_freshness_ms=100
-                ))
+        nodes_data = [
+            NodeStatus(
+                node_id=node['node_id'],
+                port=4000 + node['node_id'],
+                category=node['category'],
+                provider_type=node['provider_type'],
+                status=node['status'],
+                last_updated=node['last_updated'] or datetime.now().isoformat(),
+                data_freshness_ms=int(node['data_freshness_ms'])
+            )
+            for node in connector_status['nodes']
+        ]
         
         return NodesStatusResponse(
-            total_nodes=48,
-            connected_nodes=len([n for n in nodes_data if n.status == "online"]),
+            total_nodes=connector_status['total_nodes'],
+            connected_nodes=connector_status['connected_nodes'],
             nodes=nodes_data,
-            registry_status="online"
+            registry_status="online" if connector.registry_loaded else "using_fallback"
         )
     except Exception as e:
         print(f"Error getting nodes status: {e}")
@@ -754,7 +753,7 @@ async def websocket_trading(websocket: WebSocket):
 async def websocket_nodes(websocket: WebSocket):
     """
     WebSocket endpoint for live node status updates
-    Streams node health changes and latency updates
+    Streams node health changes and latency updates from the 48 simulated servers
     """
     await websocket.accept()
     try:
@@ -768,7 +767,14 @@ async def websocket_nodes(websocket: WebSocket):
             
             await websocket.send_json({
                 "type": "nodes_update",
-                "nodes": nodes_status,
+                "total_nodes": nodes_status['total_nodes'],
+                "connected_nodes": nodes_status['connected_nodes'],
+                "registry_loaded": connector.registry_loaded,
+                "nodes_summary": {
+                    "online": len([n for n in nodes_status['nodes'] if n['status'] == 'online']),
+                    "offline": len([n for n in nodes_status['nodes'] if n['status'] == 'offline']),
+                    "slow": len([n for n in nodes_status['nodes'] if n['status'] == 'slow'])
+                },
                 "timestamp": datetime.now().isoformat()
             })
     except Exception as e:

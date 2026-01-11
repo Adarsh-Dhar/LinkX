@@ -1,6 +1,7 @@
 """
-Node Connector Service - Manages blockchain node connections and data aggregation
-Handles multiple RPC endpoints with fallback and health checking
+Node Connector Service - Connects to the 48 simulated data providers
+Uses the local registry (port 3999) to discover providers and aggregates data
+Replaces JSON-RPC calls with HTTP endpoints and simulated payment flow
 """
 
 import asyncio
@@ -12,6 +13,9 @@ import aiohttp
 import time
 from enum import Enum
 
+# Local ecosystem registry
+REGISTRY_URL = "http://localhost:3999/directory"
+
 
 class NodeStatus(Enum):
     """Node health status"""
@@ -22,12 +26,12 @@ class NodeStatus(Enum):
 
 @dataclass
 class NodeInfo:
-    """Information about a blockchain node"""
+    """Information about a simulated data provider node"""
     node_id: int
     name: str
-    rpc_url: str
+    rpc_url: str  # points to /data endpoint of the provider
     provider_type: str  # "premium" or "budget"
-    category: str  # "price", "liquidity", "volume", etc.
+    category: str  # e.g., "price", "volume", "sentiment", etc.
     status: NodeStatus = NodeStatus.ONLINE
     last_updated: datetime = None
     response_time_ms: float = 0.0
@@ -51,8 +55,8 @@ class NodeInfo:
 
 class NodeConnector:
     """
-    Manages connections to multiple blockchain data sources.
-    Implements health checking, fallback, and data aggregation.
+    Manages connections to multiple simulated data providers.
+    Implements discovery via registry, health checking, and data aggregation.
     """
     
     def __init__(self):
@@ -63,75 +67,88 @@ class NodeConnector:
         self.max_response_time = 5000  # ms - mark as slow if slower
         self.cache = {}
         self.cache_ttl = 10  # seconds
+        self.registry_loaded = False
         
-        # Initialize default nodes (48 total for the system)
-        self._initialize_nodes()
+        # Placeholders until registry is loaded
+        self.nodes: Dict[int, NodeInfo] = {}
     
-    def _initialize_nodes(self):
-        """Initialize 48 nodes from various categories"""
+    async def _initialize_nodes(self):
+        """Initialize nodes by discovering providers from the local registry"""
+        if not self.session:
+            # Session required to fetch registry
+            self.session = aiohttp.ClientSession()
         
-        # Cronos RPC nodes (8 nodes)
-        cronos_rpcs = [
-            ("https://evm-t3.cronos.org", "premium"),
-            ("https://evm.cronos.org", "premium"),
-            ("https://cronos-rpc.publicnode.com", "budget"),
-            ("https://cronos.blockpi.network/v1/rpc/public", "budget"),
+        try:
+            async with self.session.get(REGISTRY_URL, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    providers = await resp.json()
+                    self.nodes.clear()
+                    for idx, p in enumerate(providers):
+                        # Provider fields from registry: id, category, name, port, url, price, tier
+                        self.nodes[idx] = NodeInfo(
+                            node_id=idx,
+                            name=p.get("name", p.get("id", f"provider_{idx}")),
+                            rpc_url=p.get("url"),
+                            provider_type=(p.get("tier", "Budget")).lower(),
+                            category=p.get("category", "unknown"),
+                            is_primary=(idx % 2 == 0)  # Premium/Budget alternation
+                        )
+                    self.registry_loaded = True
+                    return
+        except Exception:
+            # Fall back to static mapping if registry not reachable
+            pass
+        
+        # Fallback: construct static mapping identical to DataPipeline
+        base = 4000
+        categories = [
+            ("price", 0), ("price", 1),
+            ("volume", 2), ("volume", 3),
+            ("spread", 4), ("spread", 5),
+            ("depth", 6), ("depth", 7),
+            ("mcap", 8), ("mcap", 9),
+            ("funding", 10), ("funding", 11),
+            ("inflows", 12), ("inflows", 13),
+            ("outflows", 14), ("outflows", 15),
+            ("whales", 16), ("whales", 17),
+            ("active_addr", 18), ("active_addr", 19),
+            ("fees", 20), ("fees", 21),
+            ("age", 22), ("age", 23),
+            ("social_vol", 24), ("social_vol", 25),
+            ("sentiment", 26), ("sentiment", 27),
+            ("search", 28), ("search", 29),
+            ("dominance", 30), ("dominance", 31),
+            ("devs", 32), ("devs", 33),
+            ("tvl", 34), ("tvl", 35),
+            ("unlocks", 36), ("unlocks", 37),
+            ("burn", 38), ("burn", 39),
+            ("rsi", 40), ("rsi", 41),
+            ("ma", 42), ("ma", 43),
+            ("volatility", 44), ("volatility", 45),
+            ("correlation", 46), ("correlation", 47),
         ]
         
-        node_id = 0
-        
-        # Price data nodes (12 nodes)
-        for i, (rpc, provider_type) in enumerate(cronos_rpcs * 3):
-            self.nodes[node_id] = NodeInfo(
-                node_id=node_id,
-                name=f"price_node_{i}",
-                rpc_url=rpc,
-                provider_type=provider_type,
-                category="price",
-                is_primary=(i == 0)
+        self.nodes.clear()
+        for idx, (cat, offset) in enumerate(categories):
+            port = base + offset
+            tier = "premium" if idx % 2 == 0 else "budget"
+            self.nodes[idx] = NodeInfo(
+                node_id=idx,
+                name=f"{cat} ({'Premium' if tier=='premium' else 'Budget'})",
+                rpc_url=f"http://localhost:{port}/data",
+                provider_type=tier,
+                category=cat,
+                is_primary=(tier == "premium")
             )
-            node_id += 1
-        
-        # Liquidity data nodes (12 nodes)
-        for i, (rpc, provider_type) in enumerate(cronos_rpcs * 3):
-            self.nodes[node_id] = NodeInfo(
-                node_id=node_id,
-                name=f"liquidity_node_{i}",
-                rpc_url=rpc,
-                provider_type=provider_type,
-                category="liquidity",
-                is_primary=(i == 0)
-            )
-            node_id += 1
-        
-        # Volume data nodes (12 nodes)
-        for i, (rpc, provider_type) in enumerate(cronos_rpcs * 3):
-            self.nodes[node_id] = NodeInfo(
-                node_id=node_id,
-                name=f"volume_node_{i}",
-                rpc_url=rpc,
-                provider_type=provider_type,
-                category="volume",
-                is_primary=(i == 0)
-            )
-            node_id += 1
-        
-        # Gas price nodes (12 nodes)
-        for i, (rpc, provider_type) in enumerate(cronos_rpcs * 3):
-            self.nodes[node_id] = NodeInfo(
-                node_id=node_id,
-                name=f"gas_node_{i}",
-                rpc_url=rpc,
-                provider_type=provider_type,
-                category="gas",
-                is_primary=(i == 0)
-            )
-            node_id += 1
+        self.registry_loaded = False
     
     async def connect(self):
         """Establish async HTTP session"""
         if self.session is None:
             self.session = aiohttp.ClientSession()
+        
+        # Load registry and initialize nodes
+        await self._initialize_nodes()
         
         # Start health check task
         asyncio.create_task(self._health_check_loop())
@@ -160,59 +177,38 @@ class NodeConnector:
         await asyncio.gather(*tasks, return_exceptions=True)
     
     async def _check_node_health(self, node: NodeInfo):
-        """Check if a node is responding"""
+        """Check if a provider node responds to /data (expects 402 or 200)"""
         if not self.session:
             return
         
         try:
             start_time = time.time()
-            payload = {
-                "jsonrpc": "2.0",
-                "method": "eth_blockNumber",
-                "params": [],
-                "id": 1,
-            }
-            
-            async with self.session.post(
+            async with self.session.get(
                 node.rpc_url,
-                json=payload,
                 timeout=aiohttp.ClientTimeout(total=5)
             ) as response:
                 response_time = (time.time() - start_time) * 1000
                 node.response_time_ms = response_time
                 node.last_updated = datetime.now()
                 
-                if response.status == 200:
-                    data = await response.json()
-                    if "result" in data:
-                        node.status = (
-                            NodeStatus.SLOW if response_time > self.max_response_time
-                            else NodeStatus.ONLINE
-                        )
-                        node.data_freshness_ms = 0  # Just updated
-                    else:
-                        node.status = NodeStatus.OFFLINE
+                if response.status in (200, 402):
+                    node.status = (
+                        NodeStatus.SLOW if response_time > self.max_response_time
+                        else NodeStatus.ONLINE
+                    )
+                    node.data_freshness_ms = 0
                 else:
                     node.status = NodeStatus.OFFLINE
-        
         except asyncio.TimeoutError:
             node.status = NodeStatus.SLOW
             node.last_updated = datetime.now()
-        except Exception as e:
+        except Exception:
             node.status = NodeStatus.OFFLINE
             node.last_updated = datetime.now()
     
-    async def get_data(self, method: str, params: List = None, category: Optional[str] = None) -> Dict[str, Any]:
+    async def get_data(self, method: str = "fetch", params: List = None, category: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get data from nodes, using primary node first with fallback
-        
-        Args:
-            method: RPC method to call
-            params: RPC parameters
-            category: Specific category of nodes to use, None for all
-        
-        Returns:
-            Response data with metadata about which nodes were used
+        Fetch data from provider nodes using HTTP + payment flow.
         """
         if not self.session:
             await self.connect()
@@ -220,51 +216,57 @@ class NodeConnector:
         if params is None:
             params = []
         
-        # Select nodes to query
         nodes_to_try = self._select_nodes(category)
-        
-        payload = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            "id": 1,
-        }
-        
-        # Try primary node first
         primary_nodes = [n for n in nodes_to_try if n.is_primary and n.status == NodeStatus.ONLINE]
         fallback_nodes = [n for n in nodes_to_try if not n.is_primary and n.status in (NodeStatus.ONLINE, NodeStatus.SLOW)]
-        
         all_nodes_to_try = primary_nodes + fallback_nodes
         
         for node in all_nodes_to_try:
             try:
                 start_time = time.time()
-                async with self.session.post(
-                    node.rpc_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=3)
-                ) as response:
+                # Step 1: GET /data (expect 402)
+                async with self.session.get(node.rpc_url, timeout=aiohttp.ClientTimeout(total=3)) as resp:
                     response_time = (time.time() - start_time) * 1000
-                    
-                    if response.status == 200:
-                        data = await response.json()
-                        if "result" in data:
-                            node.response_time_ms = response_time
-                            node.last_updated = datetime.now()
-                            node.data_freshness_ms = 0
-                            
-                            return {
-                                "data": data.get("result"),
-                                "node_used": node.to_dict(),
-                                "timestamp": datetime.now().isoformat(),
-                                "method": method,
-                                "response_time_ms": response_time,
-                                "success": True,
-                            }
+                    if resp.status == 402:
+                        invoice = await resp.json()
+                        pay_url = node.rpc_url.replace('/data', '/data/payment')
+                        # Step 2: POST payment (simulated)
+                        async with self.session.post(
+                            pay_url,
+                            json={"tx_hash": "0xsimulated_payment"},
+                            timeout=aiohttp.ClientTimeout(total=3)
+                        ) as pay_resp:
+                            if pay_resp.status == 200:
+                                result = await pay_resp.json()
+                                data = result.get('data', {})
+                                node.response_time_ms = response_time
+                                node.last_updated = datetime.now()
+                                node.data_freshness_ms = 0
+                                return {
+                                    "data": data,
+                                    "node_used": node.to_dict(),
+                                    "timestamp": datetime.now().isoformat(),
+                                    "method": method,
+                                    "response_time_ms": response_time,
+                                    "success": True,
+                                }
+                    elif resp.status == 200:
+                        result = await resp.json()
+                        data = result.get('data', result)
+                        node.response_time_ms = response_time
+                        node.last_updated = datetime.now()
+                        node.data_freshness_ms = 0
+                        return {
+                            "data": data,
+                            "node_used": node.to_dict(),
+                            "timestamp": datetime.now().isoformat(),
+                            "method": method,
+                            "response_time_ms": response_time,
+                            "success": True,
+                        }
             except Exception:
                 continue
         
-        # All nodes failed
         return {
             "data": None,
             "node_used": None,
@@ -295,13 +297,13 @@ class NodeConnector:
         }
     
     async def execute_batch(self, requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Execute multiple RPC calls in parallel"""
+        """Execute multiple provider fetches in parallel"""
         if not self.session:
             await self.connect()
         
         tasks = [
             self.get_data(
-                req.get("method"),
+                req.get("method", "fetch"),
                 req.get("params", []),
                 req.get("category")
             )
@@ -310,6 +312,52 @@ class NodeConnector:
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return results
+
+    async def get_feature_vector(self) -> Dict[str, Any]:
+        """Fetch from all nodes and return a normalized 48-feature vector"""
+        if not self.session:
+            await self.connect()
+        
+        nodes = list(self.nodes.values())
+        # Build fetch tasks for each node
+        tasks = [self.get_data(category=n.category) for n in nodes]
+        results = await asyncio.gather(*tasks)
+        
+        # Extract a numeric value per node for normalization
+        import numpy as np
+        values = []
+        used = []
+        for r in results:
+            data = r.get("data")
+            used.append(r.get("node_used", {}).get("name"))
+            # Try common numeric fields
+            num = None
+            if isinstance(data, dict):
+                # Prefer 'value' then first numeric field
+                if "value" in data and isinstance(data["value"], (int, float)):
+                    num = float(data["value"])
+                else:
+                    for k, v in data.items():
+                        if isinstance(v, (int, float)):
+                            num = float(v)
+                            break
+            elif isinstance(data, (int, float)):
+                num = float(data)
+            values.append(num if num is not None else 0.0)
+        
+        vec = np.array(values, dtype=np.float32)
+        vmin, vmax = float(vec.min()), float(vec.max())
+        if vmax - vmin > 0:
+            norm = (vec - vmin) / (vmax - vmin)
+        else:
+            norm = np.full_like(vec, 0.5)
+        
+        return {
+            "vector": norm,
+            "raw": values,
+            "nodes": used,
+            "timestamp": datetime.now().isoformat(),
+        }
 
 
 # Global connector instance
