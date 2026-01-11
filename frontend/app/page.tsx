@@ -7,7 +7,10 @@ import Dashboard from "@/components/dashboard"
 import AlphaMarketplace from "@/components/alpha-marketplace"
 import LiveTerminal from "@/components/live-terminal"
 import TradingView from "@/components/trading-view"
+import TradingDashboard from "@/components/trading-dashboard"
+import SimulationView from "@/components/simulation-view"
 import ChatPage from "@/app/chat/page"
+import TradingPanel from "@/components/trading-panel"
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState("dashboard")
@@ -23,6 +26,10 @@ export default function Home() {
       case "terminal":
         return <LiveTerminal />
       case "trading":
+        return <TradingDashboard />
+      case "simulation":
+        return <SimulationView autoUpdate={true} />
+      case "charts":
         return <TradingView />
       default:
         return <Dashboard />
@@ -34,8 +41,11 @@ export default function Home() {
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-auto bg-black/40">{renderPage()}</main>
+        <main className="flex-1 overflow-auto bg-black/40">
+          {renderPage()}
+        </main>
       </div>
+      {(currentPage === "simulation" || currentPage === "trading") && <TradingPanel />}
     </div>
   )
 }

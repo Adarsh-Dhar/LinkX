@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, ShoppingBag, Terminal, Settings, MessageCircle } from "lucide-react"
+import { Home, ShoppingBag, Terminal, MessageCircle, TrendingUp, Zap } from "lucide-react"
 
 interface SidebarProps {
   currentPage: string
@@ -12,8 +12,9 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "chat", label: "Agent Chat", icon: MessageCircle },
     { id: "marketplace", label: "Alpha Market", icon: ShoppingBag },
+    { id: "trading", label: "Trading", icon: TrendingUp },
+    { id: "simulation", label: "Simulation", icon: Zap },
     { id: "terminal", label: "Live Terminal", icon: Terminal },
-    { id: "trading", label: "Trading View", icon: Settings },
   ]
 
   return (
@@ -47,7 +48,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="p-4 border-t border-border/30 text-xs text-muted-foreground">
-        <p>v0.1.0</p>
+        <p>v0.2.0</p>
       </div>
     </aside>
   )

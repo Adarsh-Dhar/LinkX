@@ -16,6 +16,7 @@ from tools import get_token_balance, execute_vvs_swap, access_paid_api
 from smart_router import SmartRouter
 from brain import RLAgent
 from data_pipeline import DataPipeline
+from trading_engine import TradingEngine, initialize_engine
 
 load_dotenv()
 
@@ -35,7 +36,7 @@ class LightweightAgent:
         
         # Initialize the Smart Router for 48-node ecosystem
         print("\n🔌 Initializing Smart Router for 48-Node Ecosystem...")
-        self.router = SmartRouter()
+        self.smart_router = SmartRouter()
         
         # Initialize the Data Pipeline for 48-node data aggregation
         print("📡 Initializing Data Pipeline...")
@@ -50,7 +51,19 @@ class LightweightAgent:
             print(f"⚠️  Brain initialization warning: {e}")
             print("   Continuing in non-neural mode...")
             self.brain = None
-            self.brain = None
+        
+        # Initialize the Trading Engine for orchestrating trades
+        print("⚙️  Initializing Trading Engine...")
+        try:
+            self.trading_engine = initialize_engine(
+                smart_router=self.smart_router,
+                data_pipeline=self.data_pipeline,
+                neural_brain=self.brain
+            )
+            print("✅ Trading Engine initialized successfully")
+        except Exception as e:
+            print(f"⚠️  Trading Engine warning: {e}")
+            self.trading_engine = None
         
         # Data accumulator for neural network (48 features)
         self.market_state = np.zeros(48, dtype=np.float32)
