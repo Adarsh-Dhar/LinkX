@@ -36,7 +36,8 @@ export default function TradingPanel() {
   const [error, setError] = useState<string | null>(null)
   const [recentTrades, setRecentTrades] = useState<any[]>([])
 
-  const API_BASE = "http://localhost:8000"
+  // Allow overriding the agent API host; default to the Next.js rewrite at /api
+  const API_BASE = process.env.NEXT_PUBLIC_AGENT_API ?? "/api"
 
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault()

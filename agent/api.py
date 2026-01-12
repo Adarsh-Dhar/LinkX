@@ -332,17 +332,7 @@ async def get_node_data(req: NodeDataRequest):
                 normalized_values=raw_data.get('normalized', {})
             )
         else:
-            # Fallback mock data
-            return NodeDataResponse(
-                category=category,
-                timestamp=datetime.now().isoformat(),
-                data={"price": 0.45, "volume_24h": 1250000, "liquidity": 5600000},
-                providers_used=[
-                    {"node_id": "1", "provider": "Premium Data Inc", "latency_ms": 45},
-                    {"node_id": "2", "provider": "Budget Data Co", "latency_ms": 120}
-                ],
-                normalized_values={"price": 0.65, "volume": 0.78, "liquidity": 0.82}
-            )
+            raise HTTPException(status_code=500, detail="DataPipeline not initialized on agent")
     except Exception as e:
         print(f"Error fetching node data: {e}")
         raise HTTPException(status_code=500, detail=str(e))

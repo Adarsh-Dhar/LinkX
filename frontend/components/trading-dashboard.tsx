@@ -51,7 +51,7 @@ export default function TradingDashboard() {
   // Fetch nodes status
   const fetchNodesStatus = async () => {
     try {
-      const response = await fetch("http://localhost:8000/nodes/status")
+      const response = await fetch("/api/nodes/status")
       if (response.ok) {
         const data = await response.json()
         setNodesStatus(data.nodes || [])
@@ -65,14 +65,14 @@ export default function TradingDashboard() {
   const fetchTradesAndMetrics = async () => {
     try {
       // Fetch recent trades
-      const tradesRes = await fetch("http://localhost:8000/simulations/recent?limit=5")
+      const tradesRes = await fetch("/api/simulations/recent?limit=5")
       if (tradesRes.ok) {
         const tradesData = await tradesRes.json()
         setRecentTrades(tradesData)
       }
 
       // Fetch metrics
-      const metricsRes = await fetch("http://localhost:8000/simulations/metrics")
+      const metricsRes = await fetch("/api/simulations/metrics")
       if (metricsRes.ok) {
         const metricsData = await metricsRes.json()
         setMetrics(metricsData)

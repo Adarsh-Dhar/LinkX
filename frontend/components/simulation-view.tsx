@@ -43,7 +43,9 @@ export default function SimulationView({ autoUpdate = true }: SimulationViewProp
   const [wsConnected, setWsConnected] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
-  const API_BASE = "http://localhost:8000"
+  // Allow overriding the agent API host; default to the Next.js rewrite at /api
+  const API_BASE = process.env.NEXT_PUBLIC_AGENT_API ?? "/api"
+  const WS_BASE = process.env.NEXT_PUBLIC_AGENT_WS ?? "ws://localhost:8000"
 
   // Fetch all simulation data
   const fetchSimulationData = async () => {
@@ -86,7 +88,7 @@ export default function SimulationView({ autoUpdate = true }: SimulationViewProp
 
     let ws: WebSocket
     const connectWebSocket = () => {
-      ws = new WebSocket("ws://localhost:8000/ws/trading")
+      ws = new WebSocket(`${WS_BASE}/ws/trading`)
       
       ws.onopen = () => {
         setWsConnected(true)

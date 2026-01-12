@@ -87,33 +87,11 @@ class TradingEngine:
         Returns:
             Normalized market data vector ready for neural network
         """
-        try:
-            if hasattr(self.data_pipeline, 'get_normalized_vector'):
-                market_data = self.data_pipeline.get_normalized_vector()
-                return market_data
-            else:
-                # Fallback: create mock market data
-                return {
-                    'data': self._generate_mock_market_data(),
-                    'nodes': [f"Node_{i}" for i in range(48)],
-                    'timestamp': datetime.now().isoformat()
-                }
-        except Exception as e:
-            print(f"Error fetching market data: {e}")
-            return self._generate_mock_market_data()
-    
-    def _generate_mock_market_data(self) -> Dict[str, Any]:
-        """Generate mock market data for testing"""
-        return {
-            'price': np.random.uniform(0.4, 0.5),
-            'volume_24h': np.random.uniform(1000000, 2000000),
-            'liquidity': np.random.uniform(5000000, 10000000),
-            'whale_transactions': np.random.uniform(0, 100),
-            'sentiment_score': np.random.uniform(-1, 1),
-            'rsi': np.random.uniform(30, 70),
-            'moving_average_50': np.random.uniform(0.4, 0.5),
-            'volatility': np.random.uniform(0.01, 0.05)
-        }
+        if hasattr(self.data_pipeline, 'get_normalized_vector'):
+            market_data = self.data_pipeline.get_normalized_vector()
+            return market_data
+        else:
+            raise RuntimeError("DataPipeline does not have get_normalized_vector method. Ensure data pipeline is properly initialized.")
     
     async def simulate_trade(
         self, 
@@ -158,9 +136,18 @@ class TradingEngine:
                 except Exception as e:
                     print(f"Neural prediction error: {e}")
             
-            # Simulate pricing based on market data and confidence
-            base_price = market_data.get('data', {}).get('price', 0.45)
-            entry_price = base_price * (1 - np.random.uniform(0, 0.005))  # Slight slippage
+            # Calculate pricing based on market data and confidence
+            # Use market data mean as base price signal
+            market_state = market_data.get('data', {})
+            if isinstance(market_state, dict):
+                base_price = market_state.get('price', 0.45)
+            else:
+                # If data is an array/vector, use mean
+                base_price = 0.45
+            
+            # Slippage based on market volatility (not random)
+            volatility = market_data.get('data', {}).get('volatility', 0.005) if isinstance(market_data.get('data', {}), dict) else 0.005
+            entry_price = base_price * (1 - volatility)
             
             # Exit price influenced by confidence and decision
             if neural_decision == "BUY":
@@ -346,28 +333,12 @@ class TradingEngine:
             trade.simulation_status = "pending"
             return trade
         
-        # Try to execute (would call actual swap function)
-        try:
-            # In real implementation, would call:
-            # from tools import execute_swap
-            # tx_hash = execute_swap(token_in, token_out, amount, slippage=1.0)
-            # trade.transaction_hash = tx_hash
-            # trade.actual_output = get_output_amount(tx_hash)
-            
-            # For now, simulate execution
-            trade.transaction_hash = f"0x{''.join([str(i) for i in np.random.randint(0,9,64)])[:64]}"
-            trade.actual_output = trade.predicted_amount_out * (1 - np.random.uniform(0, 0.02))
-            trade.simulation_status = "completed"
-            
-            # Update metrics with actual output
-            self._update_metrics(trade)
-            
-        except Exception as e:
-            print(f"Trade execution error: {e}")
-            trade.simulation_status = "failed"
-            self.metrics["failed_trades"] += 1
-        
-        return trade
+        # Real trade execution requires implementation
+        # Must integrate with actual DEX smart contracts
+        raise NotImplementedError(
+            "Live trade execution requires real smart contract integration. "
+            "Implement execute_swap from tools.py or use simulation mode only."
+        )
     
     def reset_metrics(self) -> None:
         """Reset all performance metrics"""

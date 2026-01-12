@@ -123,8 +123,9 @@ class DataPipeline:
                             if 'value' in data:
                                 return float(data['value'])
                             
-                            # Default to random for complex structures
-                            return random.uniform(0, 100)
+                            # No valid data structure - return 0.0
+                            print(f"⚠️  No numeric data in response from {name}")
+                            return 0.0
                         
                 elif response.status == 200:
                     # Direct access (no paywall)
@@ -137,7 +138,9 @@ class DataPipeline:
                     elif 'value' in data:
                         return float(data['value'])
                     
-                    return random.uniform(0, 100)
+                    # No valid numeric data - return 0.0
+                    print(f"⚠️  No numeric data in response from {name}")
+                    return 0.0
                     
             return 0.0
             
