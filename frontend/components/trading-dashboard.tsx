@@ -32,7 +32,7 @@ interface PerformanceMetrics {
   total_trades: number
   successful_trades: number
   failed_trades: number
-  total_pnl: number
+  cumulative_pnl: number
   win_rate: number
   sharpe_ratio: number
   max_drawdown: number
@@ -163,15 +163,15 @@ export default function TradingDashboard() {
         </div>
 
         {/* Total P&L */}
-        <div className={`bg-black/40 border rounded-lg p-4 ${metrics && metrics.total_pnl >= 0 ? "border-green-500/30" : "border-red-500/30"}`}>
+        <div className={`bg-black/40 border rounded-lg p-4 ${metrics && metrics.cumulative_pnl >= 0 ? "border-green-500/30" : "border-red-500/30"}`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-400 text-sm">Total P&L</p>
-              <p className={`text-2xl font-bold ${metrics && metrics.total_pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                ${metrics?.total_pnl.toFixed(2) || 0}
+              <p className={`text-2xl font-bold ${metrics && metrics.cumulative_pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                ${(metrics?.cumulative_pnl ?? 0).toFixed(2)}
               </p>
             </div>
-            {metrics && metrics.total_pnl >= 0 ? (
+            {metrics && metrics.cumulative_pnl >= 0 ? (
               <TrendingUp className="text-green-400" size={32} />
             ) : (
               <TrendingDown className="text-red-400" size={32} />
@@ -222,6 +222,19 @@ export default function TradingDashboard() {
                         style={{ width: `${(onlineCount / categoryNodes.length) * 100}%` }}
                       />
                     </div>
+                    {/* Add unique key for each node in categoryNodes */}
+                    <div className="space-y-1 text-xs">
+                      {categoryNodes.map((node) => (
+                        <div key={node.node_id} className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50">
+                          <span className="text-gray-400">
+                            Node {node.node_id} ({node.provider_type?.[0]?.toUpperCase() || node.name?.[0]?.toUpperCase() || "N"})
+                          </span>
+                          <span className={node.status === "online" ? "text-green-400" : "text-red-400"}>
+                            {node.status === "online" ? "●" : "○"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )
               })}
@@ -231,16 +244,19 @@ export default function TradingDashboard() {
             <div className="bg-black/40 border border-cyan-500/20 rounded p-3 max-h-80 overflow-y-auto">
               <p className="text-xs text-gray-500 mb-2">Active Nodes</p>
               <div className="space-y-1 text-xs">
-                {nodesStatus.slice(0, 15).map((node) => (
-                  <div key={node.node_id} className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50">
-                    <span className="text-gray-400">
-                      Node {node.node_id} ({node.provider_type[0].toUpperCase()})
-                    </span>
-                    <span className={node.status === "online" ? "text-green-400" : "text-red-400"}>
-                      {node.status === "online" ? "●" : "○"}
-                    </span>
-                  </div>
-                ))}
+                {nodesStatus.slice(0, 15).map((node) => {
+                  const providerType = node.provider_type?.[0]?.toUpperCase() || node.name?.[0]?.toUpperCase() || "N"
+                  return (
+                    <div key={node.node_id} className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50">
+                      <span className="text-gray-400">
+                        Node {node.node_id} ({providerType})
+                      </span>
+                      <span className={node.status === "online" ? "text-green-400" : "text-red-400"}>
+                        {node.status === "online" ? "●" : "○"}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>

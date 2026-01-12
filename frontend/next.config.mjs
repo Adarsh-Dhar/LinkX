@@ -6,16 +6,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  rewrites: async () => {
-    return {
-      beforeFiles: [
-        {
-          source: '/api/:path*',
-          destination: 'http://localhost:8000/:path*',
-        },
-      ],
-    }
-  },
+  // Using API routes instead of rewrites for better error handling
+  // See app/api/* for proxy routes to Python backend
 }
 
 export default nextConfig
