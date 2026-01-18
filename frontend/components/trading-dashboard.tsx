@@ -209,7 +209,7 @@ export default function TradingDashboard() {
                 const categoryNodes = nodesStatus.filter((n) => n.category === category)
                 const onlineCount = categoryNodes.filter((n) => n.status === "online").length
                 return (
-                  <div key={category} className="space-y-1">
+                  <div key={`${category}-${categories.indexOf(category)}`} className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-400">{category}</span>
                       <span className="text-cyan-400 font-bold">

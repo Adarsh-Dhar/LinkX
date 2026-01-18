@@ -91,10 +91,20 @@ echo "  • Logs: server/.server.log"
 # Wait for server to be ready
 sleep 2
 
+
 # 2. Start Python Agent API (Port 8000)
 echo ""
 echo "🤖 [2/3] Starting Agent API (FastAPI)..."
 cd "$SCRIPT_DIR/agent"
+
+# Check if port 8000 is already in use
+if lsof -i :8000 | grep LISTEN > /dev/null; then
+    echo -e "${RED}❌ Port 8000 is already in use!${NC}"
+    echo "  The Agent API (FastAPI) cannot start because something else is using port 8000."
+    echo "  Please stop the process using port 8000 and try again."
+    lsof -i :8000 | grep LISTEN
+    exit 1
+fi
 
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then

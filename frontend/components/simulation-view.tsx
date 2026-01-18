@@ -111,8 +111,24 @@ export default function SimulationView({ autoUpdate = true }: SimulationViewProp
       }
 
       ws.onerror = (error) => {
-        console.error("WebSocket error:", error)
-        setWsConnected(false)
+        if (error instanceof Event && error.target instanceof WebSocket) {
+          const wsTarget = error.target as WebSocket;
+          let state = 'unknown';
+          switch (wsTarget.readyState) {
+            case 0: state = 'CONNECTING'; break;
+            case 1: state = 'OPEN'; break;
+            case 2: state = 'CLOSING'; break;
+            case 3: state = 'CLOSED'; break;
+          }
+          // Only log if not already closed (to avoid noise during reconnects)
+          if (wsTarget.readyState !== 3 || wsConnected) {
+            console.error(`WebSocket error: readyState=${wsTarget.readyState} (${state})`);
+          }
+        } else {
+          console.error("WebSocket error:", error);
+        }
+        setWsConnected(false);
+        setError("WebSocket connection error (disconnected). If this persists, please check your network or server status.");
       }
 
       ws.onclose = () => {
@@ -145,11 +161,13 @@ export default function SimulationView({ autoUpdate = true }: SimulationViewProp
   const equityChangePercent = ((equityChange / 100) * 100).toFixed(2)
 
   // Format equity curve data for chart
-  const chartData = equityCurve?.data.map((value, idx) => ({
-    name: `Trade ${idx + 1}`,
-    equity: value,
-    timestamp: equityCurve.timestamps[idx],
-  })) || []
+  const chartData = (equityCurve?.data && equityCurve?.timestamps && Array.isArray(equityCurve.data) && Array.isArray(equityCurve.timestamps))
+    ? equityCurve.data.map((value, idx) => ({
+        name: `Trade ${idx + 1}`,
+        equity: value,
+        timestamp: equityCurve.timestamps[idx],
+      }))
+    : []
 
   if (loading) {
     return (
