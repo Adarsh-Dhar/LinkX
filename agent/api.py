@@ -359,10 +359,15 @@ async def simulate_trade(req: TradeExecutionRequest):
         nodes_used = []
         
         if hasattr(agent, 'data_pipeline'):
-            # Fetch normalized data from all 48 nodes
-            pipeline_data = agent.data_pipeline.get_normalized_vector()
-            market_data = pipeline_data.get('data', {})
-            nodes_used = pipeline_data.get('nodes', [])
+            # Fetch normalized data from all 48 nodes (async)
+            try:
+                vector = await agent.data_pipeline.get_market_state()
+                market_data = {f"feature_{i}": float(v) for i, v in enumerate(vector)}
+                nodes_used = getattr(agent.data_pipeline, 'last_fetch_keys', [])
+            except Exception as e:
+                print(f"Could not fetch market state: {e}")
+                market_data = {}
+                nodes_used = []
         
         # Get neural prediction
         neural_decision = "HOLD"

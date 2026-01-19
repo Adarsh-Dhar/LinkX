@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -6,8 +7,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Using API routes instead of rewrites for better error handling
-  // See app/api/* for proxy routes to Python backend
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8000/api/:path*', // Proxy to FastAPI
+      },
+    ]
+  },
 }
 
 export default nextConfig

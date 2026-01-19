@@ -30,45 +30,63 @@ export default function TradingPanel() {
   const [tokenIn, setTokenIn] = useState("CRO")
   const [tokenOut, setTokenOut] = useState("USDC")
   const [amount, setAmount] = useState(100)
-  const [simulateOnly, setSimulateOnly] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<SimulationResult | null>(null)
+  const [result, setResult] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [recentTrades, setRecentTrades] = useState<any[]>([])
 
   // Allow overriding the agent API host; default to the Next.js rewrite at /api
   const API_BASE = process.env.NEXT_PUBLIC_AGENT_API ?? "/api"
 
-  const handleSimulate = async (e: React.FormEvent) => {
+  const handleRealTrade = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     try {
-      const response = await fetch(`${API_BASE}/trade/simulate/advanced`, {
+      const response = await fetch(`${API_BASE}/trade/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token_in: tokenIn,
           token_out: tokenOut,
           amount: parseFloat(amount.toString()),
-          simulate_only: true,
+          simulate_only: false,
           slippage_tolerance: 1.0,
         }),
       })
 
-      const data = await response.json()
+      let data = null
+      try {
+        data = await response.json()
+      } catch (jsonErr) {
+        console.error("Failed to parse JSON response:", jsonErr)
+        setError("Invalid response from server")
+        return
+      }
 
       if (response.ok) {
         setResult(data)
-        // Fetch recent trades
+        setError(null)
         await fetchRecentTrades()
       } else {
-        setError(data.detail || "Simulation failed")
+        let errMsg = "Execution failed"
+        if (data && typeof data === "object") {
+          if (data.detail) errMsg = data.detail
+          else if (data.error) errMsg = data.error
+          else if (Object.keys(data).length > 0) errMsg = JSON.stringify(data)
+          else errMsg = "Execution failed: No details provided"
+        }
+        if (data && typeof data === "object" && Object.keys(data).length === 0) {
+          console.error("Trade execution failed: No details provided by backend.")
+        } else {
+          console.error("Trade execution failed:", data)
+        }
+        setError(errMsg)
       }
     } catch (err) {
       console.error("Error:", err)
-      setError("Failed to connect to trading engine")
+      setError("Failed to execute trade")
     } finally {
       setLoading(false)
     }
@@ -81,7 +99,7 @@ export default function TradingPanel() {
     setError(null)
 
     try {
-      const response = await fetch(`${API_BASE}/trade/execute/confirmed`, {
+      const response = await fetch(`${API_BASE}/trade/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,8 +150,8 @@ export default function TradingPanel() {
         </h2>
       </div>
 
-      {/* Trade Form */}
-      <form onSubmit={handleSimulate} className="p-4 space-y-4 flex-1 overflow-y-auto">
+      {/* Trade Form - Only Real Trade */}
+      <form onSubmit={handleRealTrade} className="p-4 space-y-4 flex-1 overflow-y-auto">
         <div>
           <label className="block text-sm text-gray-400 mb-2">From Token</label>
           <select
@@ -175,59 +193,24 @@ export default function TradingPanel() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="simulate-only"
-            checked={simulateOnly}
-            onChange={(e) => setSimulateOnly(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <label htmlFor="simulate-only" className="text-sm text-gray-400">
-            Simulate only (no real trade)
-          </label>
-        </div>
-
-        {/* Simulate Button */}
+        {/* Only Real Trade Button */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition-all"
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition-all"
         >
           {loading ? (
             <>
               <Loader className="w-4 h-4 animate-spin" />
-              Simulating...
+              Executing...
             </>
           ) : (
             <>
-              <Play className="w-4 h-4" />
-              Run Simulation
+              <CheckCircle className="w-4 h-4" />
+              Execute Real Trade
             </>
           )}
         </button>
-
-        {/* Execute Button (shown when result available) */}
-        {result && !simulateOnly && (
-          <button
-            type="button"
-            onClick={handleExecute}
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition-all"
-          >
-            {loading ? (
-              <>
-                <Loader className="w-4 h-4 animate-spin" />
-                Executing...
-              </>
-            ) : (
-              <>
-                <CheckCircle className="w-4 h-4" />
-                Execute Trade
-              </>
-            )}
-          </button>
-        )}
       </form>
 
       {/* Results */}

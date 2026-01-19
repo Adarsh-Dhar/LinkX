@@ -92,18 +92,17 @@ echo "  • Logs: server/.server.log"
 sleep 2
 
 
+
 # 2. Start Python Agent API (Port 8000)
 echo ""
 echo "🤖 [2/3] Starting Agent API (FastAPI)..."
 cd "$SCRIPT_DIR/agent"
 
-# Check if port 8000 is already in use
+# Always kill any previous agent process on port 8000
 if lsof -i :8000 | grep LISTEN > /dev/null; then
-    echo -e "${RED}❌ Port 8000 is already in use!${NC}"
-    echo "  The Agent API (FastAPI) cannot start because something else is using port 8000."
-    echo "  Please stop the process using port 8000 and try again."
-    lsof -i :8000 | grep LISTEN
-    exit 1
+    echo -e "${YELLOW}Killing previous Agent API on port 8000...${NC}"
+    lsof -ti :8000 | xargs kill -9
+    sleep 2
 fi
 
 # Check if virtual environment exists
@@ -128,6 +127,12 @@ if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
         echo "  Copy .env.example to .env and configure it"
     fi
+fi
+
+# Apply latest patch to api.py (if patch file exists)
+if [ -f "$SCRIPT_DIR/agent/api_patch.sh" ]; then
+    echo "Applying latest agent/api.py patch..."
+    bash "$SCRIPT_DIR/agent/api_patch.sh"
 fi
 
 uvicorn api:app --host 0.0.0.0 --port 8000 > .agent.log 2>&1 &

@@ -711,40 +711,15 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         
         ROUTER_ADDRESS = Web3.to_checksum_address(VVS_ROUTER)
         
-        # 3. Handle Token Approval (If not selling Native CRO)
+        # 3. Only check allowance, do not approve yet
         if token_in_addr != "cro":
             token_contract = w3.eth.contract(address=token_in_addr, abi=ERC20_ABI)
             decimals = token_contract.functions.decimals().call()
             amount_in_wei = int(amount_in * (10 ** decimals))
-            
             allowance = token_contract.functions.allowance(my_address, ROUTER_ADDRESS).call()
             if allowance < amount_in_wei:
-                print(f"   🔐 Approving Router...")
-                try:
-                    gas_price = w3.eth.gas_price
-                except:
-                    gas_price = w3.to_wei(5, 'gwei')
-                try:
-                    nonce = w3.eth.get_transaction_count(my_address)
-                except:
-                    nonce = 0
-                approve_tx = token_contract.functions.approve(ROUTER_ADDRESS, 2**256 - 1).build_transaction({
-                    'from': my_address,
-                    'nonce': nonce,
-                    'gas': 100000,
-                    'gasPrice': gas_price
-                })
-                signed = w3.eth.account.sign_transaction(approve_tx, private_key)
-                tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-                print(f"   ⏳ Approval tx: {tx_hash.hex()[:20]}...")
-                try:
-                    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-                    if receipt['status'] == 1:
-                        print("   ✅ Approved.")
-                    else:
-                        return {"error": "Token approval failed"}
-                except Exception as e:
-                    print(f"   ⚠️  Approval timeout: {str(e)}")
+                print(f"   ⚠️  Insufficient allowance. Please approve after swap confirmation.")
+                return {"error": "Insufficient allowance. Approve after swap confirmation."}
         else:
             amount_in_wei = w3.to_wei(amount_in, 'ether')
 
@@ -826,7 +801,27 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
             print(f"   ✅ Swap confirmed!")
             print(f"      Block: {receipt['blockNumber']}")
             print(f"      Gas cost: {gas_cost:.6f} CRO")
-            
+            # Now, if approval is needed, do it after swap confirmation
+            if token_in_addr != "cro":
+                try:
+                    print(f"   🔐 Approving Router after swap confirmation...")
+                    approve_nonce = w3.eth.get_transaction_count(my_address)
+                    approve_tx = token_contract.functions.approve(ROUTER_ADDRESS, 2**256 - 1).build_transaction({
+                        'from': my_address,
+                        'nonce': approve_nonce,
+                        'gas': 100000,
+                        'gasPrice': gas_price
+                    })
+                    signed_approve = w3.eth.account.sign_transaction(approve_tx, private_key)
+                    approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
+                    print(f"   ⏳ Approval tx: {approve_hash.hex()[:20]}...")
+                    approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash, timeout=120)
+                    if approve_receipt['status'] == 1:
+                        print("   ✅ Approved after swap.")
+                    else:
+                        print("   ❌ Approval failed after swap.")
+                except Exception as e:
+                    print(f"   ⚠️  Approval after swap failed: {str(e)}")
             return {
                 "status": "success",
                 "mode": "cronos_testnet_mock_router",
