@@ -1,8 +1,8 @@
-
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
+      {
+        source: '/api/:path*',
+        // FIX: Remove '/api' from the destination so it matches backend route
+        destination: 'http://localhost:8000/:path*', // Proxy to FastAPI
+      },
   },
   images: {
     unoptimized: true,
