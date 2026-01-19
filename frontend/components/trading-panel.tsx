@@ -66,8 +66,14 @@ export default function TradingPanel() {
       }
 
       if (response.ok) {
-        setResult(data)
-        setError(null)
+        // Only set result if tx_hash is present (indicating a real trade)
+        if (data && data.tx_hash) {
+          setResult(data)
+          setError(null)
+        } else {
+          setResult(null)
+          setError("No transaction hash returned. Trade may not have been executed.")
+        }
         await fetchRecentTrades()
       } else {
         let errMsg = "Execution failed"
@@ -222,35 +228,39 @@ export default function TradingPanel() {
           </div>
         )}
 
-        {result && (
+        {result && result.tx_hash && (
           <div className="p-4 space-y-3 bg-black/40 border-b border-green-500/30">
+            <div className="bg-black/60 rounded p-3">
+              <p className="text-xs text-gray-400 mb-1">Transaction Hash</p>
+              <p className="text-xs font-mono text-cyan-400 break-all">{result.tx_hash}</p>
+            </div>
             <div className="bg-black/60 rounded p-3">
               <p className="text-xs text-gray-400 mb-1">Neural Decision</p>
               <p className={`text-lg font-bold ${
-                result.simulation.neural_decision === "BUY"
+                result.simulation?.neural_decision === "BUY"
                   ? "text-green-400"
-                  : result.simulation.neural_decision === "SELL"
+                  : result.simulation?.neural_decision === "SELL"
                   ? "text-red-400"
                   : "text-yellow-400"
               }`}>
-                {result.simulation.neural_decision}
+                {result.simulation?.neural_decision}
               </p>
             </div>
 
             <div className="bg-black/60 rounded p-3">
               <p className="text-xs text-gray-400 mb-1">Confidence Score</p>
-              <p className="text-lg font-bold text-cyan-400">{(result.simulation.confidence * 100).toFixed(1)}%</p>
+              <p className="text-lg font-bold text-cyan-400">{result.simulation ? (result.simulation.confidence * 100).toFixed(1) : "-"}%</p>
               <div className="h-2 bg-black/40 rounded mt-2 overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-cyan-500 to-blue-500"
-                  style={{ width: `${result.simulation.confidence * 100}%` }}
+                  style={{ width: result.simulation ? `${result.simulation.confidence * 100}%` : "0%" }}
                 />
               </div>
             </div>
 
             <div className="bg-black/60 rounded p-3">
               <p className="text-xs text-gray-400 mb-1">Predicted Output</p>
-              <p className="text-base font-bold text-white">{result.simulation.predicted_amount_out.toFixed(6)} {tokenOut}</p>
+              <p className="text-base font-bold text-white">{result.simulation ? result.simulation.predicted_amount_out.toFixed(6) : "-"} {tokenOut}</p>
             </div>
 
             <div className="bg-black/60 rounded p-3">
@@ -260,7 +270,7 @@ export default function TradingPanel() {
 
             <div className="bg-black/60 rounded p-3">
               <p className="text-xs text-gray-400 mb-1">Reasoning</p>
-              <p className="text-xs text-gray-300 line-clamp-3">{result.simulation.reasoning}</p>
+              <p className="text-xs text-gray-300 line-clamp-3">{result.simulation?.reasoning}</p>
             </div>
           </div>
         )}

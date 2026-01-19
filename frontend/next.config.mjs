@@ -1,8 +1,7 @@
-      {
-        source: '/api/:path*',
-        // FIX: Remove '/api' from the destination so it matches backend route
-        destination: 'http://localhost:8000/:path*', // Proxy to FastAPI
-      },
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
   },
   images: {
     unoptimized: true,
@@ -11,7 +10,8 @@
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*', // Proxy to FastAPI
+        // CORRECT: Maps '/api/trade/execute' -> 'http://localhost:8000/trade/execute'
+        destination: 'http://localhost:8000/:path*',
       },
     ]
   },
