@@ -57,6 +57,7 @@ export default function TradingDashboard() {
         setNodesStatus(data.nodes || [])
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Error fetching nodes status:", error)
     }
   }
@@ -78,6 +79,7 @@ export default function TradingDashboard() {
         setMetrics(metricsData)
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Error fetching trades:", error)
     }
   }
@@ -92,6 +94,7 @@ export default function TradingDashboard() {
     }
 
     loadDashboard()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh
@@ -104,6 +107,7 @@ export default function TradingDashboard() {
     }, refreshInterval)
 
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, refreshInterval])
 
   const onlineNodes = nodesStatus.filter((n) => n.status === "online").length
@@ -153,12 +157,12 @@ export default function TradingDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-400 text-sm">Win Rate</p>
-              <p className="text-2xl font-bold text-green-400">{metrics?.win_rate ? (metrics.win_rate * 100).toFixed(1) : 0}%</p>
+              <p className="text-2xl font-bold text-green-400">{metrics?.win_rate ? (metrics.win_rate * 100).toFixed(1) : "0.0"}%</p>
             </div>
             <CheckCircle className="text-green-400" size={32} />
           </div>
           <p className="text-gray-500 text-xs mt-2">
-            {metrics?.successful_trades || 0} / {metrics?.total_trades || 0} trades
+            {metrics?.successful_trades ?? 0} / {metrics?.total_trades ?? 0} trades
           </p>
         </div>
 
@@ -168,7 +172,7 @@ export default function TradingDashboard() {
             <div>
               <p className="text-gray-400 text-sm">Total P&L</p>
               <p className={`text-2xl font-bold ${metrics && metrics.cumulative_pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                ${(metrics?.cumulative_pnl ?? 0).toFixed(2)}
+                ${metrics?.cumulative_pnl !== undefined ? metrics.cumulative_pnl.toFixed(2) : "0.00"}
               </p>
             </div>
             {metrics && metrics.cumulative_pnl >= 0 ? (
@@ -185,7 +189,7 @@ export default function TradingDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-400 text-sm">Avg Confidence</p>
-              <p className="text-2xl font-bold text-purple-400">{metrics ? (metrics.average_confidence * 100).toFixed(1) : 0}%</p>
+              <p className="text-2xl font-bold text-purple-400">{metrics ? (metrics.average_confidence * 100).toFixed(1) : "0.0"}%</p>
             </div>
             <Zap className="text-purple-400" size={32} />
           </div>
@@ -205,11 +209,11 @@ export default function TradingDashboard() {
 
             {/* Node Status Summary */}
             <div className="space-y-3 mb-4">
-              {categories.map((category) => {
+              {categories.map((category, idx) => {
                 const categoryNodes = nodesStatus.filter((n) => n.category === category)
                 const onlineCount = categoryNodes.filter((n) => n.status === "online").length
                 return (
-                  <div key={`${category}-${categories.indexOf(category)}`} className="space-y-1">
+                  <div key={`${category}-${idx}`} className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-400">{category}</span>
                       <span className="text-cyan-400 font-bold">
@@ -225,11 +229,21 @@ export default function TradingDashboard() {
                     {/* Add unique key for each node in categoryNodes */}
                     <div className="space-y-1 text-xs">
                       {categoryNodes.map((node) => (
-                        <div key={node.node_id} className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50">
+                        <div
+                          key={node.node_id}
+                          className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50"
+                        >
                           <span className="text-gray-400">
-                            Node {node.node_id} ({node.provider_type?.[0]?.toUpperCase() || node.name?.[0]?.toUpperCase() || "N"})
+                            Node {node.node_id} (
+                              {node.provider_type?.[0]?.toUpperCase() ||
+                                // @ts-expect-error
+                                node.name?.[0]?.toUpperCase() ||
+                                "N"}
+                            )
                           </span>
-                          <span className={node.status === "online" ? "text-green-400" : "text-red-400"}>
+                          <span
+                            className={node.status === "online" ? "text-green-400" : "text-red-400"}
+                          >
                             {node.status === "online" ? "●" : "○"}
                           </span>
                         </div>
@@ -245,9 +259,16 @@ export default function TradingDashboard() {
               <p className="text-xs text-gray-500 mb-2">Active Nodes</p>
               <div className="space-y-1 text-xs">
                 {nodesStatus.slice(0, 15).map((node) => {
-                  const providerType = node.provider_type?.[0]?.toUpperCase() || node.name?.[0]?.toUpperCase() || "N"
+                  const providerType =
+                    node.provider_type?.[0]?.toUpperCase() ||
+                    // @ts-expect-error
+                    node.name?.[0]?.toUpperCase() ||
+                    "N"
                   return (
-                    <div key={node.node_id} className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50">
+                    <div
+                      key={node.node_id}
+                      className="flex justify-between items-center p-2 rounded bg-black/30 hover:bg-black/50"
+                    >
                       <span className="text-gray-400">
                         Node {node.node_id} ({providerType})
                       </span>
@@ -326,11 +347,11 @@ export default function TradingDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-black/40 rounded p-3">
                 <p className="text-gray-400 text-xs mb-1">Sharpe Ratio</p>
-                <p className="text-xl font-bold text-purple-400">{metrics?.sharpe_ratio.toFixed(2) || "—"}</p>
+                <p className="text-xl font-bold text-purple-400">{metrics?.sharpe_ratio !== undefined ? metrics.sharpe_ratio.toFixed(2) : "—"}</p>
               </div>
               <div className="bg-black/40 rounded p-3">
                 <p className="text-gray-400 text-xs mb-1">Max Drawdown</p>
-                <p className="text-xl font-bold text-red-400">{metrics ? (metrics.max_drawdown * 100).toFixed(1) : "—"}%</p>
+                <p className="text-xl font-bold text-red-400">{metrics?.max_drawdown !== undefined ? (metrics.max_drawdown * 100).toFixed(1) : "—"}%</p>
               </div>
               <div className="bg-black/40 rounded p-3 col-span-2">
                 <p className="text-gray-400 text-xs mb-1">Nodes Used in Analysis</p>
@@ -343,8 +364,16 @@ export default function TradingDashboard() {
 
       {/* Selected Trade Details Modal */}
       {selectedTrade && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setSelectedTrade(null)}>
-          <div className="bg-black/90 border border-cyan-500/50 rounded-lg p-6 max-w-2xl w-full max-h-96 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedTrade(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-black/90 border border-cyan-500/50 rounded-lg p-6 max-w-2xl w-full max-h-96 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold text-white mb-4">Trade Details: {selectedTrade.simulation_id}</h3>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -374,6 +403,7 @@ export default function TradingDashboard() {
             </div>
 
             <button
+              type="button"
               onClick={() => setSelectedTrade(null)}
               className="w-full bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-400 py-2 rounded transition-all"
             >
