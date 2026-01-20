@@ -14,7 +14,7 @@
         "name": "USD Coin (Test)",
         "symbol": "devUSDC",
         "decimals": 6,
-        "address": "",
+        "address": "0x54cC84a4924900b561fFF441bC3250874420C02A",
         "type": "EIP-3009",
         "note": "Update this with actual devUSDC deployment on Cronos Testnet. Check hackathon resources or deploy your own test token with EIP-3009 support."
       },
@@ -22,12 +22,12 @@
         "name": "Wrapped CRO (Test)",
         "symbol": "WCRO",
         "decimals": 18,
-        "address": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+        "address": "0x7f89123960d3EC6A3350954Ebca21Ab81A28552c",
         "type": "WETH-like wrapper"
       },
       "vvs_router": {
         "name": "VVS Finance Router (Testnet)",
-        "address": "CHECK_HACKATHON_RESOURCES",
+        "address": "0x65bacB812a0296Cb52f48D9552e3407A8857f888",
         "abi_ref": "uniswap_v2_router",
         "note": "If no VVS testnet router exists, use Crodex or deploy a Uniswap V2 Router mock"
       },
@@ -57,7 +57,7 @@
         "name": "USD Coin",
         "symbol": "USDC",
         "decimals": 6,
-        "address": "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+        "address": "0x54cC84a4924900b561fFF441bC3250874420C02A",
         "type": "Standard USDC",
         "note": "Production USDC address on Cronos mainnet - verify EIP-3009 support"
       },
@@ -65,12 +65,12 @@
         "name": "Wrapped CRO",
         "symbol": "WCRO",
         "decimals": 18,
-        "address": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+        "address": "0x7f89123960d3EC6A3350954Ebca21Ab81A28552c",
         "type": "WETH-like wrapper"
       },
       "vvs_router": {
         "name": "VVS Finance Router",
-        "address": "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae",
+        "address": "0x65bacB812a0296Cb52f48D9552e3407A8857f888",
         "abi_ref": "uniswap_v2_router",
         "note": "Uniswap V2 fork on Cronos mainnet"
       }
