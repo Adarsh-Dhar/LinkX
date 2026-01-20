@@ -1,3 +1,7 @@
+# Required for Web3 account management
+eth-account
+# Ensure uvicorn is installed in the virtual environment
+uvicorn
 torch
 numpy
 pandas

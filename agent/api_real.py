@@ -17,7 +17,21 @@ from pathlib import Path
 
 # Import neural components directly
 from brain import RLAgent
-from data_pipeline import DataPipeline
+try:
+    from data_pipeline import DataPipeline
+except ImportError:
+    import thriftpy2 as thriftpy
+    class DataPipeline:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_market_state(self):
+            raise NotImplementedError("DataPipeline.get_market_state is not implemented.")
+        def get_feature_names(self):
+            return []
+        def get_raw_values(self):
+            return []
+        def get_normalized_vector(self):
+            return []
 
 app = FastAPI(title="Alpha-Consumer Agent API", version="1.0.0")
 

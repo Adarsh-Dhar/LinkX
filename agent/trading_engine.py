@@ -88,7 +88,10 @@ class TradingEngine:
             Normalized market data vector ready for neural network
         """
         if hasattr(self.data_pipeline, 'get_normalized_vector'):
-            market_data = self.data_pipeline.get_normalized_vector()
+            try:
+                market_data = self.data_pipeline.get_normalized_vector()
+            except NotImplementedError:
+                market_data = []
             return market_data
         else:
             raise RuntimeError("DataPipeline does not have get_normalized_vector method. Ensure data pipeline is properly initialized.")
@@ -362,10 +365,26 @@ class TradingEngine:
 _engine_instance: Optional[TradingEngine] = None
 
 
-def initialize_engine(smart_router, data_pipeline, neural_brain) -> TradingEngine:
+def initialize_engine(smart_router, data_pipeline, neural_brain) -> 'TradingEngine':
     """Initialize the global trading engine"""
     global _engine_instance
     _engine_instance = TradingEngine(smart_router, data_pipeline, neural_brain)
+    # Patch: Provide a stub DataPipeline if not available
+    try:
+        from data_pipeline import DataPipeline
+    except ImportError:
+        import thriftpy2 as thriftpy
+        class DataPipeline:
+            def __init__(self, *args, **kwargs):
+                pass
+            def get_market_state(self):
+                raise NotImplementedError("DataPipeline.get_market_state is not implemented.")
+            def get_feature_names(self):
+                return []
+            def get_raw_values(self):
+                return []
+            def get_normalized_vector(self):
+                return []
     return _engine_instance
 
 

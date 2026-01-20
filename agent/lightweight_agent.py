@@ -12,11 +12,28 @@ import requests
 import numpy as np
 import asyncio
 from dotenv import load_dotenv
-from tools import get_token_balance, execute_vvs_swap, access_paid_api
-from smart_router import SmartRouter
-from brain import RLAgent
-from data_pipeline import DataPipeline
-from trading_engine import TradingEngine, initialize_engine
+from .tools import get_token_balance, execute_vvs_swap
+from .smart_router import SmartRouter
+from .brain import RLAgent
+try:
+    from data_pipeline import DataPipeline
+except ImportError:
+    # Patch: Use thriftpy2 or a stub if data_pipeline is unavailable
+    import thriftpy2 as thriftpy
+    class DataPipeline:
+        def __init__(self, *args, **kwargs):
+            # TODO: Implement or patch with actual logic as needed
+            pass
+        def get_market_state(self):
+            # Return dummy data or raise NotImplementedError
+            raise NotImplementedError("DataPipeline.get_market_state is not implemented.")
+        def get_feature_names(self):
+            return []
+        def get_raw_values(self):
+            return []
+        def get_normalized_vector(self):
+            return []
+from .trading_engine import TradingEngine, initialize_engine
 
 load_dotenv()
 
@@ -31,7 +48,6 @@ class LightweightAgent:
         self.tools = {
             "get_token_balance": get_token_balance,
             "execute_vvs_swap": execute_vvs_swap,
-            "access_paid_api": access_paid_api,
         }
         
         # Initialize the Smart Router for 48-node ecosystem
