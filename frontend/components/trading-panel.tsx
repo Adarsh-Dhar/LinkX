@@ -30,7 +30,7 @@ interface SimulationResult {
 export default function TradingPanel() {
   const [tokenIn, setTokenIn] = useState("CRO")
   const [tokenOut, setTokenOut] = useState("USDC")
-  const [amount, setAmount] = useState(100)
+  const [amount, setAmount] = useState<number | "">(100)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +50,7 @@ export default function TradingPanel() {
         body: JSON.stringify({
           token_in: tokenIn,
           token_out: tokenOut,
-          amount: parseFloat(amount.toString()),
+          amount: typeof amount === "number" ? amount : 0,
           simulate_only: false,
           slippage_tolerance: 1.0,
         }),
@@ -73,8 +73,8 @@ export default function TradingPanel() {
         setError(data.error || data.detail || "Trade execution failed")
         setResult(null)
       } 
-      else if (response.ok && data.tx_hash) {
-        setResult(data)
+      else if (response.ok && (data.tx_hash || data.transaction_hash)) {
+        setResult({ ...data, tx_hash: data.tx_hash || data.transaction_hash })
         setError(null)
         await fetchRecentTrades()
       } 
@@ -139,8 +139,11 @@ export default function TradingPanel() {
           <label className="block text-sm text-gray-400 mb-2">Amount</label>
           <input 
             type="number" 
-            value={amount} 
-            onChange={(e) => setAmount(parseFloat(e.target.value))} 
+            value={amount === "" ? "" : amount}
+            onChange={(e) => {
+              const val = e.target.value;
+              setAmount(val === "" ? "" : parseFloat(val));
+            }}
             className="w-full bg-black/40 border border-cyan-500/30 rounded px-3 py-2 text-white bg-black/40 focus:border-cyan-500 focus:outline-none" 
             min="0"
             step="0.01"

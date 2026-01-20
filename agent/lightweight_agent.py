@@ -12,9 +12,9 @@ import requests
 import numpy as np
 import asyncio
 from dotenv import load_dotenv
-from .tools import get_token_balance, execute_vvs_swap
-from .smart_router import SmartRouter
-from .brain import RLAgent
+from tools import get_token_balance, execute_vvs_swap
+from smart_router import SmartRouter
+from brain import RLAgent
 try:
     from data_pipeline import DataPipeline
 except ImportError:
@@ -33,7 +33,7 @@ except ImportError:
             return []
         def get_normalized_vector(self):
             return []
-from .trading_engine import TradingEngine, initialize_engine
+from trading_engine import TradingEngine, initialize_engine
 
 load_dotenv()
 
