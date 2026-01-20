@@ -319,6 +319,17 @@ async function submitToFacilitator(signature, typedData) {
 }
 
 // ============================================
+// GLOBAL ERROR HANDLER (always return JSON)
+// ============================================
+app.use((err, req, res, next) => {
+    console.error('❌ Express error:', err);
+    res.status(500).json({
+        error: 'Internal server error',
+        message: err && err.message ? err.message : 'Unknown error'
+    });
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
