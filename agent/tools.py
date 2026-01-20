@@ -1,10 +1,39 @@
 import os
 import time
+import json
 from web3 import Web3
 from dotenv import load_dotenv
-from crypto_com_agent_client import tool
 
 load_dotenv()
+
+# --- UNIVERSAL COMPATIBILITY WRAPPER ---
+class UniversalTool:
+    """Wraps a function to work with LangChain, API calls, and direct execution."""
+    def __init__(self, func):
+        self.func = func
+        self.name = func.__name__
+        self.description = func.__doc__ or ""
+        self.args_schema = None  # Mock for LangChain
+
+    def invoke(self, args_dict):
+        """Handler for LangChain .invoke({'arg': val}) calls"""
+        # Unwrap dict if needed
+        if isinstance(args_dict, dict):
+            return self.func(**args_dict)
+        return self.func(args_dict)
+
+    def run(self, *args, **kwargs):
+        """Handler for Agent .run() calls"""
+        return self.func(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        """Handler for direct function() calls"""
+        return self.func(*args, **kwargs)
+
+def tool(func):
+    """Decorator that returns a UniversalTool instance."""
+    return UniversalTool(func)
+# ---------------------------------------
 
 # Configuration
 CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
@@ -15,7 +44,8 @@ USDC_CONTRACT = "0x54cC84a4924900b561fFF441bC3250874420C02A"
 TOKEN_MAP = {
     "usdc": USDC_CONTRACT,
     "cro": "cro",
-    "wcro": WCRO_ADDRESS
+    "wcro": WCRO_ADDRESS,
+    "vvs": "0xea59AC2CcEfe907e7F77B502e2C87aC929832bfF"
 }
 
 ERC20_ABI = [
@@ -37,28 +67,28 @@ def resolve_address(token):
 
 @tool
 def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0):
-    """Executes a swap on VVS Finance."""
-    import traceback, json
+    """Executes a swap on VVS Finance with auto-approval and liquidity checks."""
     try:
         w3 = Web3(Web3.HTTPProvider(CRONOS_RPC_URL))
-        private_key = os.getenv("WALLET_PRIVATE_KEY")
-        if not private_key:
-            return {"error": "No Private Key Found"}
+        if not w3.is_connected():
+            return {"error": "Failed to connect to Cronos RPC"}
 
+        private_key = os.getenv("WALLET_PRIVATE_KEY")
+        if not private_key: return {"error": "No Private Key Found in .env"}
+        
         account = w3.eth.account.from_key(private_key)
         my_address = account.address
-
+        
         addr_in = resolve_address(token_in)
         addr_out = resolve_address(token_out)
         router_addr = Web3.to_checksum_address(VVS_ROUTER)
-
-        if not addr_in or not addr_out:
-            return {"error": "Invalid token address"}
+        
+        if not addr_in or not addr_out: return {"error": f"Invalid token address for {token_in} or {token_out}"}
 
         is_native = (addr_in == "cro")
         path_in = Web3.to_checksum_address(WCRO_ADDRESS) if is_native else Web3.to_checksum_address(addr_in)
         path_out = Web3.to_checksum_address(WCRO_ADDRESS) if addr_out == "cro" else Web3.to_checksum_address(addr_out)
-
+        
         # 1. Calculate Amount in Wei
         amount_in_wei = 0
         if is_native:
@@ -67,70 +97,65 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
             ctr = w3.eth.contract(address=path_in, abi=ERC20_ABI)
             dec = ctr.functions.decimals().call()
             amount_in_wei = int(amount_in * (10**dec))
-
-            # Auto Approve if needed
-            allowance = ctr.functions.allowance(my_address, router_addr).call()
-            if allowance < amount_in_wei:
-                try:
+            
+            # Auto Approve
+            try:
+                allowance = ctr.functions.allowance(my_address, router_addr).call()
+                if allowance < amount_in_wei:
+                    print(f"Approving {token_in}...")
                     nonce = w3.eth.get_transaction_count(my_address)
                     tx = ctr.functions.approve(router_addr, 2**256-1).build_transaction({
-                        'from': my_address, 'nonce': nonce, 'gasPrice': w3.eth.gas_price
+                        'from': my_address, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
                     })
                     signed = w3.eth.account.sign_transaction(tx, private_key)
                     w3.eth.send_raw_transaction(signed.raw_transaction)
-                    time.sleep(5)
-                except Exception as e:
-                    return {"error": f"Approval failed: {str(e)}"}
+                    time.sleep(5) # Wait for approval
+            except Exception as e:
+                return {"error": f"Approval Failed: {str(e)}"}
 
-        # 2. Check Liquidity (CRITICAL FIX)
+        # 2. Check Liquidity (Prevents Revert Errors)
         router = w3.eth.contract(address=router_addr, abi=ROUTER_ABI)
         path = [path_in, path_out]
-
+        
         try:
             amounts = router.functions.getAmountsOut(amount_in_wei, path).call()
             min_out = int(amounts[-1] * (1 - max_slippage/100))
         except Exception as e:
-            return {"error": f"No Liquidity Pool found for {token_in}/{token_out} on Testnet VVS. Cannot swap. Details: {str(e)}"}
+            return {"error": f"No Liquidity Pool for {token_in}/{token_out} on Testnet VVS. Swap cancelled."}
 
         # 3. Execute Swap
-        try:
-            nonce = w3.eth.get_transaction_count(my_address)
-            deadline = int(time.time()) + 300
+        nonce = w3.eth.get_transaction_count(my_address)
+        deadline = int(time.time()) + 600 # 10 mins
+        
+        if is_native:
+            # Swap Native -> Token
+            tx = router.functions.swapExactETHForTokens(
+                min_out, path, my_address, deadline
+            ).build_transaction({
+                'from': my_address, 
+                'value': amount_in_wei, 
+                'gas': 350000, 
+                'gasPrice': int(w3.eth.gas_price * 1.2), 
+                'nonce': nonce
+            })
+        else:
+            # Swap Token -> Token/Native
+            tx = router.functions.swapExactTokensForETH(
+                amount_in_wei, min_out, path, my_address, deadline
+            ).build_transaction({
+                'from': my_address, 
+                'gas': 350000, 
+                'gasPrice': int(w3.eth.gas_price * 1.2), 
+                'nonce': nonce
+            })
 
-            if is_native:
-                tx = router.functions.swapExactETHForTokens(
-                    min_out, path, my_address, deadline
-                ).build_transaction({
-                    'from': my_address,
-                    'value': amount_in_wei,
-                    'gas': 300000,
-                    'gasPrice': w3.eth.gas_price,
-                    'nonce': nonce
-                })
-            else:
-                tx = router.functions.swapExactTokensForETH(
-                    amount_in_wei, min_out, path, my_address, deadline
-                ).build_transaction({
-                    'from': my_address,
-                    'gas': 300000,
-                    'gasPrice': w3.eth.gas_price,
-                    'nonce': nonce
-                })
-
-            signed = w3.eth.account.sign_transaction(tx, private_key)
-            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-
-            # Ensure tx_hash is hex string for JSON serialization
-            return {"status": "success", "tx_hash": tx_hash.hex()}
-        except Exception as e:
-            tb = traceback.format_exc()
-            # Return error as string, not as Exception object
-            return {"error": f"Swap failed: {str(e)}", "trace": tb}
-
+        signed = w3.eth.account.sign_transaction(tx, private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        
+        return {"status": "success", "tx_hash": tx_hash.hex()}
+        
     except Exception as e:
-        tb = traceback.format_exc()
-        # Return error as string, not as Exception object
-        return {"error": f"Internal error: {str(e)}", "trace": tb}
+        return {"error": f"Execution Exception: {str(e)}"}
 
 @tool
 def get_token_balance(token_address: str):
