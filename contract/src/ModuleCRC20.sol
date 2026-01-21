@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GNU-3
-pragma solidity >0.4.13 >=0.4.23 >=0.6.11 <0.7.0;
+pragma solidity ^0.8.13;
 
 ////// lib/ds-token/lib/ds-auth/src/auth.sol
 // This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ contract DSAuth is DSAuthEvents {
     DSAuthority  public  authority;
     address      public  owner;
 
-    constructor() public {
+    constructor() {
         owner = msg.sender;
         emit LogSetOwner(msg.sender);
     }
@@ -63,7 +63,7 @@ contract DSAuth is DSAuthEvents {
             return true;
         } else if (src == owner) {
             return true;
-        } else if (authority == DSAuthority(address(0))) {
+        } else if (address(authority) == address(0)) {
             return false;
         } else {
             return authority.canCall(src, address(this), sig);
@@ -195,7 +195,7 @@ contract DSToken is DSMath, DSAuth {
     string                                            public  name = "";     // Optional token name
 
 
-    constructor(string memory symbol_) public {
+    constructor(string memory symbol_) {
         symbol = symbol_;
     }
 
@@ -212,7 +212,7 @@ contract DSToken is DSMath, DSAuth {
     }
 
     function approve(address guy) external returns (bool) {
-        return approve(guy, uint(-1));
+        return approve(guy, type(uint).max);
     }
 
     function approve(address guy, uint wad) public stoppable returns (bool) {
@@ -232,7 +232,7 @@ contract DSToken is DSMath, DSAuth {
     stoppable
     returns (bool)
     {
-        if (src != msg.sender && allowance[src][msg.sender] != uint(-1)) {
+        if (src != msg.sender && allowance[src][msg.sender] != type(uint).max) {
             require(allowance[src][msg.sender] >= wad, "ds-token-insufficient-approval");
             allowance[src][msg.sender] = sub(allowance[src][msg.sender], wad);
         }
@@ -274,7 +274,7 @@ contract DSToken is DSMath, DSAuth {
     }
 
     function burn(address guy, uint wad) public auth stoppable {
-        if (guy != msg.sender && allowance[guy][msg.sender] != uint(-1)) {
+        if (guy != msg.sender && allowance[guy][msg.sender] != type(uint).max) {
             require(allowance[guy][msg.sender] >= wad, "ds-token-insufficient-approval");
             allowance[guy][msg.sender] = sub(allowance[guy][msg.sender], wad);
         }
@@ -314,7 +314,7 @@ contract ModuleCRC20 is DSToken  {
     event __CronosSendToEthereum(address recipient, uint256 amount, uint256 bridge_fee);
     event __CronosSendToIbc(address sender, string recipient, uint256 amount);
 
-    constructor(string memory denom_, uint8 decimals_) DSToken(denom_) public {
+    constructor(string memory denom_, uint8 decimals_) DSToken(denom_) {
         decimals = decimals_;
         denom = denom_;
     }

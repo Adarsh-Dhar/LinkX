@@ -1,177 +1,22 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+import { IVVSFactory } from "./interfaces/IVVSFactory.sol";
+import { IVVSPair } from "./interfaces/IVVSPair.sol";
+import { IERC20 } from "./interfaces/IERC20.sol";
+import { IVVSCallee } from "./interfaces/IVVSCallee.sol";
+import { SafeMath } from "./libraries/SafeMath.sol";
+
+
 /**
  *Submitted for verification at cronoscan.com on 2022-01-11
 */
 
-// File contracts/interfaces/IVVSFactory.sol
-
-pragma solidity >=0.5.0;
-
-interface IVVSFactory {
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
-
-    function feeTo() external view returns (address);
-    function feeToSetter() external view returns (address);
-
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
-    function allPairs(uint) external view returns (address pair);
-    function allPairsLength() external view returns (uint);
-
-    function createPair(address tokenA, address tokenB) external returns (address pair);
-
-    function setFeeTo(address) external;
-    function setFeeToSetter(address) external;
-}
-
-
-// File contracts/interfaces/IVVSPair.sol
-
-pragma solidity >=0.5.0;
-
-interface IVVSPair {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
-
-    function name() external pure returns (string memory);
-    function symbol() external pure returns (string memory);
-    function decimals() external pure returns (uint8);
-    function totalSupply() external view returns (uint);
-    function balanceOf(address owner) external view returns (uint);
-    function allowance(address owner, address spender) external view returns (uint);
-
-    function approve(address spender, uint value) external returns (bool);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-    function PERMIT_TYPEHASH() external pure returns (bytes32);
-    function nonces(address owner) external view returns (uint);
-
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
-
-    event Mint(address indexed sender, uint amount0, uint amount1);
-    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
-    event Swap(
-        address indexed sender,
-        uint amount0In,
-        uint amount1In,
-        uint amount0Out,
-        uint amount1Out,
-        address indexed to
-    );
-    event Sync(uint112 reserve0, uint112 reserve1);
-
-    function MINIMUM_LIQUIDITY() external pure returns (uint);
-    function factory() external view returns (address);
-    function token0() external view returns (address);
-    function token1() external view returns (address);
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function price0CumulativeLast() external view returns (uint);
-    function price1CumulativeLast() external view returns (uint);
-    function kLast() external view returns (uint);
-
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
-    function skim(address to) external;
-    function sync() external;
-
-    function initialize(address, address) external;
-}
-
-
-// File @openzeppelin/contracts/cryptography/ECDSA.sol@v2.5.1
-
-pragma solidity ^0.5.0;
-
-/**
- * @dev Elliptic Curve Digital Signature Algorithm (ECDSA) operations.
- *
- * These functions can be used to verify that a message was signed by the holder
- * of the private keys of a given address.
- */
-library ECDSA {
-    /**
-     * @dev Returns the address that signed a hashed message (`hash`) with
-     * `signature`. This address can then be used for verification purposes.
-     *
-     * The `ecrecover` EVM opcode allows for malleable (non-unique) signatures:
-     * this function rejects them by requiring the `s` value to be in the lower
-     * half order, and the `v` value to be either 27 or 28.
-     *
-     * NOTE: This call _does not revert_ if the signature is invalid, or
-     * if the signer is otherwise unable to be retrieved. In those scenarios,
-     * the zero address is returned.
-     *
-     * IMPORTANT: `hash` _must_ be the result of a hash operation for the
-     * verification to be secure: it is possible to craft signatures that
-     * recover to arbitrary addresses for non-hashed data. A safe way to ensure
-     * this is by receiving a hash of the original message (which may otherwise
-     * be too long), and then calling {toEthSignedMessageHash} on it.
-     */
-    function recover(bytes32 hash, bytes memory signature) internal pure returns (address) {
-        // Check the signature length
-        if (signature.length != 65) {
-            return (address(0));
-        }
-
-        // Divide the signature in r, s and v variables
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-
-        // ecrecover takes the signature parameters, and the only way to get them
-        // currently is to use assembly.
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-
-        // EIP-2 still allows signature malleability for ecrecover(). Remove this possibility and make the signature
-        // unique. Appendix F in the Ethereum Yellow paper (https://ethereum.github.io/yellowpaper/paper.pdf), defines
-        // the valid range for s in (281): 0 < s < secp256k1n ÷ 2 + 1, and for v in (282): v ∈ {27, 28}. Most
-        // signatures from current libraries generate a unique signature with an s-value in the lower half order.
-        //
-        // If your library generates malleable signatures, such as s-values in the upper range, calculate a new s-value
-        // with 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 - s1 and flip v from 27 to 28 or
-        // vice versa. If your library also generates signatures with 0/1 for v instead 27/28, add 27 to v to accept
-        // these malleable signatures as well.
-        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-            return address(0);
-        }
-
-        if (v != 27 && v != 28) {
-            return address(0);
-        }
-
-        // If the signature is valid (and not malleable), return the signer address
-        return ecrecover(hash, v, r, s);
-    }
-
-    /**
-     * @dev Returns an Ethereum Signed Message, created from a `hash`. This
-     * replicates the behavior of the
-     * https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign[`eth_sign`]
-     * JSON-RPC method.
-     *
-     * See {recover}.
-     */
-    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
-        // 32 is the length in bytes of hash,
-        // enforced by the type signature above
-        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
-    }
-}
-
 
 // File contracts/interfaces/IVVSERC20.sol
 
-pragma solidity >=0.5.0;
+pragma solidity ^0.8.13;
 
 interface IVVSERC20 {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
 
     function name() external pure returns (string memory);
     function symbol() external pure returns (string memory);
@@ -188,65 +33,55 @@ interface IVVSERC20 {
     function PERMIT_TYPEHASH() external pure returns (bytes32);
     function nonces(address owner) external view returns (uint);
 
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
 }
 
 
 // File contracts/libraries/SafeMath.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 // a library for performing overflow-safe math, courtesy of DappHub (https://github.com/dapphub/ds-math)
 
-library SafeMath {
-    function add(uint x, uint y) internal pure returns (uint z) {
-        require((z = x + y) >= x, 'ds-math-add-overflow');
-    }
-
-    function sub(uint x, uint y) internal pure returns (uint z) {
-        require((z = x - y) <= x, 'ds-math-sub-underflow');
-    }
-
-    function mul(uint x, uint y) internal pure returns (uint z) {
-        require(y == 0 || (z = x * y) / y == x, 'ds-math-mul-overflow');
-    }
-}
 
 
 // File contracts/VVSERC20.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 
 
 contract VVSERC20 is IVVSERC20 {
-    using SafeMath for uint;
-    using ECDSA for bytes32;
 
-    string public constant name = 'VVS Finance LPs';
-    string public constant symbol = 'VVS-LP';
-    uint8 public constant decimals = 18;
-    uint  public totalSupply;
-    mapping(address => uint) public balanceOf;
-    mapping(address => mapping(address => uint)) public allowance;
+    using SafeMath for uint;
+
+    string private _name = 'VVS Finance LPs';
+    string private _symbol = 'VVS-LP';
+    uint8 private _decimals = 18;
+    uint internal _totalSupply;
+    mapping(address => uint) private _balanceOf;
+    mapping(address => mapping(address => uint)) internal _allowance;
 
     bytes32 public DOMAIN_SEPARATOR;
     // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     bytes32 public constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
     mapping(address => uint) public nonces;
 
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
+    function name() public pure virtual returns (string memory) { return 'VVS Finance LPs'; }
+    function symbol() public pure virtual returns (string memory) { return 'VVS-LP'; }
+    function decimals() public pure virtual returns (uint8) { return 18; }
+    function totalSupply() public view virtual returns (uint) { return _totalSupply; }
+    function balanceOf(address owner) public view virtual returns (uint) { return _balanceOf[owner]; }
+    function allowance(address owner, address spender) public view virtual returns (uint) { return _allowance[owner][spender]; }
 
-    constructor() public {
+    constructor() {
         uint chainId;
         assembly {
-            chainId := chainid
+            chainId := chainid()
         }
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
-                keccak256(bytes(name)),
+                keccak256(bytes(name())),
                 keccak256(bytes('1')),
                 chainId,
                 address(this)
@@ -255,65 +90,52 @@ contract VVSERC20 is IVVSERC20 {
     }
 
     function _mint(address to, uint value) internal {
-        totalSupply = totalSupply.add(value);
-        balanceOf[to] = balanceOf[to].add(value);
-        emit Transfer(address(0), to, value);
+        _totalSupply = _totalSupply.add(value);
+        _balanceOf[to] = _balanceOf[to].add(value);
+        emit IVVSPair.Transfer(address(0), to, value);
     }
 
     function _burn(address from, uint value) internal {
-        balanceOf[from] = balanceOf[from].sub(value);
-        totalSupply = totalSupply.sub(value);
-        emit Transfer(from, address(0), value);
+        _balanceOf[from] = _balanceOf[from].sub(value);
+        _totalSupply = _totalSupply.sub(value);
+        emit IVVSPair.Transfer(from, address(0), value);
     }
 
-    function _approve(address owner, address spender, uint value) private {
-        allowance[owner][spender] = value;
-        emit Approval(owner, spender, value);
+    function _approve(address owner, address spender, uint value) internal {
+        _allowance[owner][spender] = value;
+        emit IVVSPair.Approval(owner, spender, value);
     }
 
-    function _transfer(address from, address to, uint value) private {
-        balanceOf[from] = balanceOf[from].sub(value);
-        balanceOf[to] = balanceOf[to].add(value);
-        emit Transfer(from, to, value);
+    function _transfer(address from, address to, uint value) internal {
+        _balanceOf[from] = _balanceOf[from].sub(value);
+        _balanceOf[to] = _balanceOf[to].add(value);
+        emit IVVSPair.Transfer(from, to, value);
     }
 
-    function approve(address spender, uint value) external returns (bool) {
+    function approve(address spender, uint value) external virtual returns (bool) {
         _approve(msg.sender, spender, value);
         return true;
     }
 
-    function transfer(address to, uint value) external returns (bool) {
+    function transfer(address to, uint value) external virtual returns (bool) {
         _transfer(msg.sender, to, value);
         return true;
     }
 
-    function transferFrom(address from, address to, uint value) external returns (bool) {
-        if (allowance[from][msg.sender] != uint(-1)) {
-            allowance[from][msg.sender] = allowance[from][msg.sender].sub(value);
+    function transferFrom(address from, address to, uint value) external virtual returns (bool) {
+        if (_allowance[from][msg.sender] != type(uint).max) {
+            _allowance[from][msg.sender] = _allowance[from][msg.sender].sub(value);
         }
         _transfer(from, to, value);
         return true;
     }
 
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
-        require(deadline >= block.timestamp, 'VVS: EXPIRED');
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                '\x19\x01',
-                DOMAIN_SEPARATOR,
-                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline))
-            )
-        );
-        address recoveredAddress = digest.recover(abi.encodePacked(r, s, v));
-        require(recoveredAddress != address(0) && recoveredAddress == owner, 'VVS: INVALID_SIGNATURE');
-        _approve(owner, spender, value);
-    }
 }
 
 
 // File contracts/libraries/Math.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 // a library for performing various math operations
 
@@ -340,7 +162,7 @@ library Math {
 
 // File contracts/libraries/UQ112x112.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 // a library for handling binary fixed point numbers (https://en.wikipedia.org/wiki/Q_(number_format))
 
@@ -364,37 +186,19 @@ library UQ112x112 {
 
 // File contracts/interfaces/IERC20.sol
 
-pragma solidity >=0.5.0;
+pragma solidity ^0.8.13;
 
-interface IERC20 {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
-
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
-    function decimals() external view returns (uint8);
-    function totalSupply() external view returns (uint);
-    function balanceOf(address owner) external view returns (uint);
-    function allowance(address owner, address spender) external view returns (uint);
-
-    function approve(address spender, uint value) external returns (bool);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
-}
 
 
 // File contracts/interfaces/IVVSCallee.sol
 
-pragma solidity >=0.5.0;
+pragma solidity ^0.8.13;
 
-interface IVVSCallee {
-    function vvsCall(address sender, uint amount0, uint amount1, bytes calldata data) external;
-}
 
 
 // File contracts/VVSPair.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 
 
@@ -403,6 +207,46 @@ pragma solidity =0.5.16;
 
 
 contract VVSPair is IVVSPair, VVSERC20 {
+    // Implementation of permit to satisfy IVVSPair interface
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external override {
+        // Minimal implementation: revert to indicate not supported, or implement EIP-2612 if needed
+        revert("permit not implemented");
+    }
+
+        event Mint(address indexed sender, uint amount0, uint amount1);
+        event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+        event Swap(
+            address indexed sender,
+            uint amount0In,
+            uint amount1In,
+            uint amount0Out,
+            uint amount1Out,
+            address indexed to
+        );
+        event Sync(uint112 reserve0, uint112 reserve1);
+    // Explicit overrides for ERC20/interface functions
+    function name() public pure override(IVVSPair, VVSERC20) returns (string memory) { return super.name(); }
+    function symbol() public pure override(IVVSPair, VVSERC20) returns (string memory) { return super.symbol(); }
+    function decimals() public pure override(IVVSPair, VVSERC20) returns (uint8) { return super.decimals(); }
+    function totalSupply() public view override(IVVSPair, VVSERC20) returns (uint) { return super.totalSupply(); }
+    function balanceOf(address owner) public view override(IVVSPair, VVSERC20) returns (uint) { return super.balanceOf(owner); }
+    function allowance(address owner, address spender) public view override(IVVSPair, VVSERC20) returns (uint) { return super.allowance(owner, spender); }
+    function approve(address spender, uint value) external override(IVVSPair, VVSERC20) returns (bool) {
+        VVSERC20._approve(msg.sender, spender, value);
+        return true;
+    }
+    function transfer(address to, uint value) external override(IVVSPair, VVSERC20) returns (bool) {
+        VVSERC20._transfer(msg.sender, to, value);
+        return true;
+    }
+    function transferFrom(address from, address to, uint value) external override(IVVSPair, VVSERC20) returns (bool) {
+        if (VVSERC20._allowance[from][msg.sender] != type(uint).max) {
+            VVSERC20._allowance[from][msg.sender] = VVSERC20._allowance[from][msg.sender].sub(value);
+        }
+        VVSERC20._transfer(from, to, value);
+        return true;
+    }
+
     using SafeMath  for uint;
     using UQ112x112 for uint224;
 
@@ -440,19 +284,9 @@ contract VVSPair is IVVSPair, VVSERC20 {
         require(success && (data.length == 0 || abi.decode(data, (bool))), 'VVS: TRANSFER_FAILED');
     }
 
-    event Mint(address indexed sender, uint amount0, uint amount1);
-    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
-    event Swap(
-        address indexed sender,
-        uint amount0In,
-        uint amount1In,
-        uint amount0Out,
-        uint amount1Out,
-        address indexed to
-    );
-    event Sync(uint112 reserve0, uint112 reserve1);
 
-    constructor() public {
+
+    constructor() {
         factory = msg.sender;
     }
 
@@ -465,7 +299,7 @@ contract VVSPair is IVVSPair, VVSERC20 {
 
     // update reserves and, on the first call per block, price accumulators
     function _update(uint balance0, uint balance1, uint112 _reserve0, uint112 _reserve1) private {
-        require(balance0 <= uint112(-1) && balance1 <= uint112(-1), 'VVS: OVERFLOW');
+        require(balance0 <= type(uint112).max && balance1 <= type(uint112).max, 'VVS: OVERFLOW');
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
@@ -489,7 +323,7 @@ contract VVSPair is IVVSPair, VVSERC20 {
                 uint rootK = Math.sqrt(uint(_reserve0).mul(_reserve1));
                 uint rootKLast = Math.sqrt(_kLast);
                 if (rootK > rootKLast) {
-                    uint numerator = totalSupply.mul(rootK.sub(rootKLast));
+                    uint numerator = _totalSupply.mul(rootK.sub(rootKLast));
                     uint denominator = rootK.mul(2).add(rootKLast);
                     uint liquidity = numerator / denominator;
                     if (liquidity > 0) _mint(feeTo, liquidity);
@@ -509,7 +343,7 @@ contract VVSPair is IVVSPair, VVSERC20 {
         uint amount1 = balance1.sub(_reserve1);
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
             liquidity = Math.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY);
            _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
@@ -531,10 +365,10 @@ contract VVSPair is IVVSPair, VVSERC20 {
         address _token1 = token1;                                // gas savings
         uint balance0 = IERC20(_token0).balanceOf(address(this));
         uint balance1 = IERC20(_token1).balanceOf(address(this));
-        uint liquidity = balanceOf[address(this)];
+        uint liquidity = balanceOf(address(this));
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
-        uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, 'VVS: INSUFFICIENT_LIQUIDITY_BURNED');
@@ -550,7 +384,7 @@ contract VVSPair is IVVSPair, VVSERC20 {
     }
 
     // this low-level function should be called from a contract which performs important safety checks
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external lock {
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external override lock {
         require(amount0Out > 0 || amount1Out > 0, 'VVS: INSUFFICIENT_OUTPUT_AMOUNT');
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         require(amount0Out < _reserve0 && amount1Out < _reserve1, 'VVS: INSUFFICIENT_LIQUIDITY');
@@ -597,7 +431,7 @@ contract VVSPair is IVVSPair, VVSERC20 {
 
 // File contracts/VVSFactory.sol
 
-pragma solidity =0.5.16;
+pragma solidity ^0.8.13;
 
 
 contract VVSFactory is IVVSFactory {
@@ -609,9 +443,8 @@ contract VVSFactory is IVVSFactory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
 
-    constructor(address _feeToSetter) public {
+    constructor(address _feeToSetter) {
         feeToSetter = _feeToSetter;
     }
 

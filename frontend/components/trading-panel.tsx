@@ -28,7 +28,7 @@ interface SimulationResult {
 }
 
 export default function TradingPanel() {
-  const [tokenIn, setTokenIn] = useState("CRO")
+  const [tokenIn, setTokenIn] = useState("WCRO")
   const [tokenOut, setTokenOut] = useState("USDC")
   const [amount, setAmount] = useState<number | "">(100)
   const [loading, setLoading] = useState(false)
@@ -70,9 +70,16 @@ export default function TradingPanel() {
 
       if (data && (data.success === false || data.error)) {
         console.error("Trade failed:", data)
-        setError(data.error || data.detail || "Trade execution failed")
+        let backendError = data.error || data.detail || "Trade execution failed"
+        let reason = ""
+        if (backendError.includes("Could not transact with/call contract")) {
+          reason = `Possible causes:\n- Contract address is wrong or not deployed on this chain\n- Chain/RPC is not synced or unreliable\n- Contract ABI or method is incorrect\n- Wallet/account has insufficient funds or permissions\n\nBackend error: ${backendError}`
+        } else {
+          reason = backendError
+        }
+        setError(reason)
         setResult(null)
-      } 
+      }
       else if (response.ok && (data.tx_hash || data.transaction_hash)) {
         setResult({ ...data, tx_hash: data.tx_hash || data.transaction_hash })
         setError(null)
@@ -118,21 +125,18 @@ export default function TradingPanel() {
         <div>
           <label className="block text-sm text-gray-400 mb-2">From Token</label>
           <select value={tokenIn} onChange={(e) => setTokenIn(e.target.value)} className="w-full bg-black/40 border border-cyan-500/30 rounded px-3 py-2 text-white bg-black/40 focus:border-cyan-500 focus:outline-none">
-            <option>CRO</option>
-            <option>USDC</option>
-            <option>VVS</option>
-            <option>WCRO</option>
+            <option value="WCRO">WCRO</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm text-gray-400 mb-2">To Token</label>
           <select value={tokenOut} onChange={(e) => setTokenOut(e.target.value)} className="w-full bg-black/40 border border-cyan-500/30 rounded px-3 py-2 text-white bg-black/40 focus:border-cyan-500 focus:outline-none">
-            <option>USDC</option>
-            <option>CRO</option>
-            <option>VVS</option>
-            <option>WCRO</option>
+            <option value="USDC">USDC</option>
           </select>
+        // WCRO and USDC contract addresses for Cronos
+        const WCRO_ADDRESS = "0xdaE97900D4B184c5D2012dcdB658c008966466DD";
+        const USDC_ADDRESS = "0x238213078DbD09f2D15F4c14c02300FA1b2A81BB";
         </div>
 
         <div>

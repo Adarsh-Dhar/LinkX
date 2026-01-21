@@ -1,4 +1,4 @@
-pragma solidity =0.6.6;
+pragma solidity ^0.8.13;
 
 contract WCRO {
     string public name     = "Wrapped CRO";
@@ -9,8 +9,7 @@ contract WCRO {
     event  Transfer(address indexed src, address indexed dst, uint wad);
     event  Deposit(address indexed dst, uint wad);
     event  Withdrawal(address indexed src, uint wad);
-
-    mapping (address => uint)                       public  balanceOf;
+    mapping(address => uint) public balanceOf;
     mapping (address => mapping (address => uint))  public  allowance;
 
     receive() external payable {
@@ -24,7 +23,8 @@ contract WCRO {
     function withdraw(uint wad) public {
         require(balanceOf[msg.sender] >= wad, "");
         balanceOf[msg.sender] -= wad;
-        msg.sender.transfer(wad);
+        (bool success, ) = payable(msg.sender).call{value: wad}("");
+        require(success, "Transfer failed");
         emit Withdrawal(msg.sender, wad);
     }
 
@@ -48,7 +48,7 @@ contract WCRO {
     {
         require(balanceOf[src] >= wad, "");
 
-        if (src != msg.sender && allowance[src][msg.sender] != uint(-1)) {
+        if (src != msg.sender && allowance[src][msg.sender] != type(uint).max) {
             require(allowance[src][msg.sender] >= wad, "");
             allowance[src][msg.sender] -= wad;
         }

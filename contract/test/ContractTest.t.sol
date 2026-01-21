@@ -284,9 +284,10 @@ contract ContractTest is Test {
         console.log("  PASS: Name update successful");
     }
 
-    function testFail_USDC_NonOwnerMint() public {
-        console.log("Testing USDC non-owner mint (should fail)...");
+    function test_RevertWhen_NonOwnerMintsUSDC() public {
+        console.log("Testing USDC non-owner mint (should revert)...");
         vm.prank(addr1);
+        vm.expectRevert();
         usdc.mint(addr1, 100 * 10**6);
     }
 
