@@ -4,23 +4,23 @@ pragma solidity ^0.8.13;
 import { IVVSRouter01 } from "./IVVSRouter01.sol";
 
 interface IVVSRouter02 is IVVSRouter01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
+    function removeLiquidityEthSupportingFeeOnTransferTokens(
         address token,
         uint liquidity,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountEthMin,
         address to,
         uint deadline
-    ) external returns (uint amountETH);
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+    ) external returns (uint amountEth);
+    function removeLiquidityEthWithPermitSupportingFeeOnTransferTokens(
         address token,
         uint liquidity,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountEthMin,
         address to,
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountETH);
+    ) external returns (uint amountEth);
 
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint amountIn,
