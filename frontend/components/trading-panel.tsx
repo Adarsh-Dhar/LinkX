@@ -135,8 +135,8 @@ export default function TradingPanel() {
             <option value="USDC">USDC</option>
           </select>
         // WCRO and USDC contract addresses for Cronos
-        const WCRO_ADDRESS = "0xdaE97900D4B184c5D2012dcdB658c008966466DD";
-        const USDC_ADDRESS = "0x238213078DbD09f2D15F4c14c02300FA1b2A81BB";
+        const WCRO_ADDRESS = "0x65bacB812a0296Cb52f48D9552e3407A8857f888";
+        const USDC_ADDRESS = "0xAb6DDDf5f80eC58E497aB5b65e804f1a45ce3261";
         </div>
 
         <div>

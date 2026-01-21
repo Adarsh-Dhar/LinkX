@@ -34,7 +34,7 @@ library VVSLibrary {
             hex'ff',
             factory,
             keccak256(abi.encodePacked(token0, token1)),
-            hex'' // INIT_CODE_PAIR_HASH should be set here if needed
+            hex'5d64e2ea3d4badf4d07457bb74811f56d40e66a6dab5edd7a0cbcfe4d74b0120' // INIT_CODE_PAIR_HASH set from deployment logs
         )))));
     }
 
