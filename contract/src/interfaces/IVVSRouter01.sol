@@ -15,7 +15,7 @@ interface IVVSRouter01 {
         address to,
         uint deadline
     ) external returns (uint amountA, uint amountB, uint liquidity);
-    function addLiquidityEth(
+    function addLiquidityETH(
         address token,
         uint amountTokenDesired,
         uint amountTokenMin,
@@ -32,7 +32,7 @@ interface IVVSRouter01 {
         address to,
         uint deadline
     ) external returns (uint amountA, uint amountB);
-    function removeLiquidityEth(
+    function removeLiquidityETH(
         address token,
         uint liquidity,
         uint amountTokenMin,
@@ -50,7 +50,7 @@ interface IVVSRouter01 {
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
     ) external returns (uint amountA, uint amountB);
-    function removeLiquidityEthWithPermit(
+    function removeLiquidityETHWithPermit(
         address token,
         uint liquidity,
         uint amountTokenMin,
