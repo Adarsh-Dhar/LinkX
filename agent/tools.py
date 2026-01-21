@@ -6,156 +6,127 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- UNIVERSAL COMPATIBILITY WRAPPER ---
+# ==========================================
+# ⚡️ YOUR DEPLOYED CONTRACT ADDRESSES ⚡️
+# (Updated from your recent logs)
+# ==========================================
+VVS_ROUTER_ADDR = "0x7BbB4022B0D8C9419f09E34F6a8f46822d88308f"
+WCRO_ADDRESS    = "0x65bacB812a0296Cb52f48D9552e3407A8857f888"
+USDC_CONTRACT   = "0xAb6DDDf5f80eC58E497aB5b65e804f1a45ce3261"
+# ==========================================
+
+CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+
+# --- UNIVERSAL DECORATOR ---
 class UniversalTool:
-    """Wraps a function to work with LangChain, API calls, and direct execution."""
     def __init__(self, func):
         self.func = func
         self.name = func.__name__
-        self.description = func.__doc__ or ""
-        self.args_schema = None  # Mock for LangChain
-
-    def invoke(self, args_dict):
-        """Handler for LangChain .invoke({'arg': val}) calls"""
-        # Unwrap dict if needed
-        if isinstance(args_dict, dict):
-            return self.func(**args_dict)
-        return self.func(args_dict)
-
-    def run(self, *args, **kwargs):
-        """Handler for Agent .run() calls"""
-        return self.func(*args, **kwargs)
-
+    def invoke(self, args):
+        return self.func(**args) if isinstance(args, dict) else self.func(args)
     def __call__(self, *args, **kwargs):
-        """Handler for direct function() calls"""
         return self.func(*args, **kwargs)
 
-def tool(func):
-    """Decorator that returns a UniversalTool instance."""
-    return UniversalTool(func)
-# ---------------------------------------
+def tool(func): return UniversalTool(func)
 
-# Configuration
-CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
-VVS_ROUTER = "0x7BbB4022B0D8C9419f09E34F6a8f46822d88308f"
-WCRO_ADDRESS = "0x65bacB812a0296Cb52f48D9552e3407A8857f888"
-USDC_CONTRACT = "0xAb6DDDf5f80eC58E497aB5b65e804f1a45ce3261"
-
-TOKEN_MAP = {
-    "usdc": USDC_CONTRACT,
-    "cro": "cro",
-    "wcro": WCRO_ADDRESS,
-    "vvs": "0xea59AC2CcEfe907e7F77B502e2C87aC929832bfF"
-}
-
-ERC20_ABI = [
-    {"constant":False,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"},
-    {"constant":True,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},
-    {"constant":True,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}
-]
-
-ROUTER_ABI = [
-    {"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactETHForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"payable","type":"function"},
-    {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForETH","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},
-    {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}
-]
-
-def resolve_address(token):
-    t = token.lower()
-    if t in TOKEN_MAP: return TOKEN_MAP[t]
-    return t if t.startswith("0x") else None
+# --- ABIS ---
+ERC20_ABI = [{"constant":True,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"},{"constant":False,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":True,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":True,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}]
+ROUTER_ABI = [{"inputs":[],"name":"WETH","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactETHForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForETH","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]
 
 @tool
 def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0):
-    """Executes a swap on VVS Finance with auto-approval and liquidity checks."""
+    print(f"\n🔄 STARTING SWAP: {amount_in} {token_in} -> {token_out}")
     try:
         w3 = Web3(Web3.HTTPProvider(CRONOS_RPC_URL))
-        if not w3.is_connected():
-            return {"error": "Failed to connect to Cronos RPC"}
-
         private_key = os.getenv("WALLET_PRIVATE_KEY")
-        if not private_key: return {"error": "No Private Key Found in .env"}
-        
+        if not private_key: return {"error": "Missing Private Key"}
         account = w3.eth.account.from_key(private_key)
-        my_address = account.address
+        my_addr = account.address
         
-        addr_in = resolve_address(token_in)
-        addr_out = resolve_address(token_out)
-        router_addr = Web3.to_checksum_address(VVS_ROUTER)
+        # 1. Resolve Addresses
+        # We assume 'cro' is native, everything else is an address
+        token_map = {
+            "usdc": Web3.to_checksum_address(USDC_CONTRACT),
+            "wcro": Web3.to_checksum_address(WCRO_ADDRESS),
+            "cro": "cro"
+        }
         
-        if not addr_in or not addr_out: return {"error": f"Invalid token address for {token_in} or {token_out}"}
+        addr_in = token_map.get(token_in.lower(), token_in)
+        addr_out = token_map.get(token_out.lower(), token_out)
+        
+        router = w3.eth.contract(address=Web3.to_checksum_address(VVS_ROUTER_ADDR), abi=ROUTER_ABI)
+        canonical_wcro = Web3.to_checksum_address(WCRO_ADDRESS)
 
-        is_native = (addr_in == "cro")
-        path_in = Web3.to_checksum_address(WCRO_ADDRESS) if is_native else Web3.to_checksum_address(addr_in)
-        path_out = Web3.to_checksum_address(WCRO_ADDRESS) if addr_out == "cro" else Web3.to_checksum_address(addr_out)
+        # 2. Determine Path & Swap Type
+        is_native_in = (addr_in == "cro")
+        is_native_out = (addr_out == "cro")
+
+        path_in = canonical_wcro if is_native_in else addr_in
+        path_out = canonical_wcro if is_native_out else addr_out
+        path = [path_in, path_out]
         
-        # 1. Calculate Amount in Wei
+        print(f"   📍 Path: {path}")
+
+        # 3. Calculate Amounts
         amount_in_wei = 0
-        if is_native:
+        if is_native_in:
             amount_in_wei = w3.to_wei(amount_in, 'ether')
         else:
             ctr = w3.eth.contract(address=path_in, abi=ERC20_ABI)
             dec = ctr.functions.decimals().call()
             amount_in_wei = int(amount_in * (10**dec))
             
-            # Auto Approve
-            try:
-                allowance = ctr.functions.allowance(my_address, router_addr).call()
-                if allowance < amount_in_wei:
-                    print(f"Approving {token_in}...")
-                    nonce = w3.eth.get_transaction_count(my_address)
-                    tx = ctr.functions.approve(router_addr, 2**256-1).build_transaction({
-                        'from': my_address, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
-                    })
-                    signed = w3.eth.account.sign_transaction(tx, private_key)
-                    w3.eth.send_raw_transaction(signed.raw_transaction)
-                    time.sleep(5) # Wait for approval
-            except Exception as e:
-                return {"error": f"Approval Failed: {str(e)}"}
+            # Approve Router if needed
+            allowance = ctr.functions.allowance(my_addr, VVS_ROUTER_ADDR).call()
+            if allowance < amount_in_wei:
+                print("   🔐 Approving Router...")
+                tx = ctr.functions.approve(VVS_ROUTER_ADDR, 2**256-1).build_transaction({
+                    'from': my_addr, 'nonce': w3.eth.get_transaction_count(my_addr), 'gasPrice': int(w3.eth.gas_price * 1.2)
+                })
+                w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, private_key).raw_transaction)
+                time.sleep(5)
 
-        # 2. Check Liquidity (Prevents Revert Errors)
-        router = w3.eth.contract(address=router_addr, abi=ROUTER_ABI)
-        path = [path_in, path_out]
-        
+        # 4. Check Liquidity
         try:
             amounts = router.functions.getAmountsOut(amount_in_wei, path).call()
             min_out = int(amounts[-1] * (1 - max_slippage/100))
+            print(f"   ✅ Liquidity OK! Output: {amounts[-1]}")
         except Exception as e:
-            return {"error": f"No Liquidity Pool for {token_in}/{token_out} on Testnet VVS. Swap cancelled."}
+            return {"error": f"Liquidity Pool Missing for {token_in}/{token_out}. Error: {e}"}
 
-        # 3. Execute Swap
-        nonce = w3.eth.get_transaction_count(my_address)
-        deadline = int(time.time()) + 600 # 10 mins
+        # 5. Execute Correct Swap Function
+        nonce = w3.eth.get_transaction_count(my_addr)
+        deadline = int(time.time()) + 600
+        gas_price = int(w3.eth.gas_price * 1.2)
         
-        if is_native:
-            # Swap Native -> Token
+        if is_native_in:
+            # Native -> Token
             tx = router.functions.swapExactETHForTokens(
-                min_out, path, my_address, deadline
+                min_out, path, my_addr, deadline
             ).build_transaction({
-                'from': my_address, 
-                'value': amount_in_wei, 
-                'gas': 350000, 
-                'gasPrice': int(w3.eth.gas_price * 1.2), 
-                'nonce': nonce
+                'from': my_addr, 'value': amount_in_wei, 'gas': 350000, 'gasPrice': gas_price, 'nonce': nonce
+            })
+        elif is_native_out:
+            # Token -> Native
+            tx = router.functions.swapExactTokensForETH(
+                amount_in_wei, min_out, path, my_addr, deadline
+            ).build_transaction({
+                'from': my_addr, 'gas': 350000, 'gasPrice': gas_price, 'nonce': nonce
             })
         else:
-            # Swap Token -> Token/Native
-            tx = router.functions.swapExactTokensForETH(
-                amount_in_wei, min_out, path, my_address, deadline
+            # Token -> Token (Fix: Use swapExactTokensForTokens)
+            print("   ℹ️ Doing Token->Token swap")
+            tx = router.functions.swapExactTokensForTokens(
+                amount_in_wei, min_out, path, my_addr, deadline
             ).build_transaction({
-                'from': my_address, 
-                'gas': 350000, 
-                'gasPrice': int(w3.eth.gas_price * 1.2), 
-                'nonce': nonce
+                'from': my_addr, 'gas': 350000, 'gasPrice': gas_price, 'nonce': nonce
             })
 
-        signed = w3.eth.account.sign_transaction(tx, private_key)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        
+        tx_hash = w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, private_key).raw_transaction)
         return {"status": "success", "tx_hash": tx_hash.hex()}
-        
+
     except Exception as e:
-        return {"error": f"Execution Exception: {str(e)}"}
+        return {"error": str(e)}
 
 @tool
 def get_token_balance(token_address: str):
