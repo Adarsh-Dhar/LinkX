@@ -37,26 +37,23 @@ contract DeployScript is Script {
         // 4. ADD LIQUIDITY
         // ====================================================
 
-        uint256 amountWCRO = 1 * 10**18;
-        uint256 amountUSDC = 1000 * 10**6;
-
         // Mint WCRO (Deposit CRO)
-        wcro.deposit{value: amountWCRO}();
+        wcro.deposit{value: 10 * 10**18}();
 
         // Mint USDC
-        try usdc.mint(deployer, amountUSDC) { // Note: Changed address(this) to deployer usually, but kept logic similar
+        try usdc.mint(deployer, 10000 * 10**6) {
         } catch {}
 
-        // Approve Router
-        wcro.approve(address(router), amountWCRO);
-        usdc.approve(address(router), amountUSDC);
+        // Approve Router for liquidity amounts
+        wcro.approve(address(router), 9 * 10**18);
+        usdc.approve(address(router), 9000 * 10**6);
 
-        // Add Liquidity
+        // Add Liquidity (using 9 WCRO and 9000 USDC)
         router.addLiquidity(
             address(wcro),
             address(usdc),
-            amountWCRO,
-            amountUSDC,
+            9 * 10**18,
+            9000 * 10**6,
             0,
             0,
             deployer, // Recipient of LP tokens
@@ -64,6 +61,11 @@ contract DeployScript is Script {
         );
 
         console.log("Liquidity Added! Pair Created.");
+
+        // Send remaining tokens to specified address
+        address recipient = 0xb8552ec41cd7b5697464602d24d9c174F6FB863C;
+        wcro.transfer(recipient, 1 * 10**18);
+        usdc.transfer(recipient, 1000 * 10**6);
 
         vm.stopBroadcast(); // <--- ADD THIS
     }
