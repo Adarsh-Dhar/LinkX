@@ -1,3 +1,4 @@
+"use client";
 
 import { useEffect, useState } from "react";
 import { Search, ShoppingCart, Check, Activity, Zap, BarChart, Globe, Lock } from "lucide-react";

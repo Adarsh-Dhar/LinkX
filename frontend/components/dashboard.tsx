@@ -31,8 +31,8 @@ export default function Dashboard() {
     async function fetchDashboardData() {
       try {
         const [statsRes, chartRes] = await Promise.all([
-          fetch("/api/dashboard/stats"),
-          fetch("/api/dashboard/chart"),
+          fetch("http://localhost:3600/api/dashboard/stats"),
+          fetch("http://localhost:3600/api/dashboard/chart"),
         ]);
 
         if (statsRes.ok) {
@@ -58,6 +58,7 @@ export default function Dashboard() {
     const interval = setInterval(fetchDashboardData, 10000);
     return () => clearInterval(interval);
   }, []);
+  // ...existing code...
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6">

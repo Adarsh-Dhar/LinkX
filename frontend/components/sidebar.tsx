@@ -1,55 +1,89 @@
-"use client"
+"use client";
 
-import { Home, ShoppingBag, Terminal, MessageCircle, TrendingUp, Zap } from "lucide-react"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  LineChart,
+  MessageSquare,
+  Settings,
+  Terminal,
+  Zap,
+  BarChart,
+} from "lucide-react";
 
-interface SidebarProps {
-  currentPage: string
-  onNavigate: (page: string) => void
-}
+const routes = [
+  {
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    href: "/dashboard",
+    color: "text-sky-500",
+  },
+  {
+    label: "Trade",
+    icon: LineChart,
+    href: "/trade",
+    color: "text-violet-500",
+  },
+  {
+    label: "Alpha Market",
+    icon: ShoppingCart,
+    href: "/market",
+    color: "text-pink-700",
+  },
+  {
+    label: "Chat Agent",
+    icon: MessageSquare,
+    href: "/chat",
+    color: "text-orange-700",
+  },
+];
 
-export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Home },
-    { id: "chat", label: "Agent Chat", icon: MessageCircle },
-    { id: "marketplace", label: "Alpha Market", icon: ShoppingBag },
-    { id: "trading", label: "Trading", icon: TrendingUp },
-    { id: "simulation", label: "Simulation", icon: Zap },
-    { id: "terminal", label: "Live Terminal", icon: Terminal },
-  ]
+export function Sidebar() {
+  const pathname = usePathname();
 
   return (
-    <aside className="w-64 glass border-r border-border/30 flex flex-col">
-      <div className="p-6 border-b border-border/30">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
-          Alpha
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">Consumer AI</p>
-      </div>
-
-      <nav className="flex-1 p-4 space-y-2">
-        {navItems.map((item) => {
-          const Icon = item.icon
-          const isActive = currentPage === item.id
-          return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                isActive
-                  ? "bg-gradient-to-r from-primary to-accent text-white glow-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-card/50"
-              }`}
+    <div className="space-y-4 py-4 flex flex-col h-full bg-[#111827] text-white w-64 border-r border-zinc-800">
+      <div className="px-3 py-2 flex-1">
+        <Link href="/dashboard" className="flex items-center pl-3 mb-14">
+          <Terminal className="h-8 w-8 mr-4 text-green-500" />
+          <h1 className="text-2xl font-bold">Alpha Agent</h1>
+        </Link>
+        <div className="space-y-1">
+          {routes.map((route) => (
+            <Link
+              key={route.href}
+              href={route.href}
+              className={cn(
+                "text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition",
+                pathname === route.href ? "text-white bg-white/10" : "text-zinc-400"
+              )}
             >
-              <Icon size={20} />
-              <span className="text-sm font-medium">{item.label}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      <div className="p-4 border-t border-border/30 text-xs text-muted-foreground">
-        <p>v0.2.0</p>
+              <div className="flex items-center flex-1">
+                <route.icon className={cn("h-5 w-5 mr-3", route.color)} />
+                {route.label}
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
-    </aside>
-  )
+      {/* Bottom Section */}
+      <div className="px-3 py-2">
+        <Link
+          href="/settings"
+          className={cn(
+            "text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition",
+            pathname === "/settings" ? "text-white bg-white/10" : "text-zinc-400"
+          )}
+        >
+          <div className="flex items-center flex-1">
+            <Settings className="h-5 w-5 mr-3 text-gray-400" />
+            Settings
+          </div>
+        </Link>
+      </div>
+    </div>
+  );
 }
