@@ -1,0 +1,89 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url = "file:../agent/agent_state.db"
+}
+
+// --------------------------------------------------------
+// 1. TRADES (Populates: Win Rate, Total P&L, Avg Confidence)
+// --------------------------------------------------------
+model Trade {
+  id              String   @id @default(uuid())
+  
+  // Token Details
+  tokenIn         String   // e.g. "CRO"
+  tokenOut        String   // e.g. "USDC"
+  amountIn        Float    // Raw amount sent
+  amountOut       Float    // Raw amount received
+  
+  // USD Values (Critical for P&L)
+  priceInUsd      Float    // Price of tokenIn at moment of trade
+  priceOutUsd     Float    // Price of tokenOut at moment of trade
+  valueInUsd      Float    // (amountIn * priceInUsd)
+  valueOutUsd     Float    // (amountOut * priceOutUsd)
+  
+  // Metrics
+  realizedPnL     Float    // (valueOutUsd - valueInUsd) - fees
+  pnlPercentage   Float    // ((valueOutUsd - valueInUsd) / valueInUsd) * 100
+  isWin           Boolean  // True if realizedPnL > 0
+  
+  // AI Data
+  confidence      Float    // 0.0 to 1.0 (Populates "Avg Confidence")
+  strategy        String?  // e.g. "arbitrage", "trend_follow"
+  reasoning       String?  // The "thought" from the AI
+  
+  // Blockchain Info
+  txHash          String   @unique
+  blockNumber     Int?
+  status          String   @default("CONFIRMED") // PENDING, CONFIRMED, FAILED
+  
+  timestamp       DateTime @default(now())
+  alphaSignals    AlphaSignal[]
+}
+
+// --------------------------------------------------------
+// 2. ALPHA / SIGNALS (Populates: "Alpha Purchased")
+// --------------------------------------------------------
+model AlphaSignal {
+  id              String   @id @default(uuid())
+  source          String   // e.g. "Human RPC", "Magical Headlines", "Dopamine Calc"
+  rawSignal       String   // The text or JSON data received
+  costUsd         Float    // Cost to buy this data (if using x402)
+  
+  // Did we act on it?
+  executed        Boolean  @default(false)
+  tradeId         String?
+  trade           Trade?   @relation(fields: [tradeId], references: [id])
+  
+  timestamp       DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// 3. EQUITY HISTORY (Populates: "Cumulative Returns" Chart)
+// --------------------------------------------------------
+model PortfolioSnapshot {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  
+  totalValueUsd   Float    // Combined value of all assets
+  croBalance      Float
+  usdcBalance     Float
+  otherBalance    Float    @default(0)
+  
+  // Optional: Track Alpha count at this snapshot for historical comparison
+  alphaCount      Int      @default(0)
+}
+
+// --------------------------------------------------------
+// 4. SETTINGS (Populates: "Wallet Balance" / Config)
+// --------------------------------------------------------
+model SystemState {
+  key             String   @id // e.g. "last_sync_block", "wallet_address"
+  value           String
+  updatedAt       DateTime @updatedAt
+}
