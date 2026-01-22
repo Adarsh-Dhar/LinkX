@@ -1,132 +1,203 @@
-"use client"
 
-import { useState, useEffect } from "react"
-import AlphaProductCard from "./alpha-product-card"
-import X402Modal from "./x402-modal"
+import { useEffect, useState } from "react";
+import { Search, ShoppingCart, Check, Activity, Zap, BarChart, Globe, Lock } from "lucide-react";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
-interface Signal {
-  ticker: string
-  signal: string
-  confidence: number
-  sentiment: string
-  recommended_action: string
-  amount_usdc?: number
-  reason?: string
+// Interface matches your Prisma Model
+interface AlphaNode {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price: number;
+  reputation: number;
+  status: string;
+  isPurchased: boolean;
+  icon: string;
 }
 
-export default function AlphaMarketplace() {
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [signals, setSignals] = useState<Signal[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+// Icon mapper
+const IconMap: any = {
+  activity: Activity,
+  zap: Zap,
+  "bar-chart": BarChart,
+  globe: Globe
+};
 
-  // Fetch live signals from server
+export default function AlphaMarketplace() {
+  const [nodes, setNodes] = useState<AlphaNode[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // 1. Fetch Real Data on Mount
   useEffect(() => {
-    const fetchSignals = async () => {
+    async function fetchMarket() {
       try {
-        const response = await fetch("http://localhost:3050/signals")
-        if (response.ok) {
-          const data = await response.json()
-          setSignals(data.signals || [])
+        const res = await fetch("/api/market/nodes");
+        if (res.ok) {
+          const data = await res.json();
+          setNodes(data);
+        } else {
+          console.error("Failed to fetch nodes");
         }
-      } catch (error) {
-        console.error("Failed to fetch signals:", error)
+      } catch (e) {
+        console.error("Market offline", e);
       } finally {
-        setIsLoading(false)
+        setLoading(false);
       }
     }
+    fetchMarket();
+  }, []);
 
-    fetchSignals()
-    
-    // Refresh signals every 30 seconds
-    const interval = setInterval(fetchSignals, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  // 2. Handle Purchase Action
+  const handlePurchase = async (nodeId: string, nodeName: string) => {
+    setPurchasing(nodeId);
+    try {
+      const res = await fetch("/api/market/nodes", {
+        method: "POST",
+        body: JSON.stringify({ nodeId }),
+      });
 
-  // Convert signals to product format
-  const products = signals.map((signal) => ({
-    id: signal.ticker.toLowerCase(),
-    ticker: signal.ticker,
-    name: `${signal.ticker} ${signal.recommended_action} Signal`,
-    price: "0.10",
-    provider: "Alpha-Consumer AI",
-    status: "locked" as const,
-    description: signal.reason || `${signal.sentiment} sentiment detected with ${(signal.confidence * 100).toFixed(0)}% confidence`,
-    bullish: Math.round(signal.confidence * 100),
-  }))
+      if (res.ok) {
+        // Update local state immediately
+        setNodes(nodes.map(n => n.id === nodeId ? { ...n, isPurchased: true } : n));
+        toast({
+          title: "Access Granted",
+          description: `Successfully subscribed to ${nodeName} feed.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Purchase Failed",
+        description: "Could not verify transaction on Cronos.",
+        variant: "destructive"
+      });
+    } finally {
+      setPurchasing(null);
+    }
+  };
 
-  // Add some default products if no signals available
-  const defaultProducts = [
-    {
-      id: "whale-watcher",
-      name: "VVS Whale Watcher",
-      price: "0.10",
-      provider: "HedgeFund_AI",
-      status: "locked" as const,
-      description: "Monitor large whale movements on VVS",
-      bullish: 75,
-    },
-    {
-      id: "sentiment",
-      name: "CRO Sentiment Analysis",
-      price: "0.25",
-      provider: "Social_Sniper",
-      status: "locked" as const,
-      description: "Real-time social sentiment tracking",
-      bullish: 85,
-    },
-    {
-      id: "arbitrage",
-      name: "DEX Arbitrage Finder",
-      price: "1.00",
-      provider: "FlashBot_Node",
-      status: "locked" as const,
-      description: "Automated arbitrage opportunity detection",
-      bullish: 60,
-    },
-  ]
-
-  const displayProducts = products.length > 0 ? products : defaultProducts
-
-  const handleUnlock = (productId: string) => {
-    setSelectedProduct(productId)
-    setShowPaymentModal(true)
-  }
+  // 3. Filter Logic
+  const filteredNodes = nodes.filter(n => 
+    n.name.toLowerCase().includes(search.toLowerCase()) ||
+    n.category.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="space-y-6 h-full flex flex-col">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold mb-2">Alpha Marketplace</h2>
-          <p className="text-muted-foreground">Premium trading insights via x402 protocol</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Alpha Node Market</h2>
+          <p className="text-muted-foreground">
+            Acquire high-value data streams via the x402 Protocol.
+          </p>
         </div>
-        {!isLoading && signals.length > 0 && (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-muted-foreground">Live Signals</span>
+        <div className="flex w-full max-w-sm items-center space-x-2 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800">
+          <Search className="h-4 w-4 ml-2 text-zinc-500" />
+          <Input 
+            placeholder="Search providers..." 
+            className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Grid Content */}
+      <div className="flex-1 overflow-y-auto pr-2">
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Skeleton key={i} className="h-[280px] w-full rounded-xl bg-zinc-900" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10">
+            {filteredNodes.map((node) => {
+              const IconComponent = IconMap[node.icon] || Activity;
+              const isOwned = node.isPurchased;
+
+              return (
+                <Card 
+                  key={node.id} 
+                  className={`flex flex-col border-zinc-800 transition-all duration-200 ${isOwned ? 'bg-zinc-900/30' : 'bg-black hover:border-zinc-600'}`}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="outline" className={`
+                        ${node.category === 'Sentiment' ? 'border-purple-500/50 text-purple-400' : ''}
+                        ${node.category === 'On-Chain' ? 'border-blue-500/50 text-blue-400' : ''}
+                        ${node.category === 'Technical' ? 'border-orange-500/50 text-orange-400' : ''}
+                      `}>
+                        {node.category}
+                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`h-1.5 w-1.5 rounded-full ${node.status === 'active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
+                        <span className="text-[10px] uppercase text-muted-foreground">{node.status}</span>
+                      </div>
+                    </div>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <IconComponent className={`h-5 w-5 ${isOwned ? 'text-green-500' : 'text-zinc-400'}`} />
+                      {node.name}
+                    </CardTitle>
+                  </CardHeader>
+                  
+                  <CardContent className="flex-1">
+                    <CardDescription className="line-clamp-3 mb-4 min-h-[60px]">
+                      {node.description}
+                    </CardDescription>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                        <span className="block text-zinc-500 mb-1">Reputation</span>
+                        <span className="font-mono text-green-400">{node.reputation}/100</span>
+                      </div>
+                      <div className="bg-zinc-900/50 p-2 rounded border border-zinc-800">
+                        <span className="block text-zinc-500 mb-1">Update Rate</span>
+                        <span className="font-mono text-white">~200ms</span>
+                      </div>
+                    </div>
+                  </CardContent>
+
+                  <CardFooter className="pt-2">
+                    <Button 
+                      className={`w-full transition-all ${isOwned 
+                        ? "bg-green-900/20 text-green-400 border-green-900/50 hover:bg-green-900/30" 
+                        : "bg-white text-black hover:bg-zinc-200"}`}
+                      variant={isOwned ? "outline" : "default"}
+                      disabled={isOwned || purchasing === node.id}
+                      onClick={() => handlePurchase(node.id, node.name)}
+                    >
+                      {isOwned ? (
+                        <>
+                          <Check className="mr-2 h-4 w-4" /> Active
+                        </>
+                      ) : (
+                        <>
+                          {purchasing === node.id ? (
+                            <Activity className="mr-2 h-4 w-4 animate-spin" /> 
+                          ) : (
+                            <ShoppingCart className="mr-2 h-4 w-4" />
+                          )}
+                          Buy ${node.price.toFixed(2)}
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
-
-      {isLoading ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-muted-foreground mt-4">Loading trading signals...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayProducts.map((product) => (
-            <AlphaProductCard key={product.id} product={product} onUnlock={handleUnlock} />
-          ))}
-        </div>
-      )}
-
-      {showPaymentModal && (
-        <X402Modal
-          product={displayProducts.find((p) => p.id === selectedProduct)!}
-          onClose={() => setShowPaymentModal(false)}
-        />
-      )}
     </div>
-  )
+  );
 }
