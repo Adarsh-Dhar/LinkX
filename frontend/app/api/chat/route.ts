@@ -16,11 +16,24 @@ export async function POST(req: Request) {
       body: JSON.stringify({ message }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Agent Server Error: ${response.statusText}`);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      // If response is not JSON, fallback to text
+      const text = await response.text();
+      return NextResponse.json({
+        response: `⚠️ Agent returned non-JSON response: ${text}`
+      }, { status: 500 });
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      // Forward the agent's error message if available
+      return NextResponse.json({
+        response: data.reply || `Agent Server Error: ${response.statusText}`
+      }, { status: response.status });
+    }
 
     // 2. Return the Agent's reply to the frontend UI
     return NextResponse.json({ 

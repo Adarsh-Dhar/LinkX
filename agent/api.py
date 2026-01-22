@@ -29,6 +29,7 @@ print("🚀 Initializing Alpha Agent...")
 agent = LightweightAgent()
 print("✅ Agent Ready.")
 
+
 @app.post("/chat")
 async def chat_endpoint(payload: dict = Body(...)):
     """
@@ -36,23 +37,12 @@ async def chat_endpoint(payload: dict = Body(...)):
     """
     user_message = payload.get("message", "")
     print(f"📩 Received: {user_message}")
-    
     try:
-        # --- 4. Get Real Response from Agent ---
-        # This triggers the 'interact' function in main.py
-        # allowing it to check the market, buy nodes, etc.
         reply = agent.interact(user_message)
-        
-        return {
-            "reply": reply,
-            "success": True
-        }
+        return JSONResponse(content={"reply": reply, "success": True}, status_code=200)
     except Exception as e:
         print(f"❌ Error: {e}")
-        return {
-            "reply": f"🔥 Agent Error: {str(e)}",
-            "success": False
-        }
+        return JSONResponse(content={"reply": f"🔥 Agent Error: {str(e)}", "success": False}, status_code=500)
 
 @app.get("/status")
 async def get_status():

@@ -1,8 +1,47 @@
+
+# --- UNIVERSAL DECORATOR ---
+class UniversalTool:
+    def __init__(self, func):
+        self.func = func
+        self.name = func.__name__
+    def invoke(self, args):
+        return self.func(**args) if isinstance(args, dict) else self.func(args)
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+def tool(func):
+    return UniversalTool(func)
+
+# Add missing get_portfolio_value stub to fix ImportError
+@tool
+def get_portfolio_value():
+    """Stub: Returns a dummy portfolio value. Implement real logic as needed."""
+    return {"portfolio_value": 0, "note": "Stub function. Implement logic."}
+
 import os
 import time
 import json
+
+# --- UNIVERSAL DECORATOR ---
+class UniversalTool:
+    def __init__(self, func):
+        self.func = func
+        self.name = func.__name__
+    def invoke(self, args):
+        return self.func(**args) if isinstance(args, dict) else self.func(args)
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+def tool(func):
+    return UniversalTool(func)
+
 from web3 import Web3
 from dotenv import load_dotenv
+
+@tool
+def estimate_swap_output(token_in: str, token_out: str, amount_in: float):
+    """Stub: Estimate the output amount for a swap. Implement logic as needed."""
+    return {"estimated_output": 0, "note": "Stub function. Implement logic."}
 
 load_dotenv()
 
@@ -16,6 +55,7 @@ USDC_CONTRACT   = "0xE373E44E5e64496BD092A5ad097881C0fa31D326"
 
 CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
 
+
 # --- UNIVERSAL DECORATOR ---
 class UniversalTool:
     def __init__(self, func):
@@ -26,7 +66,8 @@ class UniversalTool:
     def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)
 
-def tool(func): return UniversalTool(func)
+def tool(func):
+    return UniversalTool(func)
 
 # --- ABIS ---
 ERC20_ABI = [{"constant":True,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"},{"constant":False,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":True,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":True,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}]

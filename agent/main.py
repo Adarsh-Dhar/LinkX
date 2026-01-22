@@ -21,7 +21,7 @@ from tools import (
 load_dotenv()
 
 # Configuration: Pointing to your Next.js Frontend API
-MARKET_API_URL = "http://localhost:3000/api/market/nodes" 
+MARKET_API_URL = "http://localhost:3600/api/market/nodes"
 
 class MarketManager:
     """Manages interactions with the Alpha Node Market"""
@@ -78,13 +78,23 @@ class MarketManager:
 
         # Execute Purchase via API
         try:
-            # This sends the purchase command to your Next.js backend
+            print(f"💸 Paying for {target_node['name']} using x402 protocol...")
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
             
             if response.status_code == 200:
-                return f"🚀 **SUCCESS**: Acquired **{target_node['name']}**! \n   Data stream is now active in the neural network."
+                data = response.json()
+                tx_hash = data.get('txHash')
+                if tx_hash and tx_hash != 'N/A':
+                    return (f"🚀 **PAYMENT SUCCESSFUL**\n"
+                            f"📦 Node: {target_node['name']}\n"
+                            f"🔗 x402 Transaction: `{tx_hash}`\n"
+                            f"✅ Data stream is now active.")
+                else:
+                    return (f"❌ Payment failed: Transaction hash not received.\n"
+                            f"Node: {target_node['name']}\n"
+                            f"Response: {data}")
             else:
-                return f"❌ Purchase failed: {response.text}"
+                return f"❌ Payment failed: {response.text}"
         except Exception as e:
             return f"❌ Network error during purchase: {e}"
 
@@ -97,25 +107,46 @@ class LightweightAgent:
         # Initialize the Market Manager
         self.market = MarketManager()
     
-    def _call_llm(self, messages):
-        """Call OpenRouter LLM"""
+    def _call_llm(self, messages, image_url=None):
+        """Call OpenRouter LLM with support for text and image input."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            # Optionally set these for rankings:
+            # "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", ""),
+            # "X-Title": os.getenv("OPENROUTER_SITE_NAME", ""),
         }
-        
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": self.max_tokens,
-            "temperature": 0.0,
-        }
-        
+
+        # If image_url is provided, format the message accordingly
+        if image_url:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": messages if isinstance(messages, str) else messages[0]["content"]},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]
+                    }
+                ],
+                "max_tokens": self.max_tokens,
+                "temperature": 0.0,
+            }
+        else:
+            # Standard text-only message
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": self.max_tokens,
+                "temperature": 0.0,
+            }
+
         try:
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
-                json=payload,
+                data=json.dumps(payload),
                 timeout=20
             )
             if response.status_code == 200:

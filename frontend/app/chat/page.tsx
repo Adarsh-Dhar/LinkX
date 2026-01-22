@@ -121,31 +121,56 @@ export default function ChatPage() {
         body: JSON.stringify({ message: userInput }),
       })
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        // If not JSON, fallback to text
+        const text = await response.text();
+        data = { response: `⚠️ API returned non-JSON response: ${text}` };
       }
 
-      const data = await response.json()
+      // Enhanced buy node response handling
+      let content = data.response || data.reply || "No response from agent";
+      // Always try to extract and display tx hash for any purchase/success message
+      if (
+        content.match(/(PAYMENT SUCCESSFUL|transaction (complete|successful)|purchased)/i)
+      ) {
+        // Try to extract the tx hash from the response (various formats)
+        const txMatch =
+          content.match(/x402 Transaction: `([^`]+)`/i) ||
+          content.match(/Transaction Hash: ([0xA-Fa-f0-9]{10,})/i) ||
+          content.match(/tx(hash)?:\s*([0xA-Fa-f0-9]{10,})/i);
+        const txHash = txMatch ? (txMatch[1] || txMatch[2]) : null;
+        if (txHash && txHash !== 'N/A') {
+          content += `\n\nTransaction Hash: ${txHash}`;
+          // Also log to console for dev visibility
+          // eslint-disable-next-line no-console
+          console.log('Transaction Hash:', txHash);
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('Full backend response (no tx hash):', data);
+          // Show the raw backend response if no tx hash is found
+          content = `❌ Payment failed: Transaction hash not received.\n\nRaw backend response:\n${typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)}`;
+        }
+      }
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: "agent",
-        content: data.reply || "No response from agent",
+        content,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, agentMsg])
-      
+
       // DISPATCH ALPHA EVENT IF ALPHA WAS PURCHASED
-      if (data.reply && data.reply.includes("Alpha Purchased")) {
+      if (content.includes("Alpha Purchased")) {
         console.log("🚀 Triggering Prediction Mode...");
-        
-        // This event tells the Chart component to switch to "Prediction Mode"
-        // We simulate a 5% gain for the demo visual
         const event = new CustomEvent("alpha-purchased", { 
           detail: { 
             prediction: [
-              { price: 0.12 }, // Simulated future price points
-              { price: 0.13 }, // Chart component handles the smoothing
-              { price: 0.14 }  // and displays the purple prediction line
+              { price: 0.12 },
+              { price: 0.13 },
+              { price: 0.14 }
             ]
           } 
         });

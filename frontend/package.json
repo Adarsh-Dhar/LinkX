@@ -9,6 +9,7 @@
     "start": "next start -p 3600"
   },
   "dependencies": {
+    "@crypto.com/facilitator-client": "^1.0.4",
     "@hookform/resolvers": "^3.10.0",
     "@prisma/client": "^6.19.2",
     "@radix-ui/react-accordion": "1.2.2",
@@ -46,7 +47,7 @@
     "date-fns": "4.1.0",
     "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
-    "ethers": "^6.13.2",
+    "ethers": "^6.16.0",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "16.0.10",
