@@ -3,13 +3,11 @@ import { prisma } from "@/lib/db";
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 import { ethers } from 'ethers';
 
-console.log("🔹 LOADED ROUTE: Dynamic Price + Hash Fix");
+console.log("🔹 LOADED ROUTE: Ultimate Hash Finder");
 
 // --- CONFIGURATION ---
 const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; 
 const RPC_URL = "https://evm-t3.cronos.org"; // Cronos Testnet
-
-// Data Provider Wallet
 const PROVIDER_ADDRESS = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9";
 
 const facilitator = new Facilitator({
@@ -34,19 +32,11 @@ export async function POST(req: Request) {
 
     const node = await prisma.alphaNode.findUnique({ where: { id: nodeId } });
     if (!node) return NextResponse.json({ error: "Node not found" }, { status: 404 });
-    
-    // Allow re-purchase simulation if needed, but typically:
-    if (node.isPurchased) {
-       // Only return "already purchased" if you want to block duplicate buys
-       // return NextResponse.json({ success: true, message: "Already purchased", txHash: "PREVIOUSLY_BOUGHT" });
-    }
 
-    // --- 1. CALCULATE PRICE (1 tCRO = 100 USDC) ---
+    // --- 1. CALCULATE PRICE ---
     const usdcPrice = Number(node.price || 0); 
     const conversionRate = 100;
     const croAmount = usdcPrice / conversionRate;
-    
-    // FIX: Limit decimals to avoid "underflow" or "too many decimals" error
     const safeCroString = croAmount.toFixed(18); 
     const valueInWei = ethers.parseEther(safeCroString).toString();
 
@@ -76,16 +66,28 @@ export async function POST(req: Request) {
       throw new Error(`Verification Failed: ${verification.invalidReason || 'Unknown'}`);
     }
 
+    // --- 3. SETTLE & INSPECT ---
+    console.log("⏳ Broadcasting transaction...");
     const settlement = await facilitator.settlePayment(verifyBody);
     
-    // --- 3. ROBUST HASH EXTRACTION ---
-    // Try all common property names for the hash
+    // LOG THE FULL OBJECT TO CONSOLE
+    console.log("📦 FULL SETTLEMENT OBJECT:", JSON.stringify(settlement, null, 2));
+
+    // --- 4. AGGRESSIVE HASH EXTRACTION ---
+    // Try every possible property name used by ethers v5, v6, or web3.js
     // @ts-ignore
-    const finalHash = settlement.hash || settlement.transactionHash || settlement.txHash || "HASH_NOT_FOUND";
-    
+    let finalHash = settlement.hash || settlement.transactionHash || settlement.txHash || settlement.transaction?.hash;
+
+    // Fallback: If it's a string, assume it's the hash
+    if (!finalHash && typeof settlement === 'string') {
+        finalHash = settlement;
+    }
+
+    if (!finalHash) finalHash = "HASH_NOT_FOUND_CHECK_DEBUG";
+
     console.log(`🚀 Payment Settled! Hash: ${finalHash}`);
 
-    // --- 4. DB UPDATE ---
+    // --- 5. DB UPDATE ---
     const updated = await prisma.alphaNode.update({
       where: { id: nodeId },
       data: { isPurchased: true }
@@ -95,7 +97,9 @@ export async function POST(req: Request) {
       success: true, 
       node: updated,
       amountPaid: `${safeCroString} tCRO`,
-      txHash: finalHash 
+      txHash: finalHash,
+      // Return the full object so the Agent can print it if needed
+      debug: settlement 
     });
 
   } catch (error: any) {

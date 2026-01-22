@@ -49,45 +49,48 @@ class MarketManager:
 
     def buy_node(self, node_id_or_name):
         state = self.get_market_state()
-        if not state: return "❌ Error: Could not connect to market API."
+        if not state:
+            return "❌ Error: Could not connect to market API."
 
-        # ... (Search logic remains same) ...
         target_node = next((n for n in state['nodes'] if n['id'] == node_id_or_name), None)
         if not target_node:
-             node_id_or_name = node_id_or_name.lower()
-             target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
+            node_id_or_name = node_id_or_name.lower()
+            target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
 
-        if not target_node: return "❌ Node not found."
-        
+        if not target_node:
+            return "❌ Node not found."
+
         # --- EXECUTE PURCHASE ---
         try:
             print(f"💸 Buying {target_node['name']}...")
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
-            
+
             try:
                 data = response.json()
             except:
                 return f"❌ Invalid JSON response: {response.text}"
 
-            # --- ROBUST HASH FINDER ---
-            # Backend might send 'txHash', 'transactionHash', or 'hash'
-            tx_hash = (data.get('txHash') or 
-                       data.get('transactionHash') or 
-                       data.get('hash') or 
-                       'N/A')
-            
-            # If explicit success OR we found a hash
-            if data.get('success') or (tx_hash != 'N/A'):
-                amount = data.get('amountPaid', 'Unknown Amount')
-                
-                msg = (f"🚀 **PAYMENT SUCCESSFUL**\n"
-                       f"📦 Node: {target_node['name']}\n"
-                       f"💰 Price Paid: {amount}\n" 
-                       f"🔗 Tx Hash: `{tx_hash}`\n"
-                       f"✅ Data stream active.")
-                return msg
+            # Extract info
+            tx_hash = data.get('txHash') or data.get('transactionHash') or 'N/A'
+            amount = data.get('amountPaid', 'Unknown')
 
-            # Failure
+            # --- SUCCESS CASE ---
+            if data.get('success') or (tx_hash != 'N/A' and "HASH_NOT_FOUND" not in str(tx_hash)):
+                return (f"🚀 **PAYMENT SUCCESSFUL**\n"
+                        f"📦 Node: {target_node['name']}\n"
+                        f"💰 Paid: {amount}\n" 
+                        f"🔗 Tx Hash: `{tx_hash}`\n"
+                        f"✅ Data stream active.")
+
+            # --- DEBUGGING CASE (Transaction worked, but Hash missing) ---
+            if "HASH_NOT_FOUND" in str(tx_hash):
+                debug_info = json.dumps(data.get('debug', {}), indent=2)
+                return (f"⚠️ **Payment Likely Succeeded (But Hash Missing)**\n"
+                        f"📦 Node: {target_node['name']}\n"
+                        f"The API could not find the hash field. Here is the raw object returned by the blockchain:\n"
+                        f"```json\n{debug_info}\n```")
+
+            # --- FAILURE CASE ---
             return (f"❌ Payment failed.\n"
                     f"**Raw response:**\n```json\n{json.dumps(data, indent=2)}\n```")
 
