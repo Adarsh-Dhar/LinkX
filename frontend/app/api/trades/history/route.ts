@@ -9,7 +9,7 @@ export async function GET() {
     });
 
     // Format for frontend display
-    const formattedTrades = trades.map((t) => ({
+    const formattedTrades = trades.map((t: { id: any; tokenIn: any; tokenOut: any; amountIn: any; realizedPnL: any; status: any; timestamp: any; txHash: any; }) => ({
       id: t.id,
       pair: `${t.tokenIn}/${t.tokenOut}`,
       type: "SWAP",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lightweight Trading Agent - With Market Integration
+Lightweight Trading Agent - With x402 Market Integration
 Direct API calls to Next.js Market + Autonomous Purchasing
 """
 
@@ -21,27 +21,20 @@ from tools import (
 load_dotenv()
 
 # Configuration: Pointing to your Next.js Frontend API
-MARKET_API_URL = "http://localhost:3600/api/market/nodes"
+# Ensure this matches your Next.js port (usually 3000)
+MARKET_API_URL = "http://localhost:3600/api/market/nodes" 
 
 class MarketManager:
     """Manages interactions with the Alpha Node Market"""
-    
+
     def get_market_state(self):
-        """Fetches the entire list and calculates completion percentage"""
         try:
-            # Connect to Next.js API
             response = requests.get(MARKET_API_URL, timeout=5)
-            
             if response.status_code == 200:
                 nodes = response.json()
                 total = len(nodes)
                 purchased = len([n for n in nodes if n.get('isPurchased')])
-                
-                if total == 0:
-                    percentage = 0
-                else:
-                    percentage = (purchased / total) * 100
-                    
+                percentage = (purchased / total) * 100 if total else 0
                 return {
                     "nodes": nodes,
                     "total": total,
@@ -55,48 +48,56 @@ class MarketManager:
             return None
 
     def buy_node(self, node_id_or_name):
-        """Buys a specific node by ID or fuzzy name matching"""
         state = self.get_market_state()
         if not state:
-            return "❌ Error: Could not connect to market API (is localhost:3000 running?)."
+            return "❌ Error: Could not connect to market API."
 
-        target_node = None
-        
-        # 1. Try exact ID match
+        # Find the node (fuzzy search)
         target_node = next((n for n in state['nodes'] if n['id'] == node_id_or_name), None)
-        
-        # 2. Try fuzzy name match (e.g. "sentiment" finds "Sentiment Analysis A")
         if not target_node:
             node_id_or_name = node_id_or_name.lower()
             target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
-            
-        if not target_node:
-            return f"❌ Node '{node_id_or_name}' not found in the market."
-            
-        if target_node.get('isPurchased'):
-            return f"✅ We already own **{target_node['name']}**. Data stream is active."
 
-        # Execute Purchase via API
+        if not target_node:
+            return f"❌ Node '{node_id_or_name}' not found."
+
+        if target_node.get('isPurchased'):
+            return f"✅ We already own **{target_node['name']}**."
+
+        # --- EXECUTE PURCHASE ---
         try:
-            print(f"💸 Paying for {target_node['name']} using x402 protocol...")
+            print(f"📡 Sending POST request to: {MARKET_API_URL}")
+            print(f"📦 Payload: {{'nodeId': '{target_node['id']}'}}")
+
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
-            
-            if response.status_code == 200:
+
+            # Debugging Output
+            if response.status_code != 200:
+                return f"❌ HTTP Error {response.status_code}: {response.text}"
+
+            try:
                 data = response.json()
-                tx_hash = data.get('txHash')
-                if tx_hash and tx_hash != 'N/A':
-                    return (f"🚀 **PAYMENT SUCCESSFUL**\n"
-                            f"📦 Node: {target_node['name']}\n"
-                            f"🔗 x402 Transaction: `{tx_hash}`\n"
-                            f"✅ Data stream is now active.")
-                else:
-                    return (f"❌ Payment failed: Transaction hash not received.\n"
-                            f"Node: {target_node['name']}\n"
-                            f"Response: {data}")
-            else:
-                return f"❌ Payment failed: {response.text}"
+            except:
+                return f"❌ Invalid JSON response: {response.text}"
+
+            # CHECK FOR SUCCESS OR HASH
+            # We accept 'txHash', 'transactionHash', or just 'success': True
+            tx_hash = data.get('txHash') or data.get('transactionHash')
+
+            if data.get('success') or tx_hash:
+                msg = f"🚀 **PAYMENT SUCCESSFUL**\n📦 Node: {target_node['name']}\n"
+                if tx_hash:
+                    msg += f"🔗 x402 Transaction: `{tx_hash}`\n"
+                msg += "✅ Data stream active."
+                return msg
+
+            # IF WE GET HERE, THE BACKEND RETURNED JSON BUT NO SUCCESS FLAG
+            return (f"❌ Payment failed: Transaction hash not received.\n"
+                    f"**Raw backend response:**\n"
+                    f"```json\n{json.dumps(data, indent=2)}\n```")
+
         except Exception as e:
-            return f"❌ Network error during purchase: {e}"
+            return f"❌ Network error: {e}"
 
 class LightweightAgent:
     def __init__(self):
@@ -106,47 +107,53 @@ class LightweightAgent:
         self.max_tokens = int(os.getenv("OPENROUTER_MAX_TOKENS", "150"))
         # Initialize the Market Manager
         self.market = MarketManager()
+        
+    def check_and_acquire_data(self):
+        """
+        AUTONOMOUS LOGIC: Checks coverage. 
+        If coverage < 30%, automatically buys the cheapest node.
+        """
+        # print("🤖 Agent reviewing data coverage...") # Uncomment for debug noise
+        state = self.market.get_market_state()
+        
+        if not state:
+            return None
+
+        # Logic: If we own less than 30% of the market, buy something!
+        if state['percentage'] < 30.0:
+            missing_nodes = state['missing']
+            if missing_nodes:
+                # Strategy: Buy the cheapest one first
+                # (Assuming the API returns 'price', otherwise just pick the first one)
+                target = sorted(missing_nodes, key=lambda x: float(x.get('price', 0)) if x.get('price') else 9999)[0]
+                
+                print(f"💡 Low data coverage ({state['percentage']:.1f}%). Autonomously buying {target['name']}...")
+                result = self.market.buy_node(target['id'])
+                
+                # Clean up the result message for the user update
+                return f"🔔 **Autonomous Action:** Coverage was low ({state['percentage']:.1f}%), so I purchased **{target['name']}**.\n\n{result}"
+        
+        return None
     
-    def _call_llm(self, messages, image_url=None):
-        """Call OpenRouter LLM with support for text and image input."""
+    def _call_llm(self, messages):
+        """Call OpenRouter LLM"""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            # Optionally set these for rankings:
-            # "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", ""),
-            # "X-Title": os.getenv("OPENROUTER_SITE_NAME", ""),
         }
-
-        # If image_url is provided, format the message accordingly
-        if image_url:
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": messages if isinstance(messages, str) else messages[0]["content"]},
-                            {"type": "image_url", "image_url": {"url": image_url}}
-                        ]
-                    }
-                ],
-                "max_tokens": self.max_tokens,
-                "temperature": 0.0,
-            }
-        else:
-            # Standard text-only message
-            payload = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": self.max_tokens,
-                "temperature": 0.0,
-            }
-
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "temperature": 0.0,
+        }
+        
         try:
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
-                data=json.dumps(payload),
+                json=payload,
                 timeout=20
             )
             if response.status_code == 200:
@@ -159,6 +166,15 @@ class LightweightAgent:
         """Process user input with Market & Trading Context"""
         user_lower = user_input.lower()
         
+        # --- 0. RUN AUTONOMOUS CHECK ---
+        # Every time we chat, the agent checks if it needs to buy something
+        auto_action = self.check_and_acquire_data()
+        
+        # If the agent did something automatically, prepend it to the reply
+        prefix_msg = ""
+        if auto_action:
+            prefix_msg = f"{auto_action}\n\n---\n\n"
+
         # --- 1. Market Completion & Status ---
         # Detects questions about "completion", "list", "status"
         if any(w in user_lower for w in ["completion", "progress", "stats", "market status", "list nodes"]):
@@ -168,14 +184,14 @@ class LightweightAgent:
                 purchased_names = [n['name'] for n in state['nodes'] if n.get('isPurchased')]
                 missing_names = [n['name'] for n in state['missing']]
                 
-                return (
+                return prefix_msg + (
                     f"📊 **Alpha Market Coverage: {state['percentage']:.1f}%**\n\n"
                     f"✅ **Acquired ({state['purchased']}):**\n"
                     f"{', '.join(purchased_names) if purchased_names else 'None'}\n\n"
                     f"🔒 **Available to Buy ({len(state['missing'])}):**\n"
                     f"{', '.join(missing_names) if missing_names else 'None'}"
                 )
-            return "⚠️ Market offline. Cannot fetch stats."
+            return prefix_msg + "⚠️ Market offline. Cannot fetch stats."
 
         # --- 2. Buy Command ---
         # Detects "buy [node name]"
@@ -192,11 +208,11 @@ class LightweightAgent:
                     # Join everything after "buy" to form the query
                     query = " ".join(words[buy_index+1:]).replace("node", "").replace("provider", "").strip()
                     if query:
-                        return self.market.buy_node(query)
+                        return prefix_msg + self.market.buy_node(query)
             except Exception as e:
                 print(f"Parsing error: {e}")
                 
-            return "❓ Which node should I buy? (e.g., 'buy sentiment node')"
+            return prefix_msg + "❓ Which node should I buy? (e.g., 'buy sentiment node')"
 
         # --- 3. Standard Trading Tools (Existing Logic) ---
         old_stdout = sys.stdout
@@ -207,12 +223,12 @@ class LightweightAgent:
                 cro = get_token_balance.invoke({"token_address": "cro"})
                 usdc = get_token_balance.invoke({"token_address": "usdc"})
                 sys.stdout = old_stdout
-                return f"💰 Balance:\nCRO: {cro.get('balance_readable',0):.2f}\nUSDC: {usdc.get('balance_readable',0):.2f}"
+                return prefix_msg + f"💰 Balance:\nCRO: {cro.get('balance_readable',0):.2f}\nUSDC: {usdc.get('balance_readable',0):.2f}"
             
             elif "swap" in user_lower:
                  # Minimal swap logic (you can expand this with your previous complex logic if needed)
                  sys.stdout = old_stdout
-                 return "⚠️ To execute swaps, please use the specific 'swap X to Y' format or check the full trading engine."
+                 return prefix_msg + "⚠️ To execute swaps, please use the specific 'swap X to Y' format or check the full trading engine."
 
             # --- 4. LLM Fallback ---
             sys.stdout = old_stdout
@@ -220,11 +236,11 @@ class LightweightAgent:
                 {"role": "system", "content": "You are an autonomous trading agent. You can buy data nodes and trade tokens. Keep answers brief."},
                 {"role": "user", "content": user_input}
             ]
-            return self._call_llm(messages)
+            return prefix_msg + self._call_llm(messages)
             
         except Exception as e:
             sys.stdout = old_stdout
-            return f"Error: {e}"
+            return prefix_msg + f"Error: {e}"
 
 def main():
     agent = LightweightAgent()
