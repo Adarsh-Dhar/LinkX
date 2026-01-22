@@ -49,56 +49,51 @@ class MarketManager:
 
     def buy_node(self, node_id_or_name):
         state = self.get_market_state()
-        if not state:
-            return "❌ Error: Could not connect to market API."
+        if not state: return "❌ Error: Could not connect to market API."
 
-        # Find the node (fuzzy search)
+        # ... (Search logic remains same) ...
         target_node = next((n for n in state['nodes'] if n['id'] == node_id_or_name), None)
         if not target_node:
-            node_id_or_name = node_id_or_name.lower()
-            target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
+             node_id_or_name = node_id_or_name.lower()
+             target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
 
-        if not target_node:
-            return f"❌ Node '{node_id_or_name}' not found."
-
-        if target_node.get('isPurchased'):
-            return f"✅ We already own **{target_node['name']}**."
-
+        if not target_node: return "❌ Node not found."
+        
         # --- EXECUTE PURCHASE ---
         try:
-            print(f"📡 Sending POST request to: {MARKET_API_URL}")
-            print(f"📦 Payload: {{'nodeId': '{target_node['id']}'}}")
-
+            print(f"💸 Buying {target_node['name']}...")
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
-
-            # Debugging Output
-            if response.status_code != 200:
-                return f"❌ HTTP Error {response.status_code}: {response.text}"
-
+            
             try:
                 data = response.json()
             except:
                 return f"❌ Invalid JSON response: {response.text}"
 
-            # CHECK FOR SUCCESS OR HASH
-            # We accept 'txHash', 'transactionHash', or just 'success': True
-            tx_hash = data.get('txHash') or data.get('transactionHash')
-
-            if data.get('success') or tx_hash:
-                msg = f"🚀 **PAYMENT SUCCESSFUL**\n📦 Node: {target_node['name']}\n"
-                if tx_hash:
-                    msg += f"🔗 x402 Transaction: `{tx_hash}`\n"
-                msg += "✅ Data stream active."
+            # --- ROBUST HASH FINDER ---
+            # Backend might send 'txHash', 'transactionHash', or 'hash'
+            tx_hash = (data.get('txHash') or 
+                       data.get('transactionHash') or 
+                       data.get('hash') or 
+                       'N/A')
+            
+            # If explicit success OR we found a hash
+            if data.get('success') or (tx_hash != 'N/A'):
+                amount = data.get('amountPaid', 'Unknown Amount')
+                
+                msg = (f"🚀 **PAYMENT SUCCESSFUL**\n"
+                       f"📦 Node: {target_node['name']}\n"
+                       f"💰 Price Paid: {amount}\n" 
+                       f"🔗 Tx Hash: `{tx_hash}`\n"
+                       f"✅ Data stream active.")
                 return msg
 
-            # IF WE GET HERE, THE BACKEND RETURNED JSON BUT NO SUCCESS FLAG
-            return (f"❌ Payment failed: Transaction hash not received.\n"
-                    f"**Raw backend response:**\n"
-                    f"```json\n{json.dumps(data, indent=2)}\n```")
+            # Failure
+            return (f"❌ Payment failed.\n"
+                    f"**Raw response:**\n```json\n{json.dumps(data, indent=2)}\n```")
 
         except Exception as e:
             return f"❌ Network error: {e}"
-
+        
 class LightweightAgent:
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
