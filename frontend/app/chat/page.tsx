@@ -136,22 +136,22 @@ export default function ChatPage() {
       if (
         content.match(/(PAYMENT SUCCESSFUL|transaction (complete|successful)|purchased)/i)
       ) {
+        // Print raw backend response for debugging
+        // eslint-disable-next-line no-console
+        console.log('Raw backend response:', data);
         // Try to extract the tx hash from the response (various formats)
         const txMatch =
           content.match(/x402 Transaction: `([^`]+)`/i) ||
           content.match(/Transaction Hash: ([0xA-Fa-f0-9]{10,})/i) ||
           content.match(/tx(hash)?:\s*([0xA-Fa-f0-9]{10,})/i);
         const txHash = txMatch ? (txMatch[1] || txMatch[2]) : null;
+        // Print extracted hash for debugging
+        // eslint-disable-next-line no-console
+        console.log('Extracted txHash:', txHash);
         if (txHash && txHash !== 'N/A') {
           content += `\n\nTransaction Hash: ${txHash}`;
-          // Also log to console for dev visibility
-          // eslint-disable-next-line no-console
-          console.log('Transaction Hash:', txHash);
         } else {
-          // eslint-disable-next-line no-console
-          console.log('Full backend response (no tx hash):', data);
-          // Show the raw backend response if no tx hash is found
-          content = `❌ Payment failed: Transaction hash not received.\n\nRaw backend response:\n${typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)}`;
+          content += `\n\nTransaction Hash: NOT_FOUND`;
         }
       }
 
@@ -172,17 +172,12 @@ export default function ChatPage() {
             } catch (e) {}
           }
         }
-        // If not found, try to extract JSON from error string
+        // If not found, try to extract transaction data field from error string using improved regex
         if (!debugJson && data.response && data.response.includes('error')) {
-          const errorObjMatch = data.response.match(/transaction=\{([^}]*)\}/);
-          if (errorObjMatch) {
-            try {
-              let txStr = '{' + errorObjMatch[1] + '}';
-              txStr = txStr.replace(/([a-zA-Z0-9_]+):/g, '"$1":');
-              txStr = txStr.replace(/'/g, '"');
-              const txObj = JSON.parse(txStr);
-              txData = txObj.data;
-            } catch (e) {}
+          // Try to extract the transaction data field directly, even with nested braces
+          const dataFieldMatch = data.response.match(/data\s*[:=]\s*\"([0-9a-fA-Fx]+)\"/);
+          if (dataFieldMatch) {
+            txData = dataFieldMatch[1];
           }
         }
         if (!debugJson && typeof data.response === 'string') {
@@ -195,27 +190,39 @@ export default function ChatPage() {
         }
         // Extract transfer amount
         if (txData) {
-          const slots = [];
-          for (let i = 8; i < txData.length; i += 64) {
-            slots.push(txData.slice(i, i + 64));
-          }
-          if (slots.length >= 3) {
-            const transferAmount = parseInt(slots[2], 16);
+          // Debug: print txData
+          // eslint-disable-next-line no-console
+          console.log('txData:', txData);
+          // The amount is at offset 8+64+64=136, next 64 hex chars
+          const amountHex = txData.slice(136, 200);
+          // Debug: print amountHex
+          // eslint-disable-next-line no-console
+          console.log('amountHex:', amountHex);
+          if (amountHex && amountHex.length === 64) {
+            const transferAmount = parseInt(amountHex, 16);
             if (!isNaN(transferAmount)) {
               transferAmountCRO = transferAmount / 1e18;
+            } else {
+              // eslint-disable-next-line no-console
+              console.log('Could not parse transferAmount from amountHex:', amountHex);
             }
+          } else {
+            // eslint-disable-next-line no-console
+            console.log('Could not extract valid amountHex:', amountHex);
           }
         }
         // Extract current balance if present
         if (debugJson && debugJson.currentBalance) {
           balanceCRO = debugJson.currentBalance / 1e18;
         }
-        // Show in agent message if available
+        // Show in agent message if available, else show fallback
         if (transferAmountCRO !== null) {
           content += `\n\n❌ Insufficient balance!\nNeeded: ${transferAmountCRO} CRO`;
           if (balanceCRO !== null) {
             content += `\nAvailable: ${balanceCRO} CRO`;
           }
+        } else {
+          content += `\n\n❌ Insufficient balance! Could not extract transfer amount from transaction data.`;
         }
       }
       const agentMsg: Message = {
