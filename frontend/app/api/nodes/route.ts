@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 
 // 1. Configuration
 // Ideally, put these in your .env file
-const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Default: Hardhat Account #0 (CHANGE THIS FOR REAL NETWORKS)
+const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY; // Default: Hardhat Account #0 (CHANGE THIS FOR REAL NETWORKS)
 const RPC_URL = "https://evm-t3.cronos.org"; // Cronos Testnet
 
 // Initialize Facilitator
@@ -48,6 +48,10 @@ export async function POST(req: Request) {
     const priceAmount = "10000"; // 0.01 USDC (6 decimals) - Mock Price
 
     console.log(`🤖 Initiating x402 Payment for: ${node.name}...`);
+
+    if (!AGENT_PRIVATE_KEY) {
+      throw new Error("AGENT_PRIVATE_KEY is not set in environment variables.");
+    }
 
     // 3. Initialize Agent's Wallet (The Buyer)
     const provider = new ethers.JsonRpcProvider(RPC_URL);

@@ -49,22 +49,19 @@ class MarketManager:
 
     def buy_node(self, node_id_or_name):
         state = self.get_market_state()
-        if not state:
-            return "❌ Error: Could not connect to market API."
+        if not state: return "❌ Error: Could not connect to market API."
 
         target_node = next((n for n in state['nodes'] if n['id'] == node_id_or_name), None)
         if not target_node:
-            node_id_or_name = node_id_or_name.lower()
-            target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
+             node_id_or_name = node_id_or_name.lower()
+             target_node = next((n for n in state['nodes'] if node_id_or_name in n['name'].lower()), None)
 
-        if not target_node:
-            return "❌ Node not found."
-
-        # --- EXECUTE PURCHASE ---
+        if not target_node: return "❌ Node not found."
+        
         try:
             print(f"💸 Buying {target_node['name']}...")
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
-
+            
             try:
                 data = response.json()
             except:
@@ -73,22 +70,26 @@ class MarketManager:
             # Extract info
             tx_hash = data.get('txHash') or data.get('transactionHash') or 'N/A'
             amount = data.get('amountPaid', 'Unknown')
+            
+            # --- DEBUGGING CASE (Transaction worked, but Hash missing) ---
+            # If the backend sent our specific error string, dump the debug object
+            if "HASH_NOT_FOUND" in str(tx_hash):
+                debug_info = data.get('debug', {})
+                # Pretty print the JSON so we can read it
+                debug_str = json.dumps(debug_info, indent=2)
+                
+                return (f"⚠️ **Payment Succeeded, but Hash Parsing Failed**\n"
+                        f"📦 Node: {target_node['name']}\n"
+                        f"Please copy the JSON below and show it to the developer to fix the property name:\n\n"
+                        f"```json\n{debug_str}\n```")
 
             # --- SUCCESS CASE ---
-            if data.get('success') or (tx_hash != 'N/A' and "HASH_NOT_FOUND" not in str(tx_hash)):
+            if data.get('success') or (tx_hash != 'N/A'):
                 return (f"🚀 **PAYMENT SUCCESSFUL**\n"
                         f"📦 Node: {target_node['name']}\n"
                         f"💰 Paid: {amount}\n" 
                         f"🔗 Tx Hash: `{tx_hash}`\n"
                         f"✅ Data stream active.")
-
-            # --- DEBUGGING CASE (Transaction worked, but Hash missing) ---
-            if "HASH_NOT_FOUND" in str(tx_hash):
-                debug_info = json.dumps(data.get('debug', {}), indent=2)
-                return (f"⚠️ **Payment Likely Succeeded (But Hash Missing)**\n"
-                        f"📦 Node: {target_node['name']}\n"
-                        f"The API could not find the hash field. Here is the raw object returned by the blockchain:\n"
-                        f"```json\n{debug_info}\n```")
 
             # --- FAILURE CASE ---
             return (f"❌ Payment failed.\n"
@@ -96,7 +97,7 @@ class MarketManager:
 
         except Exception as e:
             return f"❌ Network error: {e}"
-        
+         
 class LightweightAgent:
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")

@@ -6,7 +6,15 @@ import { ethers } from 'ethers';
 console.log("🔹 LOADED ROUTE: Ultimate Hash Finder");
 
 // --- CONFIGURATION ---
-const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; 
+const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY;
+
+// Debug: Print the loaded private key and derived public address
+try {
+  const { Wallet } = require('ethers');
+  const debugWallet = new Wallet(AGENT_PRIVATE_KEY);
+  console.log('DEBUG: Loaded AGENT_PRIVATE_KEY:', AGENT_PRIVATE_KEY);
+  console.log('DEBUG: Derived public address:', debugWallet.address);
+} catch (e) { console.log('DEBUG: Could not derive public address:', e); }
 const RPC_URL = "https://evm-t3.cronos.org"; // Cronos Testnet
 const PROVIDER_ADDRESS = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9";
 
@@ -41,6 +49,10 @@ export async function POST(req: Request) {
     const valueInWei = ethers.parseEther(safeCroString).toString();
 
     console.log(`🤖 Paying for ${node.name} (${safeCroString} tCRO)`);
+
+    if (!AGENT_PRIVATE_KEY) {
+      throw new Error("AGENT_PRIVATE_KEY is not set in environment variables.");
+    }
 
     // --- 2. PAYMENT EXECUTION ---
     const provider = new ethers.JsonRpcProvider(RPC_URL);
