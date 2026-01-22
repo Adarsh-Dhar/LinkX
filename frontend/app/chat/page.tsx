@@ -129,13 +129,13 @@ export default function ChatPage() {
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: "agent",
-        content: data.response || "No response from agent",
+        content: data.reply || "No response from agent",
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, agentMsg])
       
       // DISPATCH ALPHA EVENT IF ALPHA WAS PURCHASED
-      if (data.response && data.response.includes("Alpha Purchased")) {
+      if (data.reply && data.reply.includes("Alpha Purchased")) {
         console.log("🚀 Triggering Prediction Mode...");
         
         // This event tells the Chart component to switch to "Prediction Mode"

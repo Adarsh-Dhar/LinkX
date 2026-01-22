@@ -1,3 +1,4 @@
+from fastapi import Body
 """
 FastAPI wrapper for Alpha-Consumer Agent
 """
@@ -30,7 +31,18 @@ except ImportError as e:
     print(f"⚠️ Warning: Tools failed to load: {e}")
     TOOLS_LOADED = False
 
+
 app = FastAPI(title="Alpha-Consumer Agent API", version="1.0.0")
+
+# --- Chat Endpoint for Frontend ---
+@app.post("/chat")
+async def chat_endpoint(payload: dict = Body(...)):
+    user_message = payload.get("message", "")
+    response = {
+        "reply": f"Echo: {user_message}",
+        "success": True
+    }
+    return response
 
 app.add_middleware(
     CORSMiddleware,
