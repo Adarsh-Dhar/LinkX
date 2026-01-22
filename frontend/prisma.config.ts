@@ -9,10 +9,8 @@ export default defineConfig({
   migrations: {
     path: "prisma/migrations",
   },
-  engine: "classic",
+  engine: "driver",
   datasource: {
-    adapter: "sqlite",
-    url: "file:../agent/agent_state.db",
+    url: env("DATABASE_URL"),
   },
-  url: "file:../agent/agent_state.db",
 });
