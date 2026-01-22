@@ -21,7 +21,7 @@ from tools import (
 load_dotenv()
 
 # Configuration: Pointing to your Next.js Frontend API
-# Ensure this matches your Next.js port (usually 3000)
+# Ensure this matches your Next.js port (usually 3000 or 3600)
 MARKET_API_URL = "http://localhost:3600/api/market/nodes" 
 
 class MarketManager:
@@ -59,7 +59,7 @@ class MarketManager:
         if not target_node: return "❌ Node not found."
         
         try:
-            print(f"💸 Buying {target_node['name']}...")
+            print(f"💸 Buying {target_node['name']} via {MARKET_API_URL}...")
             response = requests.post(MARKET_API_URL, json={"nodeId": target_node['id']})
             
             try:
@@ -67,23 +67,29 @@ class MarketManager:
             except:
                 return f"❌ Invalid JSON response: {response.text}"
 
-            # Extract info
+            # --- ERROR HANDLING FIX ---
+            # 1. Check if backend returned a generic 'response' message (Mock/LLM behavior) instead of tx data
+            if "response" in data and "txHash" not in data and "success" not in data:
+                return (f"⚠️ **Backend Mismatch Detected**\n"
+                        f"The server returned a text message instead of transaction data.\n"
+                        f"**Server said:** \"{data['response']}\"\n"
+                        f"**Troubleshooting:**\n"
+                        f"1. Ensure Next.js is running the latest `route.ts` code.\n"
+                        f"2. Restart your Next.js server (`pnpm dev`).")
+
+            # 2. Extract info safely
             tx_hash = data.get('txHash') or data.get('transactionHash') or 'N/A'
             amount = data.get('amountPaid', 'Unknown')
             
-            # --- DEBUGGING CASE (Transaction worked, but Hash missing) ---
-            # If the backend sent our specific error string, dump the debug object
+            # 3. Handle 'HASH_NOT_FOUND' specific debug case
             if "HASH_NOT_FOUND" in str(tx_hash):
                 debug_info = data.get('debug', {})
-                # Pretty print the JSON so we can read it
                 debug_str = json.dumps(debug_info, indent=2)
-                
                 return (f"⚠️ **Payment Succeeded, but Hash Parsing Failed**\n"
                         f"📦 Node: {target_node['name']}\n"
-                        f"Please copy the JSON below and show it to the developer to fix the property name:\n\n"
-                        f"```json\n{debug_str}\n```")
+                        f"Debug Data:\n```json\n{debug_str}\n```")
 
-            # --- SUCCESS CASE ---
+            # 4. Success Case
             if data.get('success') or (tx_hash != 'N/A'):
                 return (f"🚀 **PAYMENT SUCCESSFUL**\n"
                         f"📦 Node: {target_node['name']}\n"
@@ -91,7 +97,7 @@ class MarketManager:
                         f"🔗 Tx Hash: `{tx_hash}`\n"
                         f"✅ Data stream active.")
 
-            # --- FAILURE CASE ---
+            # 5. Generic Failure Case
             return (f"❌ Payment failed.\n"
                     f"**Raw response:**\n```json\n{json.dumps(data, indent=2)}\n```")
 
@@ -112,26 +118,17 @@ class LightweightAgent:
         AUTONOMOUS LOGIC: Checks coverage. 
         If coverage < 30%, automatically buys the cheapest node.
         """
-        # print("🤖 Agent reviewing data coverage...") # Uncomment for debug noise
         state = self.market.get_market_state()
-        
-        if not state:
-            return None
+        if not state: return None
 
         # Logic: If we own less than 30% of the market, buy something!
         if state['percentage'] < 30.0:
             missing_nodes = state['missing']
             if missing_nodes:
-                # Strategy: Buy the cheapest one first
-                # (Assuming the API returns 'price', otherwise just pick the first one)
                 target = sorted(missing_nodes, key=lambda x: float(x.get('price', 0)) if x.get('price') else 9999)[0]
-                
                 print(f"💡 Low data coverage ({state['percentage']:.1f}%). Autonomously buying {target['name']}...")
                 result = self.market.buy_node(target['id'])
-                
-                # Clean up the result message for the user update
                 return f"🔔 **Autonomous Action:** Coverage was low ({state['percentage']:.1f}%), so I purchased **{target['name']}**.\n\n{result}"
-        
         return None
     
     def _call_llm(self, messages):
@@ -166,20 +163,13 @@ class LightweightAgent:
         user_lower = user_input.lower()
         
         # --- 0. RUN AUTONOMOUS CHECK ---
-        # Every time we chat, the agent checks if it needs to buy something
         auto_action = self.check_and_acquire_data()
-        
-        # If the agent did something automatically, prepend it to the reply
-        prefix_msg = ""
-        if auto_action:
-            prefix_msg = f"{auto_action}\n\n---\n\n"
+        prefix_msg = f"{auto_action}\n\n---\n\n" if auto_action else ""
 
         # --- 1. Market Completion & Status ---
-        # Detects questions about "completion", "list", "status"
         if any(w in user_lower for w in ["completion", "progress", "stats", "market status", "list nodes"]):
             state = self.market.get_market_state()
             if state:
-                # Generate the "Entire List" view for the user
                 purchased_names = [n['name'] for n in state['nodes'] if n.get('isPurchased')]
                 missing_names = [n['name'] for n in state['missing']]
                 
@@ -192,30 +182,31 @@ class LightweightAgent:
                 )
             return prefix_msg + "⚠️ Market offline. Cannot fetch stats."
 
-        # --- 2. Buy Command ---
-        # Detects "buy [node name]"
-        if "buy" in user_lower and ("node" in user_lower or "provider" in user_lower):
-            # Simple logic to extract the node name
+        # --- 2. Buy Command (Improved Detection) ---
+        # Trigger if "buy" is present. We try to find a matching node.
+        if "buy" in user_lower or "purchase" in user_lower:
+            # Clean up the query
             words = user_input.split()
-            try:
-                # Finds the text after 'buy' to use as the search query
-                buy_index = -1
-                if "buy" in words: buy_index = words.index("buy")
-                elif "purchase" in words: buy_index = words.index("purchase")
-                
-                if buy_index != -1:
-                    # Join everything after "buy" to form the query
-                    query = " ".join(words[buy_index+1:]).replace("node", "").replace("provider", "").strip()
-                    if query:
-                        return prefix_msg + self.market.buy_node(query)
-            except Exception as e:
-                print(f"Parsing error: {e}")
-                
-            return prefix_msg + "❓ Which node should I buy? (e.g., 'buy sentiment node')"
+            buy_index = -1
+            if "buy" in words: buy_index = words.index("buy")
+            elif "purchase" in words: buy_index = words.index("purchase")
+            
+            if buy_index != -1:
+                query = " ".join(words[buy_index+1:]).replace("node", "").replace("provider", "").strip()
+                # Only proceed if we actually found a query string
+                if query:
+                    # Check if this query actually matches a node before committing to the purchase logic
+                    state = self.market.get_market_state()
+                    if state:
+                        target = next((n for n in state['nodes'] if query.lower() in n['name'].lower()), None)
+                        if target:
+                            return prefix_msg + self.market.buy_node(target['id'])
+                        
+            # If no node matched, fall through to LLM (e.g. "buy bitcoin")
 
-        # --- 3. Standard Trading Tools (Existing Logic) ---
+        # --- 3. Standard Trading Tools ---
         old_stdout = sys.stdout
-        sys.stdout = io.StringIO() # Capture output to keep console clean
+        sys.stdout = io.StringIO() 
         
         try:
             if "balance" in user_lower:
@@ -225,7 +216,6 @@ class LightweightAgent:
                 return prefix_msg + f"💰 Balance:\nCRO: {cro.get('balance_readable',0):.2f}\nUSDC: {usdc.get('balance_readable',0):.2f}"
             
             elif "swap" in user_lower:
-                 # Minimal swap logic (you can expand this with your previous complex logic if needed)
                  sys.stdout = old_stdout
                  return prefix_msg + "⚠️ To execute swaps, please use the specific 'swap X to Y' format or check the full trading engine."
 
@@ -244,7 +234,7 @@ class LightweightAgent:
 def main():
     agent = LightweightAgent()
     print("🤖 Alpha Agent Online. Type 'completion' to see market status.")
-    print("   (Ensure your Next.js app is running on localhost:3000)")
+    print("   (Ensure your Next.js app is running on localhost:3600)")
     
     while True:
         try:

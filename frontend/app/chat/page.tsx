@@ -154,6 +154,70 @@ export default function ChatPage() {
           content = `❌ Payment failed: Transaction hash not received.\n\nRaw backend response:\n${typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)}`;
         }
       }
+
+      // Log transfer amount and current balance if transfer amount exceeds balance error
+      if (
+        content.includes('transfer amount exceeds balance') && typeof data === 'object'
+      ) {
+        let debugJson = null;
+        let txData = null;
+        let transferAmountCRO = null;
+        let balanceCRO = null;
+        // Try to extract from Debug Data block
+        if (data.response && data.response.includes('Debug Data:')) {
+          const debugMatch = data.response.match(/Debug Data:\n```json\n([\s\S]+?)```/);
+          if (debugMatch) {
+            try {
+              debugJson = JSON.parse(debugMatch[1]);
+            } catch (e) {}
+          }
+        }
+        // If not found, try to extract JSON from error string
+        if (!debugJson && data.response && data.response.includes('error')) {
+          const errorObjMatch = data.response.match(/transaction=\{([^}]*)\}/);
+          if (errorObjMatch) {
+            try {
+              let txStr = '{' + errorObjMatch[1] + '}';
+              txStr = txStr.replace(/([a-zA-Z0-9_]+):/g, '"$1":');
+              txStr = txStr.replace(/'/g, '"');
+              const txObj = JSON.parse(txStr);
+              txData = txObj.data;
+            } catch (e) {}
+          }
+        }
+        if (!debugJson && typeof data.response === 'string') {
+          try {
+            debugJson = JSON.parse(data.response);
+          } catch {}
+        }
+        if (!txData && debugJson && debugJson.transaction && debugJson.transaction.data) {
+          txData = debugJson.transaction.data;
+        }
+        // Extract transfer amount
+        if (txData) {
+          const slots = [];
+          for (let i = 8; i < txData.length; i += 64) {
+            slots.push(txData.slice(i, i + 64));
+          }
+          if (slots.length >= 3) {
+            const transferAmount = parseInt(slots[2], 16);
+            if (!isNaN(transferAmount)) {
+              transferAmountCRO = transferAmount / 1e18;
+            }
+          }
+        }
+        // Extract current balance if present
+        if (debugJson && debugJson.currentBalance) {
+          balanceCRO = debugJson.currentBalance / 1e18;
+        }
+        // Show in agent message if available
+        if (transferAmountCRO !== null) {
+          content += `\n\n❌ Insufficient balance!\nNeeded: ${transferAmountCRO} CRO`;
+          if (balanceCRO !== null) {
+            content += `\nAvailable: ${balanceCRO} CRO`;
+          }
+        }
+      }
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: "agent",

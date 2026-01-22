@@ -7,20 +7,8 @@ console.log("🔹 LOADED ROUTE: Ultimate Hash Finder");
 
 // --- CONFIGURATION ---
 const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY;
-
-// Debug: Print the loaded private key and derived public address
-try {
-  const { Wallet } = require('ethers');
-  const debugWallet = new Wallet(AGENT_PRIVATE_KEY);
-  console.log('DEBUG: Loaded AGENT_PRIVATE_KEY:', AGENT_PRIVATE_KEY);
-  console.log('DEBUG: Derived public address:', debugWallet.address);
-} catch (e) { console.log('DEBUG: Could not derive public address:', e); }
 const RPC_URL = "https://evm-t3.cronos.org"; // Cronos Testnet
 const PROVIDER_ADDRESS = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9";
-
-const facilitator = new Facilitator({
-  network: CronosNetwork.CronosTestnet 
-});
 
 export async function GET() {
   try {
@@ -41,7 +29,20 @@ export async function POST(req: Request) {
     const node = await prisma.alphaNode.findUnique({ where: { id: nodeId } });
     if (!node) return NextResponse.json({ error: "Node not found" }, { status: 404 });
 
-    // --- 1. CALCULATE PRICE ---
+    // --- 1. SETUP SIGNER ---
+    if (!AGENT_PRIVATE_KEY) {
+      throw new Error("AGENT_PRIVATE_KEY is not set in environment variables.");
+    }
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const signer = new ethers.Wallet(AGENT_PRIVATE_KEY, provider);
+
+    // Initialize Facilitator (Standard init)
+    const facilitator = new Facilitator({
+      network: CronosNetwork.CronosTestnet
+    });
+
+    // --- 2. CALCULATE PRICE ---
     const usdcPrice = Number(node.price || 0); 
     const conversionRate = 100;
     const croAmount = usdcPrice / conversionRate;
@@ -49,15 +50,10 @@ export async function POST(req: Request) {
     const valueInWei = ethers.parseEther(safeCroString).toString();
 
     console.log(`🤖 Paying for ${node.name} (${safeCroString} tCRO)`);
+    console.log(`💳 Wallet: ${signer.address}`); 
 
-    if (!AGENT_PRIVATE_KEY) {
-      throw new Error("AGENT_PRIVATE_KEY is not set in environment variables.");
-    }
-
-    // --- 2. PAYMENT EXECUTION ---
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const signer = new ethers.Wallet(AGENT_PRIVATE_KEY, provider);
-    
+    // --- 3. PAYMENT EXECUTION ---
+    // We pass the signer here to sign the payload
     const paymentHeader = await facilitator.generatePaymentHeader({
       to: PROVIDER_ADDRESS,
       value: valueInWei,
@@ -78,28 +74,29 @@ export async function POST(req: Request) {
       throw new Error(`Verification Failed: ${verification.invalidReason || 'Unknown'}`);
     }
 
-    // --- 3. SETTLE & INSPECT ---
+    // --- 4. SETTLE & INSPECT ---
     console.log("⏳ Broadcasting transaction...");
-    const settlement = await facilitator.settlePayment(verifyBody);
     
-    // LOG THE FULL OBJECT TO CONSOLE
+    // ✅ CRITICAL FIX: Pass 'signer' as the second argument. 
+    // We use @ts-ignore because the type definition file might be missing this parameter, 
+    // but the runtime JS needs it to know WHO is paying for the gas.
+    // @ts-ignore
+    const settlement = await facilitator.settlePayment(verifyBody, signer);
+    
     console.log("📦 FULL SETTLEMENT OBJECT:", JSON.stringify(settlement, null, 2));
 
-    // --- 4. AGGRESSIVE HASH EXTRACTION ---
-    // Try every possible property name used by ethers v5, v6, or web3.js
+    // --- 5. HASH EXTRACTION ---
     // @ts-ignore
     let finalHash = settlement.hash || settlement.transactionHash || settlement.txHash || settlement.transaction?.hash;
 
-    // Fallback: If it's a string, assume it's the hash
     if (!finalHash && typeof settlement === 'string') {
         finalHash = settlement;
     }
-
     if (!finalHash) finalHash = "HASH_NOT_FOUND_CHECK_DEBUG";
 
     console.log(`🚀 Payment Settled! Hash: ${finalHash}`);
 
-    // --- 5. DB UPDATE ---
+    // --- 6. DB UPDATE ---
     const updated = await prisma.alphaNode.update({
       where: { id: nodeId },
       data: { isPurchased: true }
@@ -110,7 +107,6 @@ export async function POST(req: Request) {
       node: updated,
       amountPaid: `${safeCroString} tCRO`,
       txHash: finalHash,
-      // Return the full object so the Agent can print it if needed
       debug: settlement 
     });
 
