@@ -90,7 +90,9 @@ class MarketManager:
 
             import os
             private_key = os.getenv("WALLET_PRIVATE_KEY", "")
-            rpc_url = os.getenv("RPC_URL", "")
+            rpc_url = os.getenv("RPC_URL") or os.getenv("CRONOS_RPC_URL", "")
+            if not rpc_url:
+                return "⚠️ No RPC URL found in env (RPC_URL or CRONOS_RPC_URL)"
             wallet = WalletManager(private_key, rpc_url)
             decimals = 6 if currency.upper() == "USDC" else 18
             amount_wei = int(price * (10 ** decimals))

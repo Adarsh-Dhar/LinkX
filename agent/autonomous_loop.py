@@ -33,10 +33,12 @@ def run_autonomous_loop(agent, interval_sec=10):
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+        import traceback
         try:
             loop.run_until_complete(predictive_agent.run_cycle())
         except Exception as e:
-            print(f"[AlphaLoop] Error in PredictiveAgent cycle: {e}")
+            print(f"[AlphaLoop] Error in PredictiveAgent cycle: {type(e).__name__}: {e}")
+            traceback.print_exc()
         # 4. (Inside PredictiveAgent) Execute the trade using TradingEngine
         print("[AlphaLoop] Cycle complete. Sleeping...")
         time.sleep(interval_sec)

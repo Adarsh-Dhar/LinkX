@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from .wallet_manager import WalletManager
 import time
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 class Signal:
     """
@@ -37,9 +39,12 @@ def fetch_node_data(node_id: str, endpoint: str, api_key: str, category: str) ->
     """
     headers = {"x402-access-key": api_key}
     private_key = os.getenv("WALLET_PRIVATE_KEY", "")
-    rpc_url = os.getenv("RPC_URL", "")
+    rpc_url = os.getenv("RPC_URL") or os.getenv("CRONOS_RPC_URL", "")
     if not private_key:
         print("[DataConsumer] ⚠️  No Private Key found in env")
+        return None
+    if not rpc_url:
+        print("[DataConsumer] ⚠️  No RPC URL found in env (RPC_URL or CRONOS_RPC_URL)")
         return None
     wallet = WalletManager(private_key, rpc_url)
     max_retries = 2

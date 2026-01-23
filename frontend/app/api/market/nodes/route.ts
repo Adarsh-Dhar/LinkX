@@ -26,6 +26,8 @@ export async function GET() {
       status: true,
       isPurchased: true,
       icon: true,
+      endpointUrl: true, 
+      apiKey: true
     }
   });
   return NextResponse.json(nodes);

@@ -106,17 +106,33 @@ class WalletManager:
             private_key: Wallet private key (with or without 0x prefix)
             rpc_url: RPC endpoint for the blockchain
         """
-        self.w3 = Web3(Web3.HTTPProvider(rpc_url))
+        import traceback
+        try:
+            self.w3 = Web3(Web3.HTTPProvider(rpc_url))
+        except Exception as e:
+            print(f"[WalletManager] ❌ Exception while creating Web3 provider for RPC '{rpc_url}': {type(e).__name__}: {e}")
+            traceback.print_exc()
+            raise
         
-        if not self.w3.is_connected():
-            raise ConnectionError(f"Failed to connect to RPC at {rpc_url}")
+        try:
+            if not self.w3.is_connected():
+                raise ConnectionError(f"Failed to connect to RPC at {rpc_url}")
+        except Exception as e:
+            print(f"[WalletManager] ❌ RPC connection check failed for '{rpc_url}': {type(e).__name__}: {e}")
+            traceback.print_exc()
+            raise
         
         # Ensure private key has 0x prefix
         if not private_key.startswith("0x"):
             private_key = "0x" + private_key
         
-        self.account = Account.from_key(private_key)
-        self.address = self.account.address
+        try:
+            self.account = Account.from_key(private_key)
+            self.address = self.account.address
+        except Exception as e:
+            print(f"[WalletManager] ❌ Error initializing account from private key: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            raise
         
         # Load contract addresses from environment
         self.usdc_address = os.getenv("USDC_CONTRACT", "")
