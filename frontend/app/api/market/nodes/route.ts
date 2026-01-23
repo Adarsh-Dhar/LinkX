@@ -14,7 +14,20 @@ const facilitator = new Facilitator({
 });
 
 export async function GET() {
-  const nodes = await prisma.alphaNode.findMany({ orderBy: { price: 'asc' } });
+  const nodes = await prisma.alphaNode.findMany({
+    orderBy: { price: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      description: true,
+      price: true,
+      reputation: true,
+      status: true,
+      isPurchased: true,
+      icon: true,
+    }
+  });
   return NextResponse.json(nodes);
 }
 

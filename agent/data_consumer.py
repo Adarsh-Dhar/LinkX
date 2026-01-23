@@ -43,7 +43,9 @@ def fetch_node_data(node_id: str, endpoint: str, api_key: str, category: str) ->
     max_retries = 2
     for attempt in range(max_retries):
         try:
+            print(f"[fetch_node_data] Fetching from {endpoint} (category: {category})")
             resp = requests.get(endpoint, headers=headers, timeout=10)
+            print(f"[fetch_node_data] Status: {resp.status_code}, Response: {resp.text}")
             if resp.status_code == 402:
                 # Extract payment info
                 try:
@@ -89,7 +91,10 @@ def fetch_node_data(node_id: str, endpoint: str, api_key: str, category: str) ->
             resp.raise_for_status()
             payload = resp.json()
             data = payload.get('data', {})
-            return normalize_data(category, data)
+            print(f"[fetch_node_data] Parsed data: {data}")
+            signal = normalize_data(category, data)
+            print(f"[fetch_node_data] Normalized signal: {signal}")
+            return signal
         except Exception as e:
             print(f"Error fetching node data: {e}")
             return None

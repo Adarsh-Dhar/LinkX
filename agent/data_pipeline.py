@@ -91,12 +91,17 @@ class DataPipeline:
         keys = []
         for node in nodes:
             if node.get('isPurchased'):
+                print(f"[DataPipeline] Fetching node: {node['name']} ({node['endpointUrl']}) category={node['category']}")
                 signal = fetch_node_data(
                     node['id'],
                     node['endpointUrl'],
                     node.get('apiKey', ''),
                     node['category']
                 )
+                if signal:
+                    print(f"[DataPipeline] Node {node['name']} value: {signal.value}")
+                else:
+                    print(f"[DataPipeline] Node {node['name']} returned None (defaulting to 0.0)")
                 features.append(signal.value if signal else 0.0)
                 keys.append(node['name'])
         # Pad to 48 features

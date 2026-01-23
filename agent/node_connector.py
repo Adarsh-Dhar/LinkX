@@ -24,6 +24,7 @@ class NodeStatus(Enum):
     SLOW = "slow"
 
 
+
 @dataclass
 class NodeInfo:
     """Information about a simulated data provider node"""
@@ -37,7 +38,10 @@ class NodeInfo:
     response_time_ms: float = 0.0
     data_freshness_ms: float = 0.0
     is_primary: bool = False
-    
+    expiry_ms: int = 60000  # default 60s, will be set per category
+    last_value: Any = None
+    last_fetch_time: Optional[float] = None  # epoch seconds
+
     def to_dict(self) -> Dict:
         return {
             "node_id": self.node_id,
@@ -50,6 +54,8 @@ class NodeInfo:
             "response_time_ms": self.response_time_ms,
             "data_freshness_ms": self.data_freshness_ms,
             "is_primary": self.is_primary,
+            "expiry_ms": self.expiry_ms,
+            "last_fetch_time": self.last_fetch_time,
         }
 
 
@@ -72,6 +78,34 @@ class NodeConnector:
         # Placeholders until registry is loaded
         self.nodes: Dict[int, NodeInfo] = {}
     
+    # Expiry/freshness per category (ms)
+    CATEGORY_EXPIRY_MS = {
+        "price": 5000,
+        "volume": 10000,
+        "spread": 5000,
+        "depth": 10000,
+        "mcap": 60000,
+        "funding": 60000,
+        "inflows": 20000,
+        "outflows": 20000,
+        "whales": 30000,
+        "active_addr": 60000,
+        "fees": 60000,
+        "age": 300000,
+        "social_vol": 60000,
+        "sentiment": 60000,
+        "search": 120000,
+        "dominance": 60000,
+        "devs": 300000,
+        "tvl": 300000,
+        "unlocks": 300000,
+        "burn": 300000,
+        "rsi": 10000,
+        "ma": 10000,
+        "volatility": 20000,
+        "correlation": 60000,
+    }
+
     async def _initialize_nodes(self):
         """Initialize nodes by discovering providers from the local registry"""
         if not self.session:
@@ -132,13 +166,15 @@ class NodeConnector:
         for idx, (cat, offset) in enumerate(categories):
             port = base + offset
             tier = "premium" if idx % 2 == 0 else "budget"
+            expiry = self.CATEGORY_EXPIRY_MS.get(cat, 60000)
             self.nodes[idx] = NodeInfo(
                 node_id=idx,
                 name=f"{cat} ({'Premium' if tier=='premium' else 'Budget'})",
                 rpc_url=f"http://localhost:{port}/data",
                 provider_type=tier,
                 category=cat,
-                is_primary=(tier == "premium")
+                is_primary=(tier == "premium"),
+                expiry_ms=expiry
             )
         self.registry_loaded = False
     
@@ -208,20 +244,32 @@ class NodeConnector:
     
     async def get_data(self, method: str = "fetch", params: List = None, category: Optional[str] = None) -> Dict[str, Any]:
         """
-        Fetch data from provider nodes using HTTP + payment flow.
+        Fetch data from provider nodes using HTTP + payment flow, with expiry/freshness logic.
         """
         if not self.session:
             await self.connect()
-        
         if params is None:
             params = []
-        
         nodes_to_try = self._select_nodes(category)
         primary_nodes = [n for n in nodes_to_try if n.is_primary and n.status == NodeStatus.ONLINE]
         fallback_nodes = [n for n in nodes_to_try if not n.is_primary and n.status in (NodeStatus.ONLINE, NodeStatus.SLOW)]
         all_nodes_to_try = primary_nodes + fallback_nodes
-        
+
+        now = time.time()
         for node in all_nodes_to_try:
+            # Check expiry/freshness
+            if node.last_value is not None and node.last_fetch_time is not None:
+                if now - node.last_fetch_time < (node.expiry_ms / 1000.0):
+                    # Use cached value
+                    return {
+                        "data": node.last_value,
+                        "node_used": node.to_dict(),
+                        "timestamp": datetime.now().isoformat(),
+                        "method": method,
+                        "response_time_ms": node.response_time_ms,
+                        "success": True,
+                        "cached": True,
+                    }
             try:
                 start_time = time.time()
                 # Step 1: GET /data (expect 402)
@@ -242,6 +290,8 @@ class NodeConnector:
                                 node.response_time_ms = response_time
                                 node.last_updated = datetime.now()
                                 node.data_freshness_ms = 0
+                                node.last_value = data
+                                node.last_fetch_time = time.time()
                                 return {
                                     "data": data,
                                     "node_used": node.to_dict(),
@@ -249,6 +299,7 @@ class NodeConnector:
                                     "method": method,
                                     "response_time_ms": response_time,
                                     "success": True,
+                                    "cached": False,
                                 }
                     elif resp.status == 200:
                         result = await resp.json()
@@ -256,6 +307,8 @@ class NodeConnector:
                         node.response_time_ms = response_time
                         node.last_updated = datetime.now()
                         node.data_freshness_ms = 0
+                        node.last_value = data
+                        node.last_fetch_time = time.time()
                         return {
                             "data": data,
                             "node_used": node.to_dict(),
@@ -263,10 +316,10 @@ class NodeConnector:
                             "method": method,
                             "response_time_ms": response_time,
                             "success": True,
+                            "cached": False,
                         }
             except Exception:
                 continue
-        
         return {
             "data": None,
             "node_used": None,
