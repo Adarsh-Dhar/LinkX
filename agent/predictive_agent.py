@@ -1,6 +1,6 @@
 import asyncio
 try:
-    from data_pipeline import DataPipeline
+    from .data_pipeline import DataPipeline
 except ImportError:
     import thriftpy2 as thriftpy
     class DataPipeline:
@@ -14,7 +14,7 @@ except ImportError:
             return []
         def get_normalized_vector(self):
             return []
-from brain import RLAgent
+from .brain import RLAgent
 import time
 from datetime import datetime
 import json
@@ -22,7 +22,7 @@ import os
 
 # Import existing tools if available
 try:
-    from tools import execute_vvs_swap, get_token_balance
+    from .tools import execute_vvs_swap, get_token_balance
     TOOLS_AVAILABLE = True
 except ImportError:
     TOOLS_AVAILABLE = False
@@ -40,8 +40,8 @@ class PredictiveAgent:
     4. REWARD: Learn from outcome and update neural network
     """
     
-    def __init__(self, simulation_mode=True):
-        self.pipeline = DataPipeline()
+    def __init__(self, market_manager, simulation_mode=True):
+        self.pipeline = DataPipeline(market_manager)
         self.brain = RLAgent(model_path="agent/brain.pth")
         
         # Trading state

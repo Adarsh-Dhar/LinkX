@@ -73,116 +73,44 @@ DATA_PROVIDERS = {
 }
 
 class DataPipeline:
-    def __init__(self):
-        self.feature_vector = []
-        self.provider_count = 48
-        self.providers = None  # Will be populated from registry
-        
-    async def discover_providers(self, session):
-        """Fetch provider directory from the registry."""
-        try:
-            async with session.get(REGISTRY_URL, timeout=aiohttp.ClientTimeout(total=3)) as response:
-                if response.status == 200:
-                    providers = await response.json()
-                    print(f"✅ Discovered {len(providers)} providers from registry")
-                    return providers
-        except Exception as e:
-            print(f"⚠️  Registry unreachable, using static mapping: {e}")
-        
-        # Fallback to static mapping
-        return None
-        
-    async def fetch_provider(self, session, provider_info):
-        """Fetch data from a single provider with payment flow simulation."""
-        name = provider_info.get('name', provider_info.get('id', 'unknown'))
-        url = provider_info.get('url')
-        
-        try:
-            # Step 1: Request data (expect 402 Payment Required)
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
-                if response.status == 402:
-                    # Paywall detected - simulate payment
-                    invoice = await response.json()
-                    
-                    # Step 2: Send payment proof (simulated for demo)
-                    payment_url = url.replace('/data', '/data/payment')
-                    async with session.post(
-                        payment_url, 
-                        json={"tx_hash": "0xsimulated_payment"},
-                        timeout=aiohttp.ClientTimeout(total=2)
-                    ) as payment_response:
-                        if payment_response.status == 200:
-                            result = await payment_response.json()
-                            data = result.get('data', {})
-                            
-                            # Extract first numeric value from data
-                            for key, value in data.items():
-                                if isinstance(value, (int, float)):
-                                    return float(value)
-                            
-                            # If no numeric value, extract from nested data
-                            if 'value' in data:
-                                return float(data['value'])
-                            
-                            # No valid data structure - return 0.0
-                            print(f"⚠️  No numeric data in response from {name}")
-                            return 0.0
-                        
-                elif response.status == 200:
-                    # Direct access (no paywall)
-                    result = await response.json()
-                    data = result.get('data', result)
-                    
-                    # Extract numeric value
-                    if isinstance(data, (int, float)):
-                        return float(data)
-                    elif 'value' in data:
-                        return float(data['value'])
-                    
-                    # No valid numeric data - return 0.0
-                    print(f"⚠️  No numeric data in response from {name}")
-                    return 0.0
-                    
-            return 0.0
-            
-        except asyncio.TimeoutError:
-            print(f"⏱️  Timeout: {name}")
-            return 0.0
-        except Exception as e:
-            print(f"⚠️  Error fetching {name}: {e}")
-            return 0.0
+    def __init__(self, market_manager):
+        self.market = market_manager
+        self.last_fetch_keys = []
+        self.last_fetch_values = []
 
     async def get_market_state(self):
-        """Aggregates all 48 providers into a single normalized vector using real data via fetch_node_data."""
-        print("📡 Connecting to 48-node ecosystem...")
-        # For now, use static DATA_PROVIDERS
-        results = []
+        """
+        1. Get list of purchased nodes from MarketManager
+        2. Fetch data from each node using fetch_node_data (x402 logic)
+        3. Pad to 48 features (fixed input size for Brain)
+        """
+        print("📡 Connecting to 48-node ecosystem (purchased nodes)...")
+        state = self.market.get_market_state()
+        nodes = state.get('nodes', []) if state else []
+        features = []
         keys = []
-        for k, v in DATA_PROVIDERS.items():
-            provider_info = {'id': k, 'name': k, 'url': v}
-            # Use fetch_node_data synchronously (could be made async with thread pool)
-            signal = fetch_node_data(k, v, os.getenv('X402_API_KEY', ''), k)
-            if signal is not None:
-                results.append(signal.value)
-            else:
-                results.append(0.0)
-            keys.append(k)
-        # Min-Max normalization with safeguards
-        vector = np.array(results, dtype=np.float32)
-        vector_min = vector.min()
-        vector_max = vector.max()
-        if vector_max - vector_min > 0:
-            vector = (vector - vector_min) / (vector_max - vector_min)
-        else:
-            vector = np.full_like(vector, 0.5)
+        for node in nodes:
+            if node.get('isPurchased'):
+                signal = fetch_node_data(
+                    node['id'],
+                    node['endpointUrl'],
+                    node.get('apiKey', ''),
+                    node['category']
+                )
+                features.append(signal.value if signal else 0.0)
+                keys.append(node['name'])
+        # Pad to 48 features
+        while len(features) < 48:
+            features.append(0.0)
+            keys.append(f"pad_{len(keys)}")
+        features = features[:48]
+        keys = keys[:48]
+        vector = np.array(features, dtype=np.float32)
         self.last_fetch_keys = keys
-        self.last_fetch_values = results
-        print(f"✅ Successfully fetched {len(vector)} data points")
-        print(f"📊 Data range: [{np.min(results):.2f}, {np.max(results):.2f}]")
+        self.last_fetch_values = features
+        print(f"✅ Successfully fetched {len(vector)} data points (purchased nodes)")
+        print(f"📊 Data range: [{np.min(features):.2f}, {np.max(features):.2f}]")
         return vector
-            print(f"🔢 Normalized: [{vector.min():.3f}, {vector.max():.3f}]")
-            
-            return vector
     
     def get_feature_names(self):
         """Returns the list of all 48 feature names for debugging."""

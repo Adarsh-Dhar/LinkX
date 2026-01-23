@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import sys
 import os
 
-# Import the new Intelligent Agent
-from main import IntelligentAgent
+
+# Import the new Intelligent Agent (always use absolute import for FastAPI/uvicorn)
+from agent.main import IntelligentAgent
 
 app = FastAPI()
 

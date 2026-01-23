@@ -1,19 +1,19 @@
 import time
 import threading
-from data_consumer import fetch_node_data
-from trading_engine import TradingEngine
-from wallet_manager import get_daily_spend, can_spend
+from .data_consumer import fetch_node_data
+from .trading_engine import TradingEngine
+from .wallet_manager import get_daily_spend, can_spend
 
 # ...existing code...
 
-def run_autonomous_loop(agent, interval_sec=300):
+def run_autonomous_loop(agent, interval_sec=10):
     """
     Unified autonomous loop: ensure data access, fetch/pay for data, run prediction, and execute trades.
     Runs in a background thread.
     """
     import asyncio
-    from predictive_agent import PredictiveAgent
-    predictive_agent = PredictiveAgent(simulation_mode=False)
+    from .predictive_agent import PredictiveAgent
+    predictive_agent = PredictiveAgent(agent.market, simulation_mode=False)
     while True:
         print("[AlphaLoop] Starting unified cycle...")
         # 1. Ensure required data nodes are active (buy if needed)

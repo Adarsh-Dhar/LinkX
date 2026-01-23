@@ -3,15 +3,23 @@
 Intelligent Trading Agent - Context-Aware Purchasing
 """
 
+
 import os
 import sys
 import io
 import requests
-from agent.wallet_manager import WalletManager
+# Import WalletManager with dynamic import fallback
+try:
+    from agent.wallet_manager import WalletManager
+except ModuleNotFoundError:
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from wallet_manager import WalletManager
 import json
 import re
 from dotenv import load_dotenv
-from tools import get_token_balance
+from .tools import get_token_balance
+
+load_dotenv()
 
 load_dotenv()
 
@@ -180,7 +188,7 @@ class IntelligentAgent:
 
 # API Entry Point (Used by api.py)
 
-from autonomous_loop import start_background_loop
+from .autonomous_loop import start_background_loop
 agent = IntelligentAgent()
 start_background_loop(agent)
 

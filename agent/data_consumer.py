@@ -1,6 +1,6 @@
 import requests
 from typing import Any, Dict, Optional, Union
-from agent.wallet_manager import WalletManager
+from .wallet_manager import WalletManager
 import time
 
 class Signal:

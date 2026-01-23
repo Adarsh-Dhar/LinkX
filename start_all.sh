@@ -24,8 +24,8 @@ if [ ! -d "venv" ]; then
 fi
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn api:app --host 0.0.0.0 --port 8000 &
 cd "$SCRIPT_DIR"
+uvicorn agent.api:app --host 0.0.0.0 --port 8000 &
 sleep 3
 
 echo "Starting Frontend (Next.js)..."
