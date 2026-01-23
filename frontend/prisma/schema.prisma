@@ -9,8 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:../../agent/agent_state.db"
+  provider = "postgresql"
 }
 
 

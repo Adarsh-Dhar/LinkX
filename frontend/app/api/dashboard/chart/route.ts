@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+
+// CoinGecko API for real price history (e.g., CRO/USDC)
+const COINGECKO_API = "https://api.coingecko.com/api/v3/coins/cronos/market_chart?vs_currency=usd&days=30&interval=daily";
 
 export async function GET() {
   try {
-    // Fetch last 30 snapshots for the chart
-    const snapshots = await prisma.portfolioSnapshot.findMany({
-      orderBy: { timestamp: "asc" },
-      take: 50, // Limit data points
-      select: {
-        timestamp: true,
-        totalValueUsd: true,
-      },
-    });
-
-    // Format for Recharts (or your charting lib)
-    const chartData = snapshots.map((snap: { timestamp: string | number | Date; totalValueUsd: any; }) => ({
-      time: new Date(snap.timestamp).toLocaleDateString(), // or .toLocaleTimeString()
-      value: snap.totalValueUsd,
+    const res = await fetch(COINGECKO_API);
+    if (!res.ok) throw new Error("Failed to fetch from CoinGecko");
+    const data = await res.json();
+    // data.prices: [ [timestamp, price], ... ]
+    const chartData = (data.prices || []).map(([ts, price]: [number, number]) => ({
+      time: new Date(ts).toLocaleDateString(),
+      value: price,
     }));
-
     return NextResponse.json(chartData);
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch chart data" }, { status: 500 });

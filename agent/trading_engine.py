@@ -357,39 +357,107 @@ class TradingEngine:
             "recent_trades": self.get_trade_history(10)
         }
     
+
     async def execute_live_trade(
         self,
         token_in: str,
         token_out: str,
         amount: float,
-        confidence_threshold: float = 0.6
+        confidence_threshold: float = 0.6,
+        slippage: float = 0.05
     ) -> SimulatedTrade:
         """
-        Execute a live trade if confidence exceeds threshold
-        
-        Args:
-            token_in: Token to swap from
-            token_out: Token to swap to
-            amount: Amount to trade
-            confidence_threshold: Minimum confidence to execute (default 0.6)
-            
-        Returns:
-            Trade with execution result
+        Execute a live trade if confidence exceeds threshold, using a DEX Router contract.
         """
-        # First simulate
         trade = await self.simulate_trade(token_in, token_out, amount)
-        
-        # Check confidence
         if trade.confidence < confidence_threshold:
             trade.simulation_status = "pending"
             return trade
-        
-        # Real trade execution requires implementation
-        # Must integrate with actual DEX smart contracts
-        raise NotImplementedError(
-            "Live trade execution requires real smart contract integration. "
-            "Implement execute_swap from tools.py or use simulation mode only."
-        )
+        try:
+            swap_result = self.execute_swap_with_slippage(token_in, token_out, amount, slippage)
+            trade.simulation_status = "completed"
+            trade.transaction_hash = swap_result.get("tx_hash")
+            trade.exit_price = swap_result.get("expected_out")
+            trade.reasoning += f" | On-chain swap executed."
+        except Exception as e:
+            trade.simulation_status = "failed"
+            trade.reasoning += f" | Swap failed: {e}"
+        return trade
+
+    def execute_swap_with_slippage(self, token_in, token_out, amount, slippage=0.05):
+        """
+        Execute a swapExactTokensForTokens with slippage protection and gas management.
+        """
+        from web3 import Web3
+        from eth_account import Account
+        import json, os, time
+        w3 = Web3(Web3.HTTPProvider(os.getenv('CRONOS_RPC_URL')))
+        private_key = os.getenv('WALLET_PRIVATE_KEY')
+        account = Account.from_key(private_key)
+        USDC = w3.to_checksum_address(os.getenv('USDC_CONTRACT'))
+        ROUTER = w3.to_checksum_address(os.getenv('VVS_ROUTER'))
+        WTCRO = w3.to_checksum_address(os.getenv('WCRO_ADDRESS'))
+        ERC20_ABI = json.loads('[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"}]')
+        router_abi = json.loads('[{"inputs":[{"name":"amountIn","type":"uint256"},{"name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]')
+        swap_abi = json.loads('[{"inputs":[{"name":"amountIn","type":"uint256"},{"name":"amountOutMin","type":"uint256"},{"name":"path","type":"address[]"},{"name":"to","type":"address"},{"name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"}]')
+        if token_in.upper() == "USDC":
+            token_in_addr = USDC
+        elif token_in.upper() == "WCRO":
+            token_in_addr = WTCRO
+        else:
+            raise Exception(f"Unsupported token_in: {token_in}")
+        if token_out.upper() == "USDC":
+            token_out_addr = USDC
+        elif token_out.upper() == "WCRO":
+            token_out_addr = WTCRO
+        else:
+            raise Exception(f"Unsupported token_out: {token_out}")
+        token_contract = w3.eth.contract(address=token_in_addr, abi=ERC20_ABI)
+        router = w3.eth.contract(address=ROUTER, abi=router_abi + swap_abi)
+        decimals = token_contract.functions.decimals().call()
+        swap_amount = int(amount * (10 ** decimals))
+        allowance = token_contract.functions.allowance(account.address, ROUTER).call()
+        if allowance < swap_amount:
+            approve_tx = token_contract.functions.approve(ROUTER, swap_amount).build_transaction({
+                'from': account.address,
+                'nonce': w3.eth.get_transaction_count(account.address),
+                'gas': 100000,
+                'gasPrice': w3.eth.gas_price,
+                'chainId': w3.eth.chain_id
+            })
+            signed = account.sign_transaction(approve_tx)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+        path = [token_in_addr, token_out_addr]
+        amounts = router.functions.getAmountsOut(swap_amount, path).call()
+        expected_out = amounts[1]
+        min_out = int(expected_out * (1 - slippage))
+        gas_price = w3.eth.gas_price
+        est_gas = 300000
+        deadline = w3.eth.get_block('latest')['timestamp'] + 600
+        swap_tx = router.functions.swapExactTokensForTokens(
+            swap_amount,
+            min_out,
+            path,
+            account.address,
+            deadline
+        ).build_transaction({
+            'from': account.address,
+            'nonce': w3.eth.get_transaction_count(account.address),
+            'gas': est_gas,
+            'gasPrice': gas_price,
+            'chainId': w3.eth.chain_id
+        })
+        signed = account.sign_transaction(swap_tx)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        return {
+            "tx_hash": tx_hash.hex(),
+            "block": receipt['blockNumber'],
+            "gas_used": receipt['gasUsed'],
+            "min_out": min_out,
+            "expected_out": expected_out
+        }
     
     def reset_metrics(self) -> None:
         """Reset all performance metrics"""

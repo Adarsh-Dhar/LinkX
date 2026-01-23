@@ -1,6 +1,8 @@
 {
   "dependencies": {
-    "ethers": "^6.16.0"
+    "@prisma/client": "^7.3.0",
+    "ethers": "^6.16.0",
+    "prisma": "^7.3.0"
   },
   "packageManager": "pnpm@9.10.0+sha1.216899f511c8dfde183c7cb50b69009c779534a8"
 }

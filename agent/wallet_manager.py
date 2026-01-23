@@ -246,14 +246,42 @@ class WalletManager:
         """
         return self.w3.eth.get_transaction_count(self.address)
     
-    def get_gas_price(self):
+
+    def get_gas_price(self, use_external: bool = False):
         """
-        Get current gas price
-        
+        Get current gas price (wei). Optionally fetch from external API for more accuracy.
+        Args:
+            use_external: If True, fetch from an external gas oracle API (e.g., Cronoscan, Etherchain)
         Returns:
             int: Gas price in wei
         """
+        if use_external:
+            try:
+                import requests
+                resp = requests.get("https://cronos.org/explorer/api/v1/gastracker")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # Example: {'result': {'SafeGasPrice': '5000', ...}}
+                    price_gwei = float(data['result']['SafeGasPrice'])
+                    return int(price_gwei * 1e9)
+            except Exception as e:
+                print(f"[WalletManager] External gas oracle failed: {e}")
         return self.w3.eth.gas_price
+
+    def gas_cost_exceeds_profit(self, gas_limit: int, gas_price: int, potential_profit: float, cro_price: float = 0.1) -> bool:
+        """
+        Check if gas cost (in CRO, converted to USD) exceeds potential profit.
+        Args:
+            gas_limit: Estimated gas units
+            gas_price: Gas price in wei
+            potential_profit: Expected profit in USD
+            cro_price: Price of CRO in USD (default 0.1, update as needed)
+        Returns:
+            bool: True if gas cost > potential profit
+        """
+        gas_cost_cro = gas_limit * gas_price / 1e18
+        gas_cost_usd = gas_cost_cro * cro_price
+        return gas_cost_usd > potential_profit
     
     def estimate_gas(self, transaction):
         """

@@ -22,7 +22,33 @@ class Signal:
 def normalize_data(category: str, data: Dict[str, Any]) -> Signal:
     """
     Convert raw provider data to a normalized Signal object.
+    Handles real API responses for News, Sentiment, and On-chain data.
     """
+    # Example: LunarCrush (Sentiment)
+    if 'galaxy_score' in data or 'alt_rank' in data:
+        # LunarCrush asset data
+        value = float(data.get('galaxy_score', 0))
+        return Signal(value=value, source='LunarCrush', raw=data, confidence=value/100)
+    # Example: Twitter API (Sentiment)
+    if 'data' in data and isinstance(data['data'], list):
+        # Count tweets as a proxy for activity
+        value = float(len(data['data']))
+        return Signal(value=value, source='Twitter', raw=data, confidence=None)
+    # Example: NewsAPI (News)
+    if 'articles' in data:
+        # Count articles as a proxy for news volume
+        value = float(len(data['articles']))
+        return Signal(value=value, source='NewsAPI', raw=data, confidence=None)
+    # Example: Covalent (On-chain Volume)
+    if 'data' in data and 'items' in data['data']:
+        txs = data['data']['items']
+        value = float(len(txs))
+        return Signal(value=value, source='Covalent', raw=data, confidence=None)
+    # Example: Whale Alert (On-chain)
+    if 'transactions' in data:
+        value = float(len(data['transactions']))
+        return Signal(value=value, source='WhaleAlert', raw=data, confidence=None)
+    # Fallbacks for legacy mock/other
     if category == 'Sentiment':
         value = float(data.get('sentiment', 0))
         return Signal(value=value, source=category, raw=data, confidence=abs(value))

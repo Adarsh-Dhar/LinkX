@@ -26,40 +26,7 @@ pkill -f "uvicorn agent.api:app" || true
 pkill -f "node index.js" || true
 sleep 2
 
-# --- STEP 1: START MOCK DATA PROVIDERS ---
-echo "🚀 Starting 48 mock data providers..."
-MOCK_PROVIDER_SCRIPT="/tmp/mock_provider_alpha.py"
-cat > "$MOCK_PROVIDER_SCRIPT" << 'EOF'
-from flask import Flask, jsonify, request
-import random
-import sys
-import logging
 
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-app = Flask(__name__)
-
-@app.route('/data', methods=['GET'])
-def data():
-  value = round(random.uniform(0.01, 1.0), 4)
-  port = int(sys.argv[1])
-  if port in [4026, 4027]:
-    return jsonify({"data": {"sentiment": value}})
-  elif port in [4044, 4045]:
-    return jsonify({"data": {"volatility": value}})
-  else:
-    return jsonify({"data": {"value": value}})
-
-if __name__ == '__main__':
-  port = int(sys.argv[1])
-  app.run(host='0.0.0.0', port=port)
-EOF
-
-for PORT in $(seq 4000 4047); do
-  python3 "$MOCK_PROVIDER_SCRIPT" $PORT &
-done
-sleep 2
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 

@@ -16,28 +16,13 @@
 # most recent version of that image when you build your Dockerfile.
 # If reproducibility is important, consider using a versioned tag
 # (e.g., alpine:3.17.2) or SHA (e.g., alpine@sha256:c41ab5c992deb4fe7e5da09f67a8804a46bd0592bfdf0b1847dde0e0889d2bff).
-FROM node:20.19-alpine as base
-
-################################################################################
-# Create a stage for building/compiling the application.
-#
-# The following commands will leverage the "base" stage above to generate
-# a "hello world" script and make it executable, but for a real application, you
-# would issue a RUN command for your application's build process to generate the
-# executable. For language-specific examples, take a look at the Dockerfiles in
-# the Awesome Compose repository: https://github.com/docker/awesome-compose
-echo Hello world from $(whoami)! In order to get your application running in a container, take a look at the comments in the Dockerfile to get started.'\
-FROM base as build
-# Install any build dependencies here if needed
-
-################################################################################
-# Create a final stage for running your application.
-#
-# The following commands copy the output from the "build" stage above and tell
-# the container runtime to execute it when the image is run. Ideally this stage
-# contains the minimal runtime dependencies for the application as to produce
-# the smallest image possible. This often means using a different and smaller
-# image than the one used for building the application, but for illustrative
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install
+COPY . .
+EXPOSE 3000
+CMD ["pnpm", "run", "dev"]
 # purposes the "base" image is used here.
 FROM node:20.19-alpine AS final
 
