@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, node: updated, txHash });
     }
 
-    return NextResponse.json({ error: "Missing transaction hash" }, { status: 400 });
+    return NextResponse.json({ error: "Transaction hash missing. Please pay via wallet." }, { status: 400 });
 
   } catch (error: any) {
     console.error("❌ Purchase Verification Failed:", error);
