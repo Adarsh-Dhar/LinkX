@@ -8,20 +8,24 @@ import { toast } from "sonner"
 import { ethers } from "ethers"
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 
-  id: string
-  name: string
-  description: string
-  price: string
-  category?: string
-  isPurchased?: boolean
-  provider?: string
-  status?: "locked" | "unlocked"
-  bullish?: number
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  category?: string;
+  isPurchased?: boolean;
+  provider?: string;
+  status?: "locked" | "unlocked";
+  bullish?: number;
 }
 
-  const [loading, setLoading] = useState(false)
-  const [purchased, setPurchased] = useState(product.isPurchased || product.status === "unlocked")
-  const isLocked = !purchased
+export default function AlphaProductCard({ product }: { product: Product }) {
+
+  const [loading, setLoading] = useState(false);
+  const [purchased, setPurchased] = useState(product.isPurchased || product.status === "unlocked");
+  const isLocked = !purchased;
 
   const handlePurchase = async () => {
     setLoading(true)
@@ -174,5 +178,5 @@ import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
         </Button>
       </div>
     </div>
-  )
+  );
 }
