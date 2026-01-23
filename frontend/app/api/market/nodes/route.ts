@@ -1,3 +1,12 @@
+export async function GET() {
+  // Return all nodes from the database
+  try {
+    const nodes = await prisma.alphaNode.findMany();
+    return NextResponse.json(nodes);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
@@ -86,10 +95,13 @@ export async function POST(req: Request) {
         }
       }
     }
+    if (!finalHash || finalHash === "HASH_NOT_FOUND") {
+      return NextResponse.json({ error: "Transaction hash not found. Payment not completed." }, { status: 500 });
+    }
     return NextResponse.json({ 
       success: true, 
       node: node, // update this to use the real updated node
-      txHash: finalHash || "HASH_NOT_FOUND"
+      txHash: finalHash
     });
 
   } catch (error: any) {
