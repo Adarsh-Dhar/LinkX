@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
+import TopBar from "@/components/topbar";
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -29,6 +30,7 @@ export default function RootLayout({
       style={{ colorScheme: "dark" }}
     >
       <body className={`font-sans antialiased bg-background text-foreground`}>
+            <TopBar />
         <ThemeProvider attribute="class" defaultTheme="dark">
           <div className="flex h-screen overflow-hidden">
             <Sidebar />
