@@ -4,8 +4,10 @@ import os
 import datetime
 import subprocess
 import sys
+import threading
 data_log_path = os.path.join(os.path.dirname(__file__), 'data_purchase_log.json')
 DAILY_LIMIT_USDC = 50.0
+_spend_lock = threading.Lock()
 # Persistent blacklist
 def _load_blacklist():
     try:
@@ -45,7 +47,14 @@ def log_data_purchase(node_id, amount):
         json.dump(logs, f)
 
 def can_spend(amount: float) -> bool:
-    return (get_daily_spend() + amount) <= DAILY_LIMIT_USDC
+    """Atomically check and persist spend to avoid race conditions."""
+    with _spend_lock:
+        spent = get_daily_spend()
+        if (spent + amount) > DAILY_LIMIT_USDC:
+            return False
+        # Log immediately to persist
+        log_data_purchase("_atomic_check", amount)
+        return True
 
 def validate_data(node_id, data):
     # Blacklist if data is null or static for 3+ fetches (simple version)

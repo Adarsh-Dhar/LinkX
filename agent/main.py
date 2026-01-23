@@ -7,6 +7,7 @@ import os
 import sys
 import io
 import requests
+from agent.wallet_manager import WalletManager
 import json
 import re
 from dotenv import load_dotenv
@@ -55,29 +56,49 @@ class MarketManager:
             return None
 
     def buy_node(self, node_name_query):
-        """Buys a node by fuzzy name matching"""
+        """Buys a node by fuzzy name matching, using WalletManager for direct payment"""
         state = self.get_market_state()
-        if not state: return "❌ Market offline."
+        if not state:
+            return "❌ Market offline."
 
         # Find best match
         node_name_query = node_name_query.lower()
         target = next((n for n in state['nodes'] if node_name_query in n['name'].lower()), None)
-        
-        if not target: return f"❌ Node '{node_name_query}' not found."
-        if target.get('isPurchased'): return None # Already owned
 
-        # Buy it
+        if not target:
+            return f"❌ Node '{node_name_query}' not found."
+        if target.get('isPurchased'):
+            return None  # Already owned
+
+        # Buy it using WalletManager
         try:
             print(f"💸 Autonomous Purchase: Buying {target['name']} (${target['price']})...")
-            res = requests.post(MARKET_API_URL, json={"nodeId": target['id']})
-            data = res.json()
-            
-            if res.status_code == 200 and (data.get('success') or data.get('txHash')):
-                tx = data.get('txHash', 'N/A')
-                return (f"🚀 **Auto-Acquired Data:** I needed **{target['name']}** to answer your request.\n"
-                        f"💰 Paid: {data.get('amountPaid')} | 🔗 Tx: `{tx}`\n\n---\n\n")
-            else:
-                return f"⚠️ I tried to buy **{target['name']}** but failed (Insufficient Funds?). Analysis may be limited.\n\n"
+            # Extract payment info
+            price = float(target.get('price', 0))
+            pay_to = target.get('payTo') or target.get('paymentAddress')
+            currency = target.get('currency', 'USDC')
+            if not pay_to:
+                return f"⚠️ No payment address for {target['name']}"
+
+            import os
+            private_key = os.getenv("WALLET_PRIVATE_KEY", "")
+            rpc_url = os.getenv("RPC_URL", "")
+            wallet = WalletManager(private_key, rpc_url)
+            decimals = 6 if currency.upper() == "USDC" else 18
+            amount_wei = int(price * (10 ** decimals))
+            contract = wallet.w3.eth.contract(address=wallet.w3.to_checksum_address(wallet.usdc_address), abi=wallet.ERC20_ABI)
+            nonce = wallet.get_nonce()
+            tx = contract.functions.transfer(pay_to, amount_wei).build_transaction({
+                'from': wallet.address,
+                'nonce': nonce,
+                'gas': 100000,
+                'gasPrice': wallet.get_gas_price(),
+            })
+            signed_tx = wallet.w3.eth.account.sign_transaction(tx, private_key)
+            tx_hash = wallet.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            print(f"Payment sent, tx hash: {tx_hash.hex()}")
+            return (f"🚀 **Auto-Acquired Data:** I needed **{target['name']}** to answer your request.\n"
+                    f"💰 Paid: {price} {currency} | 🔗 Tx: `{tx_hash.hex()}`\n\n---\n\n")
         except Exception as e:
             return f"⚠️ Purchase Error: {e}\n\n"
 

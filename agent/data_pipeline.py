@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import numpy as np
 import random
+from agent.data_consumer import fetch_node_data
 
 # 🌐 LIVE 48-SERVER ECOSYSTEM MAPPING
 # Maps to the 48 autonomous nodes (ports 4000-4047)
@@ -152,52 +153,33 @@ class DataPipeline:
             return 0.0
 
     async def get_market_state(self):
-        """Aggregates all 48 providers into a single normalized vector."""
+        """Aggregates all 48 providers into a single normalized vector using real data via fetch_node_data."""
         print("📡 Connecting to 48-node ecosystem...")
-        
-        async with aiohttp.ClientSession() as session:
-            # Step 1: Discover providers from registry
-            providers = await self.discover_providers(session)
-            
-            if providers:
-                # Use dynamic provider list from registry
-                print(f"🌐 Using {len(providers)} live providers")
-                self.providers = providers
-                tasks = [self.fetch_provider(session, p) for p in providers]
-                keys = [p.get('id', f"provider_{i}") for i, p in enumerate(providers)]
+        # For now, use static DATA_PROVIDERS
+        results = []
+        keys = []
+        for k, v in DATA_PROVIDERS.items():
+            provider_info = {'id': k, 'name': k, 'url': v}
+            # Use fetch_node_data synchronously (could be made async with thread pool)
+            signal = fetch_node_data(k, v, os.getenv('X402_API_KEY', ''), k)
+            if signal is not None:
+                results.append(signal.value)
             else:
-                # Fallback to static mapping
-                print("📋 Using static provider mapping")
-                tasks = []
-                keys = []
-                for k, v in DATA_PROVIDERS.items():
-                    provider_info = {'id': k, 'name': k, 'url': v}
-                    tasks.append(self.fetch_provider(session, provider_info))
-                    keys.append(k)
-            
-            # Step 2: Fetch all data concurrently
-            print(f"⚡ Fetching from {len(tasks)} endpoints...")
-            results = await asyncio.gather(*tasks)
-            
-            # Step 3: Normalization (Crucial for Neural Networks)
-            # AI models need values between 0 and 1 for stable training
-            vector = np.array(results, dtype=np.float32)
-            
-            # Min-Max normalization with safeguards
-            vector_min = vector.min()
-            vector_max = vector.max()
-            if vector_max - vector_min > 0:
-                vector = (vector - vector_min) / (vector_max - vector_min)
-            else:
-                # All values are the same, default to 0.5
-                vector = np.full_like(vector, 0.5)
-            
-            # Step 4: Store metadata for debugging
-            self.last_fetch_keys = keys
-            self.last_fetch_values = results
-            
-            print(f"✅ Successfully fetched {len(vector)} data points")
-            print(f"📊 Data range: [{np.min(results):.2f}, {np.max(results):.2f}]")
+                results.append(0.0)
+            keys.append(k)
+        # Min-Max normalization with safeguards
+        vector = np.array(results, dtype=np.float32)
+        vector_min = vector.min()
+        vector_max = vector.max()
+        if vector_max - vector_min > 0:
+            vector = (vector - vector_min) / (vector_max - vector_min)
+        else:
+            vector = np.full_like(vector, 0.5)
+        self.last_fetch_keys = keys
+        self.last_fetch_values = results
+        print(f"✅ Successfully fetched {len(vector)} data points")
+        print(f"📊 Data range: [{np.min(results):.2f}, {np.max(results):.2f}]")
+        return vector
             print(f"🔢 Normalized: [{vector.min():.3f}, {vector.max():.3f}]")
             
             return vector

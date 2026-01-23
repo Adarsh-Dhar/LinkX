@@ -8,41 +8,37 @@ from wallet_manager import get_daily_spend, can_spend
 
 def run_autonomous_loop(agent, interval_sec=300):
     """
-    Main autonomous loop: scan, analyze, buy, fetch, trade.
+    Unified autonomous loop: ensure data access, fetch/pay for data, run prediction, and execute trades.
     Runs in a background thread.
     """
+    import asyncio
+    from predictive_agent import PredictiveAgent
+    predictive_agent = PredictiveAgent(simulation_mode=False)
     while True:
-        print("[AlphaLoop] Scanning market...")
+        print("[AlphaLoop] Starting unified cycle...")
+        # 1. Ensure required data nodes are active (buy if needed)
         market_state = agent.market.get_market_state()
         if not market_state:
             print("[AlphaLoop] Market offline. Retrying...")
             time.sleep(interval_sec)
             continue
-
-        # 1. Market scan (example: check CRO price)
-        # ... (implement price scan logic as needed) ...
-
-        # 2. Assess confidence (placeholder logic)
-        confidence = 0.5  # TODO: Replace with real model
-        threshold = 0.7
-        if confidence < threshold:
-            print("[AlphaLoop] Confidence low. Seeking new data...")
-            # Query MarketManager for helpful nodes
-            for node in market_state['missing']:
-                if can_spend(node['price']):
-                    buy_log = agent.market.buy_node(node['name'])
-                    print(buy_log)
-                    # Fetch and ingest data
-                    signal = fetch_node_data(node['id'], node['endpointUrl'], node.get('apiKey', ''), node['category'])
-                    if signal:
-                        print(f"[AlphaLoop] Ingested signal: {signal}")
-                        # TODO: Save DataLog, update strategy, execute trade
-                        TradingEngine.process_signal(signal)
-                        break
-        else:
-            print("[AlphaLoop] Confidence sufficient. No new data needed.")
-
-        # Sleep until next loop
+        for node in market_state.get('missing', []):
+            if can_spend(node['price']):
+                buy_log = agent.market.buy_node(node['name'])
+                print(buy_log)
+        # 2. Fetch/pay for fresh data (x402 logic is in fetch_node_data)
+        # 3. Pass data to PredictiveAgent (Brain) to get a decision
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(predictive_agent.run_cycle())
+        except Exception as e:
+            print(f"[AlphaLoop] Error in PredictiveAgent cycle: {e}")
+        # 4. (Inside PredictiveAgent) Execute the trade using TradingEngine
+        print("[AlphaLoop] Cycle complete. Sleeping...")
         time.sleep(interval_sec)
 
 def start_background_loop(agent):
