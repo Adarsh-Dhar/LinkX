@@ -1,5 +1,8 @@
 "use client";
 import Dashboard from "@/components/dashboard";
+import { DataStreamWidget } from "@/components/data-stream-widget";
+import { DecisionLog } from "@/components/decision-log";
+import { ROICalculator } from "@/components/roi-calculator";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useEffect, useState, useRef } from "react";
@@ -74,6 +77,11 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+        <DataStreamWidget />
+        <DecisionLog />
+        <ROICalculator />
+      </div>
     </>
   );
 }

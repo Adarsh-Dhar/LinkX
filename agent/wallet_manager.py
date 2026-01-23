@@ -1,3 +1,63 @@
+# --- Autonomous Loop Spend Controls (Production Logic) ---
+
+import os
+import datetime
+import subprocess
+import sys
+data_log_path = os.path.join(os.path.dirname(__file__), 'data_purchase_log.json')
+DAILY_LIMIT_USDC = 50.0
+# Persistent blacklist
+def _load_blacklist():
+    try:
+        result = subprocess.run([sys.executable, '-c',
+            'import json; print(json.dumps(list(__import__("blacklist_persistence").loadBlacklist())))'],
+            capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        return set(json.loads(result.stdout.strip()))
+    except Exception:
+        return set()
+
+def _save_blacklist(blacklist):
+    try:
+        subprocess.run([sys.executable, '-c',
+            f'import json; __import__("blacklist_persistence").saveBlacklist(set(json.loads("{json.dumps(list(blacklist))}")))'],
+            cwd=os.path.dirname(__file__))
+    except Exception:
+        pass
+
+BLACKLISTED_NODES = _load_blacklist()
+
+def get_daily_spend() -> float:
+    today = datetime.date.today().isoformat()
+    if not os.path.exists(data_log_path):
+        return 0.0
+    with open(data_log_path, 'r') as f:
+        logs = json.load(f)
+    return sum(entry['amount'] for entry in logs if entry['date'] == today)
+
+def log_data_purchase(node_id, amount):
+    today = datetime.date.today().isoformat()
+    logs = []
+    if os.path.exists(data_log_path):
+        with open(data_log_path, 'r') as f:
+            logs = json.load(f)
+    logs.append({'date': today, 'node_id': node_id, 'amount': amount})
+    with open(data_log_path, 'w') as f:
+        json.dump(logs, f)
+
+def can_spend(amount: float) -> bool:
+    return (get_daily_spend() + amount) <= DAILY_LIMIT_USDC
+
+def validate_data(node_id, data):
+    # Blacklist if data is null or static for 3+ fetches (simple version)
+    if data is None or (isinstance(data, dict) and all(v in [None, 0, '', '0'] for v in data.values())):
+        BLACKLISTED_NODES.add(node_id)
+        _save_blacklist(BLACKLISTED_NODES)
+        print(f"[WalletManager] Blacklisted node {node_id} for invalid data.")
+        return False
+    return True
+
+def is_blacklisted(node_id):
+    return node_id in BLACKLISTED_NODES
 """
 Wallet Manager for the Alpha-Consumer Agent
 Handles wallet operations, balance checks, and transaction management

@@ -1,3 +1,29 @@
+class SignalInput:
+    """
+    Represents external signals for trading decisions.
+    """
+    def __init__(self, sentiment_score: float = 0.0, whale_movement_index: float = 0.0, macro_economic_score: float = 0.0, technical_score: float = 0.0):
+        self.sentiment_score = sentiment_score
+        self.whale_movement_index = whale_movement_index
+        self.macro_economic_score = macro_economic_score
+        self.technical_score = technical_score
+
+    def weighted_score(self, weights=None):
+        if weights is None:
+            weights = {
+                'sentiment': 0.4,
+                'whale': 0.2,
+                'macro': 0.2,
+                'technical': 0.2
+            }
+        score = (
+            weights['sentiment'] * self.sentiment_score +
+            weights['whale'] * self.whale_movement_index +
+            weights['macro'] * self.macro_economic_score +
+            weights['technical'] * self.technical_score
+        )
+        return score
+
 """
 Trading Engine - Orchestrates node data aggregation, neural prediction, and trade execution
 Bridges the gap between 48 nodes and the neural network brain
@@ -35,6 +61,28 @@ class SimulatedTrade:
 
 
 class TradingEngine:
+    @staticmethod
+    def process_signal(signal):
+        """
+        Accepts a Signal or SignalInput and makes a weighted decision.
+        """
+        # If signal is already a SignalInput, use it; else, try to convert
+        if hasattr(signal, 'weighted_score'):
+            score = signal.weighted_score()
+        elif hasattr(signal, 'value'):
+            # Assume it's a normalized Signal from data_consumer
+            score = signal.value
+        else:
+            score = 0.0
+        print(f"[TradingEngine] Weighted signal score: {score}")
+        # Example: simple threshold logic
+        if score > 0.5:
+            print("[TradingEngine] Decision: BUY")
+        elif score < -0.5:
+            print("[TradingEngine] Decision: SELL")
+        else:
+            print("[TradingEngine] Decision: HOLD")
+
     """
     Main orchestrator for trading operations
     Handles:
