@@ -1,10 +1,8 @@
-
 import asyncio
-from datetime import datetime
 import numpy as np
+from datetime import datetime
 
-
-# We keep the pipeline to fetch data
+# Import pipeline
 try:
     from .data_pipeline import DataPipeline
 except ImportError:
@@ -19,76 +17,67 @@ class PredictiveAgent:
         print("\n" + "="*60)
         print(f"🤖 EXPERT AGENT ANALYSIS - {datetime.now().strftime('%H:%M:%S')}")
 
-        # --- STEP 1: MARKET CONTEXT ANALYSIS ---
+        # --- PHASE 1: TECHNICAL ANALYSIS (The Chart) ---
         prices = self.pipeline.fetch_chart_history()
         
-        if len(prices) < 2:
-            print("   ⏳ Not enough chart data yet. Waiting...")
+        if len(prices) < 5:
+            print("   ⏳ Waiting for Chart Data (Next.js is compiling/loading)...")
             return
 
         current_price = prices[-1]
         start_price = prices[0]
         
-        # Calculate Volatility (Standard Deviation of returns)
-        returns = np.diff(prices) / prices[:-1]
-        volatility = np.std(returns) if len(returns) > 0 else 0
-        
-        # Calculate Trend
+        # Calculate Trend & Volatility
         trend_pct = (current_price - start_price) / start_price
+        volatility = np.std(prices) / np.mean(prices) * 100
         
-        print(f"   📊 Chart Stats: Price=${current_price:.4f} | Trend={trend_pct*100:.2f}% | Volatility={volatility:.4f}")
+        print(f"   📊 Chart: Price=${current_price:.4f} | Trend={trend_pct*100:.2f}% | Vol={volatility:.2f}")
 
-        # --- STEP 2: DETERMINE DATA NEEDS ---
+        # --- PHASE 2: STRATEGY & DATA BUYING ---
         needed_data = []
         context = "NEUTRAL"
         
-        if volatility > 0.05: # High Volatility
-            context = "VOLATILE"
-            print("   🚨 Market is VOLATILE! requesting Risk & Whale data.")
-            needed_data = ["TECHNICAL", "ON_CHAIN"]
-            
-        elif trend_pct > 0.02: # Strong Uptrend
+        if trend_pct > 0.02: # Up 2%
             context = "BULLISH"
-            print("   🚀 Market is PUMPING! Requesting Sentiment validation.")
-            needed_data = ["SENTIMENT", "NEWS"]
+            print("   🚀 Setup: BULLISH Trend Detected. Verifying with Sentiment.")
+            needed_data = ["SENTIMENT"]
             
-        elif trend_pct < -0.02: # Strong Downtrend
+        elif trend_pct < -0.02: # Down 2%
             context = "BEARISH"
-            print("   🔻 Market is DUMPING! Requesting Whale Volume data.")
-            needed_data = ["ON_CHAIN", "NEWS"]
+            print("   🔻 Setup: BEARISH Trend Detected. Verifying with Whale Data.")
+            needed_data = ["ON_CHAIN"]
             
-        else: # Ranging/Boring
-            print("   😴 Market is Flat. Checking News for catalysts.")
-            needed_data = ["NEWS"]
+        elif volatility > 1.5: # Volatile
+            context = "VOLATILE"
+            print("   🚨 Setup: High Volatility. Checking Technicals.")
+            needed_data = ["TECHNICAL"]
+            
+        else:
+            context = "FLAT"
+            print("   😴 Setup: Market Flat. Forcing checks for 'Flash News'.")
+            needed_data = ["NEWS", "SENTIMENT"] # Force buying data to show it works
 
-        # --- STEP 3: BUY & ANALYZE DATA ---
-        # The agent now pays for specific nodes based on the context above
+        # --- PHASE 3: EXECUTION ---
+        # Fetch external data (Auto-Pays 402s)
         data_signals = await self.pipeline.fetch_specific_nodes(needed_data)
         
-        avg_signal = np.mean(data_signals) if data_signals else 0.5
-        print(f"   🧠 Aggregated Data Score: {avg_signal:.2f} (0=Bearish, 1=Bullish)")
+        avg_score = np.mean(data_signals) if data_signals else 0.5
+        print(f"   🧠 Data Confirmation Score: {avg_score:.2f}")
 
-        # --- STEP 4: EXECUTE TRADE ---
         action = "HOLD"
         
-        if context == "BULLISH" and avg_signal > 0.6:
-            action = "BUY"
-            print("   ✅ CONFIRMED: Trend is up and Sentiment agrees.")
-            
-        elif context == "BEARISH" and avg_signal < 0.4:
-            action = "SELL"
-            print("   ✅ CONFIRMED: Trend is down and On-Chain data agrees.")
-            
-        elif context == "VOLATILE":
-            if avg_signal > 0.8: 
-                action = "BUY" # Buying the dip/breakout
-            elif avg_signal < 0.2: 
-                action = "SELL" # Panic selling
-        
-        # Execution
+        # Decision Matrix
+        if context == "BULLISH" and avg_score > 0.5: action = "BUY"
+        elif context == "BEARISH" and avg_score < 0.5: action = "SELL"
+        elif context == "FLAT" and avg_score > 0.7: action = "BUY"
+        elif context == "FLAT": 
+            # Force trade for demonstration if we bought data but market is boring
+            print("   🎲 [Demo] Market is flat, forcing exploration trade.")
+            action = "BUY" 
+
+        print(f"   🎯 FINAL DECISION: {action}")
+
         if action == "BUY":
             self.trading_engine.execute_swap("USDC", "CRO", 10.0)
         elif action == "SELL":
             self.trading_engine.execute_swap("CRO", "USDC", 100.0)
-        else:
-            print("   ⏸️ Decision: HOLD (No edge found)")

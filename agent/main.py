@@ -14,7 +14,7 @@ class MarketManager:
     def get_market_state(self):
         import requests
         try:
-            resp = requests.get("http://localhost:3000/api/market/nodes", timeout=2)
+            resp = requests.get("http://localhost:3600/api/market/nodes", timeout=2)
             if resp.status_code == 200:
                 return {"nodes": resp.json()}
         except:
