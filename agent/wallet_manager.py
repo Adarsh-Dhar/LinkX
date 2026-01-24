@@ -109,14 +109,27 @@ class WalletManager:
         Logs every single transaction hash to a JSON file with explorer URL and timestamp.
         """
         entry = {
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "timestamp": time.time(),
+            "date": time.strftime('%Y-%m-%d %H:%M:%S'),
             "tx_hash": tx_hash,
             "type": tx_type,
-            "details": details,
-            "error": error,
-            "explorer_url": f"https://cronoscan.com/tx/{tx_hash}"
+            "details": details
         }
+        try:
+            with self._lock:
+                logs = []
+                if self.TX_LOG_FILE.exists():
+                    try:
+                        with open(self.TX_LOG_FILE, 'r') as f:
+                            logs = json.load(f)
+                    except:
+                        pass
+                logs.append(entry)
+                with open(self.TX_LOG_FILE, 'w') as f:
+                    json.dump(logs, f, indent=2)
+            print(f"📝 [LOG] {tx_type} TX Saved: {tx_hash}")
+        except Exception as e:
+            print(f"⚠️ Log Error: {e}")
         try:
             with _spend_lock:
                 logs = []
