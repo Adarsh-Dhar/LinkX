@@ -8,8 +8,8 @@ class DataPipeline:
         self.market = market_manager
         self.last_fetch_keys = []
         self.last_fetch_values = []
-        # Use the internal docker network address if possible, or localhost
-        self.chart_api_url = "http://localhost:3600/api/dashboard/chart"
+        # Use the correct frontend API address for local development
+        self.chart_api_url = "http://127.0.0.1:3000/api/dashboard/chart"
 
     def fetch_live_price(self):
         """

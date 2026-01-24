@@ -31,7 +31,16 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null
 echo "📈 Starting Market Analyst Server..."
 cd "$SCRIPT_DIR/server"
 if [ ! -d "node_modules" ]; then pnpm install; fi
-node index.js &
+
+# Fix: Check for index.js or index.cjs
+if [ -f "index.js" ]; then
+    node index.js &
+elif [ -f "index.cjs" ]; then
+    node index.cjs &
+else
+    echo "❌ Error: Could not find server entry point (index.js or index.cjs)"
+    exit 1
+fi
 SERVER_PID=$!
 echo "   ✅ Analyst Server PID: $SERVER_PID"
 sleep 5
