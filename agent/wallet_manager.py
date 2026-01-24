@@ -78,6 +78,48 @@ from web3 import Web3
 from eth_account import Account
 
 class WalletManager:
+        def log_transaction(self, tx_hash, tx_type, details=None, error=None):
+            """
+            Log every transaction (success or failure) to transactions.log
+            """
+            log_path = os.path.join(os.path.dirname(__file__), 'transactions.log')
+            entry = {
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "tx_hash": tx_hash,
+                "type": tx_type,
+                "details": details,
+                "error": error
+            }
+            try:
+                if os.path.exists(log_path):
+                    with open(log_path, 'r') as f:
+                        logs = json.load(f)
+                else:
+                    logs = []
+                logs.append(entry)
+                with open(log_path, 'w') as f:
+                    json.dump(logs, f, indent=2)
+            except Exception as e:
+                print(f"[WalletManager] Logging failed: {e}")
+        """Manages blockchain wallet operations for the agent"""
+    
+        # Standard ERC20 ABI for balance checking
+        ERC20_ABI = [
+            {
+                "constant": True,
+                "inputs": [{"name": "_owner", "type": "address"}],
+                "name": "balanceOf",
+                "outputs": [{"name": "balance", "type": "uint256"}],
+                "type": "function"
+            },
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "decimals",
+                "outputs": [{"name": "", "type": "uint8"}],
+                "type": "function"
+            }
+        ]
     """Manages blockchain wallet operations for the agent"""
     
     # Standard ERC20 ABI for balance checking

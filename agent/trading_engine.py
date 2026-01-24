@@ -427,7 +427,14 @@ class TradingEngine:
             })
             signed = account.sign_transaction(approve_tx)
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-            w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+            try:
+                receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+                if receipt['status'] == 1:
+                    print(f"[TradingEngine] ✅ Approve Confirmed: {tx_hash.hex()}")
+                else:
+                    print(f"[TradingEngine] ❌ Approve Reverted: {tx_hash.hex()}")
+            except Exception as e:
+                print(f"[TradingEngine] ❌ Approve Tx Failed: {tx_hash.hex()} | {e}")
         path = [token_in_addr, token_out_addr]
         amounts = router.functions.getAmountsOut(swap_amount, path).call()
         expected_out = amounts[1]
@@ -450,11 +457,18 @@ class TradingEngine:
         })
         signed = account.sign_transaction(swap_tx)
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        try:
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            if receipt['status'] == 1:
+                print(f"[TradingEngine] ✅ Swap Confirmed: {tx_hash.hex()}")
+            else:
+                print(f"[TradingEngine] ❌ Swap Reverted: {tx_hash.hex()}")
+        except Exception as e:
+            print(f"[TradingEngine] ❌ Swap Tx Failed: {tx_hash.hex()} | {e}")
         return {
             "tx_hash": tx_hash.hex(),
-            "block": receipt['blockNumber'],
-            "gas_used": receipt['gasUsed'],
+            "block": receipt['blockNumber'] if 'receipt' in locals() else None,
+            "gas_used": receipt['gasUsed'] if 'receipt' in locals() else None,
             "min_out": min_out,
             "expected_out": expected_out
         }

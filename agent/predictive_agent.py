@@ -18,9 +18,9 @@ except ImportError:
     from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
-    def __init__(self, market_manager, simulation_mode=True):
+    def __init__(self, market_manager, trading_engine, simulation_mode=True):
         self.pipeline = DataPipeline(market_manager)
-        self.trade_api_url = "http://localhost:8000/trade/execute/confirmed"
+        self.trading_engine = trading_engine
         self.previous_price = None
         self.min_price_change = 0.001  # 0.1% movement required to confirm trend
 
@@ -68,23 +68,12 @@ class PredictiveAgent:
     def _trigger_trade(self, token_in, token_out, amount):
         print(f"🚀 EXECUTING TRADE: {amount} {token_in} -> {token_out}")
         try:
-            payload = {"token_in": token_in, "token_out": token_out, "amount": amount, "slippage": 1.0}
-            res = requests.post(self.trade_api_url, json=payload, timeout=5)
-            print(f"   ✅ Trade Status: {res.status_code}")
+            # Directly call the trading engine for execution
+            result = self.trading_engine.execute_swap_with_slippage(token_in, token_out, amount, slippage=0.01)
+            tx_hash = result.get("tx_hash")
+            if tx_hash:
+                print(f"   ✅ Trade Executed: {tx_hash}")
+            else:
+                print(f"   ❌ Trade failed: No tx_hash returned")
         except Exception as e:
-            print(f"   ❌ Execution Failed: {e}")
-            print(f"   ✅ Trade Status: {res.status_code} - {res.text[:100]}")
-            # Send trade status to frontend SSE endpoint
-            try:
-                sse_payload = {
-                    "token_in": token_in,
-                    "token_out": token_out,
-                    "amount": amount,
-                    "status_code": res.status_code,
-                    "status_text": res.text[:100],
-                }
-                requests.post("http://localhost:3000/api/dashboard/trade-status", json=sse_payload, timeout=2)
-            except Exception as sse_err:
-                print(f"   ⚠️  SSE Notify Failed: {sse_err}")
-        except Exception as e:
-            print(f"   ❌ Trade Failed: {e}")
+            print(f"   ❌ Trade Execution Exception: {e}")

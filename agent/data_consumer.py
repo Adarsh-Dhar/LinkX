@@ -112,11 +112,14 @@ def fetch_node_data(node_id: str, endpoint: str, api_key: str, category: str) ->
                     tx_hash = wallet.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
                     tx_hex = tx_hash.hex()
                     print(f"[DataConsumer] ✅ Payment Sent: {tx_hex}")
+                    # Log transaction
+                    wallet.log_transaction(tx_hex, "data_payment", {"node_id": node_id, "amount": price, "currency": currency, "pay_to": pay_to, "category": category})
                     time.sleep(2)
                     headers["X-Payment-Proof"] = tx_hex
                     continue
                 except Exception as e:
                     print(f"[DataConsumer] ❌ Payment Transaction Failed: {e}")
+                    wallet.log_transaction(None, "data_payment", {"node_id": node_id, "amount": price, "currency": currency, "pay_to": pay_to, "category": category}, error=str(e))
                     return None
             if resp.status_code == 200:
                 payload = resp.json()
