@@ -40,13 +40,25 @@ pnpm start &
 cd "$SCRIPT_DIR"
 sleep 3
 
+
 # --- STEP 3: START FRONTEND (NEXT.JS) ---
 echo "🖥️  Starting Frontend (Next.js)..."
 cd "$SCRIPT_DIR/frontend"
 if [ ! -d "node_modules" ]; then
   pnpm install
 fi
-# Start Next.js and wait for it to compile
+
+# 1. Export the DB URL explicitly for local SQLite
+export DATABASE_URL="file:./agent/agent_state.db"
+
+# 2. Ensure DB schema is up to date (creates file if missing)
+echo "🗄️  Syncing Database Schema..."
+npx prisma db push --accept-data-loss
+
+# 3. (Optional) Seed data if needed
+# npx prisma db seed
+
+# 4. Start Next.js and wait for it to compile
 pnpm run dev &
 echo "⏳ Waiting 10s for Frontend to boot..."
 sleep 10
