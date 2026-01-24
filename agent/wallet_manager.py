@@ -77,51 +77,10 @@ import json
 from web3 import Web3
 from eth_account import Account
 
+
 class WalletManager:
-        def log_transaction(self, tx_hash, tx_type, details=None, error=None):
-            """
-            Log every transaction (success or failure) to transactions.log
-            """
-            log_path = os.path.join(os.path.dirname(__file__), 'transactions.log')
-            entry = {
-                "timestamp": datetime.datetime.utcnow().isoformat(),
-                "tx_hash": tx_hash,
-                "type": tx_type,
-                "details": details,
-                "error": error
-            }
-            try:
-                if os.path.exists(log_path):
-                    with open(log_path, 'r') as f:
-                        logs = json.load(f)
-                else:
-                    logs = []
-                logs.append(entry)
-                with open(log_path, 'w') as f:
-                    json.dump(logs, f, indent=2)
-            except Exception as e:
-                print(f"[WalletManager] Logging failed: {e}")
-        """Manages blockchain wallet operations for the agent"""
-    
-        # Standard ERC20 ABI for balance checking
-        ERC20_ABI = [
-            {
-                "constant": True,
-                "inputs": [{"name": "_owner", "type": "address"}],
-                "name": "balanceOf",
-                "outputs": [{"name": "balance", "type": "uint256"}],
-                "type": "function"
-            },
-            {
-                "constant": True,
-                "inputs": [],
-                "name": "decimals",
-                "outputs": [{"name": "", "type": "uint8"}],
-                "type": "function"
-            }
-        ]
     """Manages blockchain wallet operations for the agent"""
-    
+
     # Standard ERC20 ABI for balance checking
     ERC20_ABI = [
         {
@@ -139,11 +98,34 @@ class WalletManager:
             "type": "function"
         }
     ]
-    
+
+    def log_transaction(self, tx_hash, tx_type, details=None, error=None):
+        """
+        Log every transaction (success or failure) to transactions.log
+        """
+        log_path = os.path.join(os.path.dirname(__file__), 'transactions.log')
+        entry = {
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "tx_hash": tx_hash,
+            "type": tx_type,
+            "details": details,
+            "error": error
+        }
+        try:
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    logs = json.load(f)
+            else:
+                logs = []
+            logs.append(entry)
+            with open(log_path, 'w') as f:
+                json.dump(logs, f, indent=2)
+        except Exception as e:
+            print(f"[WalletManager] Logging failed: {e}")
+
     def __init__(self, private_key: str, rpc_url: str):
         """
         Initialize wallet manager
-        
         Args:
             private_key: Wallet private key (with or without 0x prefix)
             rpc_url: RPC endpoint for the blockchain
@@ -155,7 +137,7 @@ class WalletManager:
             print(f"[WalletManager] ❌ Exception while creating Web3 provider for RPC '{rpc_url}': {type(e).__name__}: {e}")
             traceback.print_exc()
             raise
-        
+
         try:
             if not self.w3.is_connected():
                 raise ConnectionError(f"Failed to connect to RPC at {rpc_url}")
@@ -163,11 +145,11 @@ class WalletManager:
             print(f"[WalletManager] ❌ RPC connection check failed for '{rpc_url}': {type(e).__name__}: {e}")
             traceback.print_exc()
             raise
-        
+
         # Ensure private key has 0x prefix
         if not private_key.startswith("0x"):
             private_key = "0x" + private_key
-        
+
         try:
             self.account = Account.from_key(private_key)
             self.address = self.account.address
@@ -175,14 +157,13 @@ class WalletManager:
             print(f"[WalletManager] ❌ Error initializing account from private key: {type(e).__name__}: {e}")
             traceback.print_exc()
             raise
-        
+
         # Load contract addresses from environment
         self.usdc_address = os.getenv("USDC_CONTRACT", "")
-        
+
     def get_tcro_balance(self):
         """
         Get native TCRO balance
-        
         Returns:
             float: Balance in TCRO
         """
@@ -193,48 +174,45 @@ class WalletManager:
         except Exception as e:
             print(f"Error getting TCRO balance: {e}")
             return 0.0
-    
+
     def get_usdc_balance(self):
         """
         Get USDC token balance
-        
         Returns:
             float: Balance in USDC
         """
         if not self.usdc_address:
             print("⚠️  USDC contract address not configured")
             return 0.0
-        
+
         try:
             # Create contract instance
             contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(self.usdc_address),
                 abi=self.ERC20_ABI
             )
-            
+
             # Get balance
             balance_raw = contract.functions.balanceOf(self.address).call()
-            
+
             # Get decimals
             try:
                 decimals = contract.functions.decimals().call()
             except:
                 decimals = 6  # Default for USDC
-            
+
             balance = balance_raw / (10 ** decimals)
             return float(balance)
-            
+
         except Exception as e:
             print(f"Error getting USDC balance: {e}")
             return 0.0
-    
+
     def get_token_balance(self, token_address: str):
         """
         Get balance of any ERC20 token
-        
         Args:
             token_address: Contract address of the token
-        
         Returns:
             dict: Balance information with raw and formatted amounts
         """
@@ -243,51 +221,47 @@ class WalletManager:
                 address=Web3.to_checksum_address(token_address),
                 abi=self.ERC20_ABI
             )
-            
+
             balance_raw = contract.functions.balanceOf(self.address).call()
-            
+
             try:
                 decimals = contract.functions.decimals().call()
             except:
                 decimals = 18  # Default for most tokens
-            
+
             balance_formatted = balance_raw / (10 ** decimals)
-            
+
             return {
                 "address": token_address,
                 "balance_raw": balance_raw,
                 "balance_formatted": balance_formatted,
                 "decimals": decimals
             }
-            
+
         except Exception as e:
             return {
                 "address": token_address,
                 "error": str(e)
             }
-    
+
     def sign_message(self, message: str):
         """
         Sign a message with the wallet's private key
-        
         Args:
             message: Message to sign
-        
         Returns:
             str: Hex-encoded signature
         """
         signed = self.account.sign_message(message)
         return signed.signature.hex()
-    
+
     def get_nonce(self):
         """
         Get the current transaction nonce for the wallet
-        
         Returns:
             int: Transaction nonce
         """
         return self.w3.eth.get_transaction_count(self.address)
-    
 
     def get_gas_price(self, use_external: bool = False):
         """
@@ -324,14 +298,12 @@ class WalletManager:
         gas_cost_cro = gas_limit * gas_price / 1e18
         gas_cost_usd = gas_cost_cro * cro_price
         return gas_cost_usd > potential_profit
-    
+
     def estimate_gas(self, transaction):
         """
         Estimate gas for a transaction
-        
         Args:
             transaction: Transaction dictionary
-        
         Returns:
             int: Estimated gas
         """
@@ -340,17 +312,16 @@ class WalletManager:
         except Exception as e:
             print(f"Error estimating gas: {e}")
             return 100000  # Default fallback
-    
+
     def format_balance_display(self):
         """
         Get formatted string of all balances for display
-        
         Returns:
             str: Formatted balance information
         """
         tcro = self.get_tcro_balance()
         usdc = self.get_usdc_balance()
-        
+
         output = f"""
 ╔════════════════════════════════════════╗
 ║         Wallet Balance                 ║
@@ -362,29 +333,27 @@ class WalletManager:
 ╚════════════════════════════════════════╝
 """
         return output
-    
+
     def check_sufficient_balance(self, token_address: str, required_amount: int):
         """
         Check if wallet has sufficient balance for a payment
-        
         Args:
             token_address: Address of the token
             required_amount: Required amount in smallest units
-        
         Returns:
             dict: Balance check result with recommendation
         """
         balance_info = self.get_token_balance(token_address)
-        
+
         if "error" in balance_info:
             return {
                 "sufficient": False,
                 "error": balance_info["error"]
             }
-        
+
         balance_raw = balance_info["balance_raw"]
         sufficient = balance_raw >= required_amount
-        
+
         return {
             "sufficient": sufficient,
             "current_balance": balance_raw,

@@ -1,28 +1,23 @@
+
 import asyncio
 from datetime import datetime
-import requests
-import json
-
-import numpy as np
-import pandas as pd
-import asyncio
-from datetime import datetime
-import requests
-import json
 import numpy as np
 
-# We keep the pipeline to fetch data, but we bypass the 'Brain'
+
+# We keep the pipeline to fetch data
 try:
     from .data_pipeline import DataPipeline
 except ImportError:
     from agent.data_pipeline import DataPipeline
 
+
 class PredictiveAgent:
     def __init__(self, market_manager, trading_engine, simulation_mode=True):
         self.pipeline = DataPipeline(market_manager)
-        self.trading_engine = trading_engine
+        self.trading_engine = trading_engine  # Store the engine
         self.previous_price = None
         self.min_price_change = 0.001  # 0.1% movement required to confirm trend
+
 
     async def run_cycle(self):
         print("\n" + "="*60)
@@ -39,8 +34,10 @@ class PredictiveAgent:
         trend = "NEUTRAL"
         if self.previous_price:
             price_change = (current_price - self.previous_price) / self.previous_price
-            if price_change > self.min_price_change: trend = "UPTREND"
-            elif price_change < -self.min_price_change: trend = "DOWNTREND"
+            if price_change > self.min_price_change:
+                trend = "UPTREND"
+            elif price_change < -self.min_price_change:
+                trend = "DOWNTREND"
         self.previous_price = current_price
         # 3. EXPERT DECISION LOGIC
         print(f"📊 ANALYSIS: Price ${current_price:.4f} ({trend}) | Sentiment: {avg_signal:.2f}")
@@ -58,22 +55,32 @@ class PredictiveAgent:
         elif avg_signal < 0.25:
             action = "SELL"
         print(f"🎯 EXPERT DECISION: {action}")
-        # 4. EXECUTE
+        # 4. EXECUTE & LOG TRANSACTION
         if action == "BUY":
             self._trigger_trade("USDC", "CRO", 10.0)
         elif action == "SELL":
             self._trigger_trade("CRO", "USDC", 100.0)
         return {"action": action}
 
+
     def _trigger_trade(self, token_in, token_out, amount):
         print(f"🚀 EXECUTING TRADE: {amount} {token_in} -> {token_out}")
         try:
-            # Directly call the trading engine for execution
-            result = self.trading_engine.execute_swap_with_slippage(token_in, token_out, amount, slippage=0.01)
-            tx_hash = result.get("tx_hash")
+            # Determine 'side' for the trading engine
+            side = "buy" if token_out == "CRO" else "sell"
+            # Execute Swap (assume execute_swap returns tx_hash)
+            tx_hash = self.trading_engine.execute_swap(
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=amount,
+                slippage_tolerance=1.0
+            )
             if tx_hash:
-                print(f"   ✅ Trade Executed: {tx_hash}")
+                print(f"   ✅ Trade SUBMITTED. Hash: {tx_hash}")
+                # Log to file via wallet manager (if available)
+                if hasattr(self.trading_engine, 'wallet') and hasattr(self.trading_engine.wallet, 'log_transaction'):
+                    self.trading_engine.wallet.log_transaction(tx_hash, "SWAP", f"{side} {amount}")
             else:
-                print(f"   ❌ Trade failed: No tx_hash returned")
+                print("   ⚠️ Trade failed (No Hash returned)")
         except Exception as e:
-            print(f"   ❌ Trade Execution Exception: {e}")
+            print(f"   ❌ Execution CRITICAL FAILURE: {e}")
