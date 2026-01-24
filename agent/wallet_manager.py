@@ -158,6 +158,7 @@ class WalletManager:
             print(f"[WalletManager] Logging failed: {e}")
 
     def __init__(self, private_key: str, rpc_url: str):
+        self.rpc_url = rpc_url
         """
         Initialize wallet manager
         Args:

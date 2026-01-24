@@ -27,7 +27,7 @@ class IntelligentAgent:
         print("🤖 [Main] Initializing Intelligent Agent...")
         # 1. Wallet
         private_key = os.getenv("WALLET_PRIVATE_KEY")
-        rpc_url = os.getenv("RPC_URL", "http://localhost:8545")
+        rpc_url = os.getenv("CRONOS_RPC_URL", os.getenv("RPC_URL", "https://evm-t3.cronos.org"))
         self.wallet = WalletManager(private_key, rpc_url)
         print(f"   ✅ Wallet: {self.wallet.address}")
         # 2. Market

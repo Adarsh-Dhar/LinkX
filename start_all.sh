@@ -78,7 +78,7 @@ sleep 2
 echo ""
 echo "✅ All services started in correct order!"
 echo "------------------------------------------------"
-echo "🌐 Frontend: http://localhost:3000"
+echo "🌐 Frontend: http://localhost:3600"
 echo "📡 Agent API: http://localhost:8000"
 echo "------------------------------------------------"
 echo "Press Ctrl+C to stop all services cleanly."
