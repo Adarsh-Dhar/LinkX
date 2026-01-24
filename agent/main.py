@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from .wallet_manager import WalletManager
-from .trading_engine import TradingEngine
-from .autonomous_loop import run_autonomous_loop
+from agent.wallet_manager import WalletManager
+from agent.trading_engine import TradingEngine
+from agent.autonomous_loop import run_autonomous_loop
 
 class MarketManager:
     def get_market_state(self):

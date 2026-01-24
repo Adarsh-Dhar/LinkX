@@ -6,72 +6,72 @@ from .data_consumer import fetch_node_data
 class DataPipeline:
     def __init__(self, market_manager):
         self.market = market_manager
-        self.last_fetch_keys = []
-        self.last_fetch_values = []
-        # Use the correct frontend API address for local development
-        self.chart_api_url = "http://127.0.0.1:3000/api/dashboard/chart"
+        import numpy as np
+        import requests
+        import random
+        import time
+        from agent.data_consumer import fetch_node_data
 
-    def fetch_live_price(self):
-        """
-        Fetches the latest price from the Frontend Dashboard Chart API.
-        Includes a fallback so the agent doesn't receive 0.0 during startup.
-        """
-        try:
-            response = requests.get(self.chart_api_url, timeout=2)
-            if response.status_code == 200:
-                data = response.json()
-                # Handle standard array format from Recharts/Next.js
-                if isinstance(data, list) and len(data) > 0:
-                    latest = data[-1]
-                    # Check for common value keys
-                    return float(latest.get('value') or latest.get('price') or latest.get('uv', 0.0))
-        except Exception as e:
-            print(f"[DataPipeline] ⚠️ Chart API Error: {e}")
-        
-        # FALLBACK: If API fails, return a random 'alive' price so the brain works
-        # This ensures we don't feed 0.0 into the neural net
-        return round(random.uniform(0.10, 0.15), 4)
+        class DataPipeline:
+            def __init__(self, market_manager):
+                self.market = market_manager
+                # Use localhost for internal communication
+                self.chart_api_url = "http://127.0.0.1:3000/api/dashboard/chart"
+                self.nodes_api_url = "http://127.0.0.1:3000/api/market/nodes"
 
-    async def get_market_state(self):
-        # 1. Get ALL market nodes (Purchased OR Not)
-        state = self.market.get_market_state()
-        nodes = state.get('nodes', []) if state else []
-        
-        features = []
-        keys = []
+            def fetch_chart_history(self):
+                """
+                Fetches the last 50 candles to analyze trend and volatility.
+                """
+                try:
+                    response = requests.get(self.chart_api_url, timeout=2)
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Extract just the values
+                        prices = [float(point.get('value', 0)) for point in data]
+                        return prices[-50:] # Return last 50 points
+                except Exception as e:
+                    print(f"   ⚠️ Chart API Error: {e}")
+                return []
 
-        # --- 2. FETCH LIVE CHART PRICE ---
-        live_price = self.fetch_live_price()
-        print(f"[DataPipeline] 📈 Market Price Input: ${live_price:.4f}")
-        features.append(live_price)
-        keys.append("market_price")
+            def get_available_nodes(self):
+                """Fetches the list of all available data providers from the DB."""
+                try:
+                    response = requests.get(self.nodes_api_url, timeout=2)
+                    if response.status_code == 200:
+                        return response.json()
+                except:
+                    pass
+                return []
 
-        # --- 3. FETCH DATA FROM ALL NODES (AUTO-PAY) ---
-        # We process up to 10 nodes per cycle to avoid draining wallet instantly
-        # or hitting timeouts.
-        active_nodes = nodes[:10] 
+            async def fetch_specific_nodes(self, target_categories):
+                """
+                Fetches data ONLY from nodes matching the target categories.
+                Auto-pays if necessary.
+                """
+                all_nodes = self.get_available_nodes()
+                features = []
         
-        print(f"📡 Accessing {len(active_nodes)} data nodes (Auto-Pay Enabled)...")
+                print(f"   🔍 Looking for providers in: {target_categories}")
         
-        for node in active_nodes:
-            # REMOVED: if node.get('isPurchased'): 
-            # REASON: We want to fetch everything. The consumer handles the 402 payment.
+                selected_nodes = [n for n in all_nodes if n.get('category') in target_categories]
+        
+                if not selected_nodes:
+                    print("   ⚠️ No matching providers found.")
+                    return [0.5] * 5 # Default neutral signals
+
+                for node in selected_nodes:
+                    print(f"   🛒 Buying Data from: {node['name']} ({node['category']})...")
+                    signal = fetch_node_data(
+                        node['id'],
+                        node['endpointUrl'],
+                        node.get('apiKey', ''),
+                        node['category']
+                    )
+                    val = signal.value if signal else 0.5
+                    features.append(val)
             
-            signal = fetch_node_data(
-                node['id'],
-                node['endpointUrl'],
-                node.get('apiKey', ''), # API key might be empty initially
-                node['category']
-            )
-            
-            val = signal.value if signal else 0.0
-            features.append(val)
-            keys.append(node['name'])
-
-        # --- 4. PAD VECTOR ---
-        while len(features) < 48:
-            features.append(0.0)
-            keys.append("pad")
+                return features
             
         vector = np.array(features[:48], dtype=np.float32)
         

@@ -8,60 +8,87 @@ import numpy as np
 try:
     from .data_pipeline import DataPipeline
 except ImportError:
-    from .data_pipeline import DataPipeline
-
+    from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
     def __init__(self, market_manager, trading_engine, simulation_mode=True):
         self.pipeline = DataPipeline(market_manager)
-        self.trading_engine = trading_engine  # Store the engine
-        self.previous_price = None
-        self.min_price_change = 0.001  # 0.1% movement required to confirm trend
-
-
+        self.trading_engine = trading_engine
 
     async def run_cycle(self):
-        print("="*60)
-        print(f"🤖 EXPERT TRADER ANALYZING - {datetime.now().strftime('%H:%M:%S')}")
+        print("\n" + "="*60)
+        print(f"🤖 EXPERT AGENT ANALYSIS - {datetime.now().strftime('%H:%M:%S')}")
 
-        # 1. Fetch Price from Frontend (The "Chart")
-        # This is handled inside pipeline.get_market_state() -> fetch_live_price()
-        state_vector = await self.pipeline.get_market_state()
-        current_price = float(state_vector[0])
+        # --- STEP 1: MARKET CONTEXT ANALYSIS ---
+        prices = self.pipeline.fetch_chart_history()
+        
+        if len(prices) < 2:
+            print("   ⏳ Not enough chart data yet. Waiting...")
+            return
 
-        # 2. Check Data (This triggers fetching from 'server' + paying 402s)
-        # The 402 payment logic is inside DataConsumer, triggered by pipeline
-        data_signals = state_vector[1:11]
-        valid_signals = [x for x in data_signals if x > 0.0]
-        avg_signal = np.mean(valid_signals) if valid_signals else 0.5
+        current_price = prices[-1]
+        start_price = prices[0]
+        
+        # Calculate Volatility (Standard Deviation of returns)
+        returns = np.diff(prices) / prices[:-1]
+        volatility = np.std(returns) if len(returns) > 0 else 0
+        
+        # Calculate Trend
+        trend_pct = (current_price - start_price) / start_price
+        
+        print(f"   📊 Chart Stats: Price=${current_price:.4f} | Trend={trend_pct*100:.2f}% | Volatility={volatility:.4f}")
 
-        # 3. Decision
-        trend = "NEUTRAL"
-        if self.previous_price:
-            change = (current_price - self.previous_price) / self.previous_price
-            if change > self.min_price_change:
-                trend = "UPTREND"
-            elif change < -self.min_price_change:
-                trend = "DOWNTREND"
-        self.previous_price = current_price
+        # --- STEP 2: DETERMINE DATA NEEDS ---
+        needed_data = []
+        context = "NEUTRAL"
+        
+        if volatility > 0.05: # High Volatility
+            context = "VOLATILE"
+            print("   🚨 Market is VOLATILE! requesting Risk & Whale data.")
+            needed_data = ["TECHNICAL", "ON_CHAIN"]
+            
+        elif trend_pct > 0.02: # Strong Uptrend
+            context = "BULLISH"
+            print("   🚀 Market is PUMPING! Requesting Sentiment validation.")
+            needed_data = ["SENTIMENT", "NEWS"]
+            
+        elif trend_pct < -0.02: # Strong Downtrend
+            context = "BEARISH"
+            print("   🔻 Market is DUMPING! Requesting Whale Volume data.")
+            needed_data = ["ON_CHAIN", "NEWS"]
+            
+        else: # Ranging/Boring
+            print("   😴 Market is Flat. Checking News for catalysts.")
+            needed_data = ["NEWS"]
 
-        print(f"📊 Market: Price ${current_price:.4f} | Sentiment: {avg_signal:.2f}")
+        # --- STEP 3: BUY & ANALYZE DATA ---
+        # The agent now pays for specific nodes based on the context above
+        data_signals = await self.pipeline.fetch_specific_nodes(needed_data)
+        
+        avg_signal = np.mean(data_signals) if data_signals else 0.5
+        print(f"   🧠 Aggregated Data Score: {avg_signal:.2f} (0=Bearish, 1=Bullish)")
 
-        # 4. Trade
-        if trend == "UPTREND" or avg_signal > 0.55:
-            self._trigger_trade("USDC", "CRO", 10.0)
-        elif trend == "DOWNTREND" or avg_signal < 0.45:
-            self._trigger_trade("CRO", "USDC", 10.0)
-
-        return {"action": "HOLD"}
-
-    def _trigger_trade(self, token_in, token_out, amount):
-        print(f"🚀 EXECUTING: {amount} {token_in} -> {token_out}")
-        try:
-            tx = self.trading_engine.execute_swap(token_in, token_out, amount)
-            if tx:
-                print(f"   ✅ TX SUCCESS: {tx}")
-            else:
-                print(f"   ❌ TX FAILED (See TradingEngine logs)")
-        except Exception as e:
-            print(f"   ❌ CRITICAL FAIL: {e}")
+        # --- STEP 4: EXECUTE TRADE ---
+        action = "HOLD"
+        
+        if context == "BULLISH" and avg_signal > 0.6:
+            action = "BUY"
+            print("   ✅ CONFIRMED: Trend is up and Sentiment agrees.")
+            
+        elif context == "BEARISH" and avg_signal < 0.4:
+            action = "SELL"
+            print("   ✅ CONFIRMED: Trend is down and On-Chain data agrees.")
+            
+        elif context == "VOLATILE":
+            if avg_signal > 0.8: 
+                action = "BUY" # Buying the dip/breakout
+            elif avg_signal < 0.2: 
+                action = "SELL" # Panic selling
+        
+        # Execution
+        if action == "BUY":
+            self.trading_engine.execute_swap("USDC", "CRO", 10.0)
+        elif action == "SELL":
+            self.trading_engine.execute_swap("CRO", "USDC", 100.0)
+        else:
+            print("   ⏸️ Decision: HOLD (No edge found)")
