@@ -14,109 +14,94 @@ class PredictiveAgent:
         self.trading_engine = trading_engine
 
     async def run_cycle(self):
-        print("\n" + "─"*65)
-        print(f"🧠 EXPERT CONTEXT ANALYSIS - {datetime.now().strftime('%H:%M:%S')}")
+        print("\n" + "═"*70)
+        print(f"♟️  EXPERT TRADER CONTEXT ENGINE - {datetime.now().strftime('%H:%M:%S')}")
 
-        # 1. FETCH & PROCESS DATA (The Tape)
+        # 1. READ THE TAPE
         df = self.pipeline.fetch_candles()
-        
-        if df is None:
+        if df is None or len(df) < 20:
             print("   ⏳ [Tape] Insufficient market data. Collecting candles...")
             return
 
-        current_price = df['close'].iloc[-1]
+        curr = df['close'].iloc[-1]
         
-        # 2. INTERNAL TOOLKIT CALCULATIONS
-        # RSI (14)
+        # 2. COMPUTE METRICS
+        # Volatility (BB Width)
+        sma = df['close'].rolling(20).mean()
+        std = df['close'].rolling(20).std()
+        bb_width = ((sma + (std * 2)) - (sma - (std * 2))) / sma
+        # Momentum (RSI)
         delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs)).iloc[-1]
-
-        # Bollinger Band Width
-        sma = df['close'].rolling(window=20).mean()
-        std = df['close'].rolling(window=20).std()
-        bb_width = ((sma + (std * 2)) - (sma - (std * 2)) / sma).iloc[-1] * 100
-
-        # VWAP
-        vwap = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
-        vwap_val = vwap.iloc[-1]
-
-        # Volume Delta
-        vol_ma = df['volume'].rolling(window=20).mean().iloc[-1]
-        vol_current = df['volume'].iloc[-1]
-        vol_ratio = vol_current / vol_ma if vol_ma > 0 else 0
-
-        # Trend (5-candle slope)
-        trend_slope = (current_price - df['close'].iloc[-5]) / 5
+        # Volume
+        vol_ma = df['volume'].rolling(20).mean().iloc[-1]
+        vol_ratio = df['volume'].iloc[-1] / vol_ma if vol_ma > 0 else 0
         
-        print(f"   📉 Chart: ${current_price:.2f} | RSI: {rsi:.1f} | VWAP: ${vwap_val:.2f}")
-        print(f"   📊 Volatility: {bb_width:.3f} | Vol Ratio: {vol_ratio:.2f}x")
+        print(f"   📉 Price: ${curr:.2f} | RSI: {rsi:.1f} | Vol Ratio: {vol_ratio:.2f}x")
 
-        # 3. FORMULATE THESIS & SHOPPING LIST
-        hypothesis = "NEUTRAL"
-        required_alpha = []
+        # 3. SITUATION MAPPING (Identify Missing Data)
+        situation = "NOISE"
+        toolkit_names = [] # This list will be sent to the pipeline to find in DB
 
-        # SCENARIO A: SQUEEZE BREAKOUT
-        if bb_width < 0.5 and vol_ratio > 1.5:
-            hypothesis = "BREAKOUT"
-            print("   🚀 Setup: Volatility Squeeze with Volume Spike!")
-            required_alpha = ["NEWS", "ON_CHAIN"] 
+        # A: PUMP -> Check Whales & Retail Hype
+        if rsi > 70 and vol_ratio > 1.5:
+            situation = "PARABOLIC_PUMP"
+            # Exact names from your DB Seed
+            toolkit_names = ["Whale Alert", "Social Pulse"] 
 
-        # SCENARIO B: OVERBOUGHT/OVERSOLD
-        elif rsi > 70:
-            hypothesis = "SHORT"
-            print("   ⚠️ Setup: RSI Overbought. Looking for Top.")
-            required_alpha = ["SENTIMENT", "TECHNICAL"]
+        # B: CRASH -> Check Safety & Peak Fear
         elif rsi < 30:
-            hypothesis = "LONG"
-            print("   💎 Setup: RSI Oversold. Looking for Bounce.")
-            required_alpha = ["SENTIMENT", "ON_CHAIN"]
-            
-        # SCENARIO C: TREND CONTINUATION
-        elif current_price > vwap_val and trend_slope > 0:
-             hypothesis = "LONG"
-             print("   📈 Setup: Price above VWAP. Trend Following.")
-             required_alpha = ["ON_CHAIN"]
-             
-        # SCENARIO D: CONSOLIDATION (The "Chopping" Fix)
-        else:
-            hypothesis = "ACCUMULATION_WATCH"
-            print("   😴 Setup: Market is chopping (Consolidation).")
-            print("      👉 Expert Thesis: Checking for hidden whale accumulation or pending news.")
-            # Even in chop, we want to know if whales are buying the floor
-            required_alpha = ["ON_CHAIN", "NEWS"]
+            situation = "LIQUIDATION_CASCADE"
+            toolkit_names = ["Chainlink Sentinel", "Sentiment Surge"]
 
-        # 4. ACQUIRE & VERIFY EXTERNAL DATA
-        # This will try to buy the data. If it fails (DB issue), 'intel' will be missing keys.
-        intel = await self.pipeline.fetch_specific_nodes(required_alpha)
+        # C: SQUEEZE -> Check Catalysts
+        elif bb_width.iloc[-1] < 0.005:
+            situation = "VOLATILITY_SQUEEZE"
+            toolkit_names = ["Macro News AI", "Neural Oracle"]
+
+        # D: GLITCH -> Check Anomalies
+        elif abs(df['close'].pct_change().iloc[-1]) > 0.005 and vol_ratio < 0.8:
+            situation = "PRICE_ANOMALY"
+            toolkit_names = ["Quantum Scanner", "Flash Arbitrage"]
+
+        # E: TREND -> Check Flows
+        else:
+            situation = "ESTABLISHED_TREND"
+            toolkit_names = ["On-Chain Watcher"]
+
+        print(f"   🧠 Context: {situation}")
+        print(f"   📋 [REQUIREMENTS] I need data from: {', '.join(toolkit_names)}")
+
+        # 4. FETCH DATA (This triggers the DB Lookup + Payment)
+        intel = await self.pipeline.fetch_dynamic_tools(toolkit_names)
         
-        # LOG MISSING DATA EXPLICITLY
-        missing_data = [req for req in required_alpha if req not in intel]
-        
-        if missing_data:
-            print(f"   ⚠️ [INCOMPLETE INTELLIGENCE] I cannot make a decision.")
-            print(f"      I specifically need the following data sources:")
-            for req in missing_data:
-                 print(f"      ❌ [MISSING] {req} Provider")
-            
-            print("   🛑 [DECISION] HOLD. Waiting for data providers to come online.")
+        # 5. VERIFY & EXECUTE
+        # If we didn't get data (payment failed or node missing), ABORT.
+        missing = [t for t in toolkit_names if t not in intel]
+        if missing:
+            print(f"   🛑 [BLOCK] Missing critical data from: {missing}")
+            print("   🛡️ [Risk Protocol] Trade Aborted. Waiting for data providers.")
             return
 
-        # 5. EXECUTION (Only if we have data)
+        # Simple Scoring for Demo
         score = 0
-        for cat, val in intel.items():
-            if hypothesis in ["LONG", "BREAKOUT", "ACCUMULATION_WATCH"] and val > 0.6: score += 1
-            if hypothesis == "SHORT" and val < 0.4: score += 1
-            
-        print(f"   ⚖️ Thesis Score: {score}/{len(required_alpha)}")
+        for name, val in intel.items():
+            print(f"      ✅ Report from {name}: {val:.2f}")
+            # Logic: If trend is UP, we want High scores. If trend DOWN, we want Low scores.
+            if situation in ["PARABOLIC_PUMP", "LIQUIDATION_CASCADE"] and val < 0.4: score += 1
+            elif val > 0.6: score += 1
 
-        if score == len(required_alpha):
-            print(f"   ✅ [EXECUTE] {hypothesis} Confirmed.")
-            if hypothesis in ["LONG", "BREAKOUT", "ACCUMULATION_WATCH"]:
+        action = "HOLD"
+        if score == len(toolkit_names):
+            print(f"   🚀 [EXECUTE] Data confirms thesis.")
+            action = "BUY" if situation != "PARABOLIC_PUMP" else "SELL"
+            
+            if action == "BUY":
                 self.trading_engine.execute_swap("USDC", "WETH", 50.0)
-            elif hypothesis == "SHORT":
+            else:
                 self.trading_engine.execute_swap("WETH", "USDC", 0.1)
         else:
-            print("   ⏸️ [ABORT] Data does not confirm hypothesis.")
+            print("   ⏸️ [HOLD] Data contradicts thesis.")

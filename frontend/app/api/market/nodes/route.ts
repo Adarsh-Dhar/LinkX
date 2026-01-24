@@ -14,23 +14,29 @@ const facilitator = new Facilitator({
 });
 
 export async function GET() {
-  const nodes = await prisma.alphaNode.findMany({
-    orderBy: { price: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      description: true,
-      price: true,
-      reputation: true,
-      status: true,
-      isPurchased: true,
-      icon: true,
-      endpointUrl: true, 
-      apiKey: true
-    }
-  });
-  return NextResponse.json(nodes);
+  try {
+    const nodes = await prisma.alphaNode.findMany({
+      orderBy: { price: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        description: true,
+        price: true,
+        reputation: true,
+        status: true,
+        isPurchased: true,
+        icon: true,
+        endpointUrl: true, 
+        apiKey: true
+      }
+    });
+    console.log('AlphaNode query result:', nodes);
+    return NextResponse.json(nodes);
+  } catch (error) {
+    console.error('AlphaNode API error:', error);
+    return NextResponse.json({ error: String(error), stack: error?.stack }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
