@@ -78,6 +78,9 @@ from web3 import Web3
 from eth_account import Account
 
 
+
+from pathlib import Path
+
 class WalletManager:
     """Manages blockchain wallet operations for the agent"""
 
@@ -98,6 +101,37 @@ class WalletManager:
             "type": "function"
         }
     ]
+
+    TX_LOG_FILE = Path(__file__).parent / "transaction_log.json"
+
+    def log_transaction(self, tx_hash, tx_type, details="", error=None):
+        """
+        Logs every single transaction hash to a JSON file with explorer URL and timestamp.
+        """
+        entry = {
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "tx_hash": tx_hash,
+            "type": tx_type,
+            "details": details,
+            "error": error,
+            "explorer_url": f"https://cronoscan.com/tx/{tx_hash}"
+        }
+        try:
+            with _spend_lock:
+                logs = []
+                if self.TX_LOG_FILE.exists():
+                    try:
+                        with open(self.TX_LOG_FILE, 'r') as f:
+                            logs = json.load(f)
+                    except Exception:
+                        pass
+                logs.append(entry)
+                with open(self.TX_LOG_FILE, 'w') as f:
+                    json.dump(logs, f, indent=2)
+            print(f"📝 [TX LOGGED] {tx_type}: {tx_hash}")
+        except Exception as e:
+            print(f"⚠️ Failed to log tx: {e}")
 
     def log_transaction(self, tx_hash, tx_type, details=None, error=None):
         """
