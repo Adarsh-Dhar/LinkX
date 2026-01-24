@@ -7,8 +7,8 @@ import sys
 # Ensure path is correct
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from main import IntelligentAgent
-from autonomous_loop import run_autonomous_loop
+from .main import IntelligentAgent
+from .autonomous_loop import run_autonomous_loop
 
 app = FastAPI()
 agent_instance = None # Global variable to hold the agent

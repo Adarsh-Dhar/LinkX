@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Simple Alpha-Consumer System Startup Script
-# Fixed Order: Node Server -> Frontend (Wait) -> Python Agent
-
 # --- CLEANUP FUNCTION ---
 cleanup() {
     echo ""
@@ -11,76 +8,64 @@ cleanup() {
     pkill -f "node index.js" || true
     pkill -f "uvicorn agent.api:app" || true
     pkill -f "next-server" || true
-    # Kill the background pnpm processes
     pkill -P $$ 
     exit 0
 }
 
 trap cleanup SIGINT
-set -e
-
-# --- STEP 0: PRE-FLIGHT CLEANUP ---
-echo "🧹 Cleaning up old processes..."
-pkill -f "mock_provider" || true
-pkill -f "uvicorn agent.api:app" || true
-pkill -f "node index.js" || true
-sleep 2
-
-
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-# --- STEP 2: START MARKET SERVER (BACKEND) ---
-echo "📈 Starting Market Analyst Server (Node.js)..."
-cd "$SCRIPT_DIR/server"
-if [ ! -d "node_modules" ]; then
-  pnpm install
-fi
-pnpm start &
 cd "$SCRIPT_DIR"
-sleep 3
 
+echo "🚀 STARTING ALPHA CONSUMER (REAL DATABASE MODE)"
+echo "------------------------------------------------"
 
-# --- STEP 3: START FRONTEND (NEXT.JS) ---
-echo "🖥️  Starting Frontend (Next.js)..."
+# 1. Cleanup
+echo "🧹 Cleaning up..."
+pkill -f "python3.*agent"
+pkill -f "node.*server/index.js"
+pkill -f "next-server"
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+
+# 2. Start Real Data Source (Market Analyst Server)
+echo "📈 Starting Market Analyst Server..."
+cd "$SCRIPT_DIR/server"
+if [ ! -d "node_modules" ]; then pnpm install; fi
+node index.js &
+SERVER_PID=$!
+echo "   ✅ Analyst Server PID: $SERVER_PID"
+sleep 5
+
+# 3. Setup Database (Seed with REAL endpoints)
+echo "🗄️  Setting up Database..."
 cd "$SCRIPT_DIR/frontend"
-if [ ! -d "node_modules" ]; then
-  pnpm install
-fi
-
-# 1. Export the DB URL explicitly for local SQLite
 export DATABASE_URL="file:./agent/agent_state.db"
-
-# 2. Ensure DB schema is up to date (creates file if missing)
-echo "🗄️  Syncing Database Schema..."
 npx prisma db push --accept-data-loss
+echo "🌱 Seeding Database..."
+npx prisma db seed
 
-# 3. (Optional) Seed data if needed
-# npx prisma db seed
-
-# 4. Start Next.js and wait for it to compile
+# 4. Start Frontend
+echo "🖥️  Starting Frontend..."
 pnpm run dev &
-echo "⏳ Waiting 10s for Frontend to boot..."
+FRONTEND_PID=$!
+echo "   ✅ Frontend PID: $FRONTEND_PID"
 sleep 10
 
-# --- STEP 4: START AGENT API (PYTHON) ---
-echo "🤖 Starting Agent API (FastAPI)..."
-cd "$SCRIPT_DIR/agent"
-if [ ! -d "venv" ]; then
-  python3 -m venv venv
-fi
-source venv/bin/activate
-pip install -r requirements.txt > /dev/null 2>&1
+# 5. Start Agent
+echo "🤖 Starting Agent..."
+
+# Setup Python venv and install requirements if needed
+if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
+source "$SCRIPT_DIR/agent/venv/bin/activate"
+pip install -r "$SCRIPT_DIR/agent/requirements.txt"
+export DATABASE_URL="file:frontend/agent/agent_state.db"
+export RPC_URL="https://evm-t3.cronos.org"
+
+# Start the agent API using module mode for correct relative imports
 cd "$SCRIPT_DIR"
-uvicorn agent.api:app --host 0.0.0.0 --port 8000 &
-sleep 2
+python -m agent.api &
+AGENT_PID=$!
 
-echo ""
-echo "✅ All services started in correct order!"
-echo "------------------------------------------------"
-echo "🌐 Frontend: http://localhost:3600"
-echo "📡 Agent API: http://localhost:8000"
-echo "------------------------------------------------"
-echo "Press Ctrl+C to stop all services cleanly."
-
+echo "✅ System Online."
+trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID; exit" SIGINT SIGTERM
 wait

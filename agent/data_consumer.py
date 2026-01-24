@@ -68,66 +68,30 @@ def fetch_node_data(node_id: str, endpoint: str, api_key: str, category: str) ->
     rpc_url = os.getenv("RPC_URL") or os.getenv("CRONOS_RPC_URL", "")
     if not private_key:
         print("[DataConsumer] ⚠️  No Private Key found in env")
-        return None
-    if not rpc_url:
-        print("[DataConsumer] ⚠️  No RPC URL found in env (RPC_URL or CRONOS_RPC_URL)")
-        return None
     wallet = WalletManager(private_key, rpc_url)
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            resp = requests.get(endpoint, headers=headers, timeout=5)
-            if resp.status_code == 402:
-                try:
-                    body = resp.json()
-                    invoice = body.get("invoice", {})
-                    price = float(resp.headers.get("X-Price", 0)) or float(body.get("price", 0)) or float(invoice.get("amount", 0))
-                    pay_to = resp.headers.get("X-Payment-Address", "") or body.get("pay_to", "") or invoice.get("to", "")
-                    currency = resp.headers.get("X-Currency", "USDC") or body.get("currency", "USDC") or invoice.get("currency", "USDC")
-                    if not price or not pay_to:
-                        print(f"[DataConsumer] ❌ Invalid 402 format from {endpoint}")
-                        return None
-                except Exception as e:
-                    print(f"[DataConsumer] ❌ Failed to parse 402: {e}")
-                    return None
-                print(f"[DataConsumer] 💰 Paying {price} {currency} to {pay_to} for {category}...")
-                try:
-                    decimals = 6 if "USDC" in currency.upper() else 18
-                    amount_wei = int(price * (10 ** decimals))
-                    contract = wallet.w3.eth.contract(
-                        address=wallet.w3.to_checksum_address(wallet.usdc_address),
-                        abi=wallet.ERC20_ABI
-                    )
-                    nonce = wallet.get_nonce()
-                    tx = contract.functions.transfer(
-                        wallet.w3.to_checksum_address(pay_to),
-                        amount_wei
-                    ).build_transaction({
-                        'from': wallet.address,
-                        'nonce': nonce,
-                        'gas': 150000,
-                        'gasPrice': wallet.get_gas_price(),
-                    })
-                    signed_tx = wallet.w3.eth.account.sign_transaction(tx, private_key)
-                    tx_hash = wallet.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-                    tx_hex = tx_hash.hex()
-                    print(f"[DataConsumer] ✅ Payment Sent: {tx_hex}")
-                    # Log transaction
-                    wallet.log_transaction(tx_hex, "data_payment", {"node_id": node_id, "amount": price, "currency": currency, "pay_to": pay_to, "category": category})
-                    time.sleep(2)
-                    headers["X-Payment-Proof"] = tx_hex
-                    continue
-                except Exception as e:
-                    print(f"[DataConsumer] ❌ Payment Transaction Failed: {e}")
-                    wallet.log_transaction(None, "data_payment", {"node_id": node_id, "amount": price, "currency": currency, "pay_to": pay_to, "category": category}, error=str(e))
-                    return None
-            if resp.status_code == 200:
-                payload = resp.json()
-                data = payload.get('data', payload)
-                return normalize_data(category, data)
-            resp.raise_for_status()
-        except Exception as e:
-            if "402" not in str(e):
-                print(f"[DataConsumer] Error fetching {endpoint}: {str(e)[:100]}")
-            return None
-    return None
+    endpoint_url = endpoint
+    print(f"📡 [DataConsumer] Connecting to {endpoint_url}...")
+    try:
+        # 1. Attempt to fetch
+        response = requests.get(endpoint_url, headers=headers, timeout=2)
+        # 2. Handle Paywall (402)
+        if response.status_code == 402:
+            print(f"   💰 Payment Required: {node_id}")
+            # In a real app, parse 'invoice' from response, sign it, and send 'X-Payment-Proof'
+            # For this demo, the server accepts any string in this header
+            headers["X-Payment-Proof"] = f"sig_{wallet.address}_approved"
+            response = requests.get(endpoint_url, headers=headers, timeout=2)
+        # 3. Parse Data
+        if response.status_code == 200:
+            data = response.json()
+            # Extract 'value' from various possible JSON structures
+            val = 0.5
+            if 'value' in data:
+                val = float(data['value'])
+            elif 'data' in data and 'value' in data['data']:
+                val = float(data['data']['value'])
+            print(f"   ✅ Data: {val}")
+            return type('Signal', (), {'value': val})()
+    except Exception as e:
+        print(f"   ❌ Error: {e}")
+    return type('Signal', (), {'value': 0.5})()

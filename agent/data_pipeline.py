@@ -1,7 +1,7 @@
 import numpy as np
 import requests
 import random
-from agent.data_consumer import fetch_node_data
+from .data_consumer import fetch_node_data
 
 class DataPipeline:
     def __init__(self, market_manager):

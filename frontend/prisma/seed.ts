@@ -6,9 +6,9 @@ const prisma = new PrismaClient()
 const CATEGORIES = ["Sentiment", "On-Chain", "Technical", "Whale Watch", "News AI", "Macro"];
 const ADJECTIVES = ["Quantum", "Hyper", "Neural", "Deep", "Global", "Fast", "Smart", "Alpha", "Omega", "Prime"];
 const NOUNS = ["Scanner", "Oracle", "Vision", "Flow", "Pulse", "Signal", "Metric", "Index", "Radar", "Sentience"];
-
-function getRandomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+const ADJECTIVES = ["Global", "Fast", "Smart", "Alpha", "Omega", "Prime"];
+const NOUNS = ["Oracle", "Vision", "Flow", "Pulse", "Signal", "Metric", "Index", "Radar"];
 }
 
 function getRandomFloat(min: number, max: number) {

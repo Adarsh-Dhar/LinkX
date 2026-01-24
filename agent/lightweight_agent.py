@@ -33,7 +33,7 @@ except ImportError:
             return []
         def get_normalized_vector(self):
             return []
-from trading_engine import TradingEngine, initialize_engine
+from .trading_engine import TradingEngine, initialize_engine
 
 load_dotenv()
 

@@ -8,7 +8,7 @@ import numpy as np
 try:
     from .data_pipeline import DataPipeline
 except ImportError:
-    from agent.data_pipeline import DataPipeline
+    from .data_pipeline import DataPipeline
 
 
 class PredictiveAgent:

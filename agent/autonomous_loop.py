@@ -1,16 +1,16 @@
 import time
 import threading
 
-from agent.data_consumer import fetch_node_data
-from agent.trading_engine import TradingEngine
-from agent.wallet_manager import get_daily_spend, can_spend
+from .data_consumer import fetch_node_data
+from .trading_engine import TradingEngine
+from .wallet_manager import get_daily_spend, can_spend
 
 # ...existing code...
 
 
 
 import asyncio
-from agent.predictive_agent import PredictiveAgent
+from .predictive_agent import PredictiveAgent
 
 def run_autonomous_loop(agent, interval_sec=10):
     """
