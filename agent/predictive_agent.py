@@ -2,7 +2,6 @@ import asyncio
 import numpy as np
 from datetime import datetime
 
-# Import pipeline
 try:
     from .data_pipeline import DataPipeline
 except ImportError:
@@ -14,70 +13,57 @@ class PredictiveAgent:
         self.trading_engine = trading_engine
 
     async def run_cycle(self):
-        print("\n" + "="*60)
-        print(f"🤖 EXPERT AGENT ANALYSIS - {datetime.now().strftime('%H:%M:%S')}")
+        print("\n" + "─"*50)
+        print(f"🤖 EXPERT AGENT (ETH/USDC) - {datetime.now().strftime('%H:%M:%S')}")
 
-        # --- PHASE 1: TECHNICAL ANALYSIS (The Chart) ---
+        # 1. READ CHART (ETH PRICE)
         prices = self.pipeline.fetch_chart_history()
         
         if len(prices) < 5:
-            print("   ⏳ Waiting for Chart Data (Next.js is compiling/loading)...")
+            print("   ⏳ Waiting for ETH Chart Data...")
             return
 
         current_price = prices[-1]
         start_price = prices[0]
         
-        # Calculate Trend & Volatility
-        trend_pct = (current_price - start_price) / start_price
-        volatility = np.std(prices) / np.mean(prices) * 100
+        # 2. METRICS
+        trend_pct = ((current_price - start_price) / start_price) * 100
+        volatility = np.std(prices[-20:]) if len(prices) > 20 else 0
         
-        print(f"   📊 Chart: Price=${current_price:.4f} | Trend={trend_pct*100:.2f}% | Vol={volatility:.2f}")
+        direction = "FLAT"
+        if trend_pct > 0.02: direction = "UP 🟢"
+        if trend_pct < -0.02: direction = "DOWN 🔴"
 
-        # --- PHASE 2: STRATEGY & DATA BUYING ---
+        print(f"   💎 ETH Price: ${current_price:.2f} | Trend: {trend_pct:.3f}% [{direction}]")
+
+        # 3. STRATEGY
         needed_data = []
-        context = "NEUTRAL"
-        
-        if trend_pct > 0.02: # Up 2%
-            context = "BULLISH"
-            print("   🚀 Setup: BULLISH Trend Detected. Verifying with Sentiment.")
-            needed_data = ["SENTIMENT"]
-            
-        elif trend_pct < -0.02: # Down 2%
-            context = "BEARISH"
-            print("   🔻 Setup: BEARISH Trend Detected. Verifying with Whale Data.")
+        if direction == "UP 🟢":
+            print("   🚀 Setup: ETH Rally. Checking Sentiment.")
+            needed_data = ["SENTIMENT", "NEWS"]
+        elif direction == "DOWN 🔴":
+            print("   🔻 Setup: ETH Dump. Checking On-Chain Support.")
             needed_data = ["ON_CHAIN"]
-            
-        elif volatility > 1.5: # Volatile
-            context = "VOLATILE"
-            print("   🚨 Setup: High Volatility. Checking Technicals.")
-            needed_data = ["TECHNICAL"]
-            
         else:
-            context = "FLAT"
-            print("   😴 Setup: Market Flat. Forcing checks for 'Flash News'.")
-            needed_data = ["NEWS", "SENTIMENT"] # Force buying data to show it works
+            print("   💤 Setup: ETH Ranging. Scanning News.")
+            needed_data = ["NEWS"]
 
-        # --- PHASE 3: EXECUTION ---
-        # Fetch external data (Auto-Pays 402s)
+        # 4. DATA & EXECUTION
         data_signals = await self.pipeline.fetch_specific_nodes(needed_data)
+        score = np.mean(data_signals) if data_signals else 0.5
         
-        avg_score = np.mean(data_signals) if data_signals else 0.5
-        print(f"   🧠 Data Confirmation Score: {avg_score:.2f}")
+        print(f"   🧠 Alpha Score: {score:.2f}")
 
         action = "HOLD"
-        
-        # Decision Matrix
-        if context == "BULLISH" and avg_score > 0.5: action = "BUY"
-        elif context == "BEARISH" and avg_score < 0.5: action = "SELL"
-        elif context == "FLAT" and avg_score > 0.7: action = "BUY"
-        elif context == "FLAT": 
-            # Force trade for demonstration if we bought data but market is boring
-            print("   🎲 [Demo] Market is flat, forcing exploration trade.")
-            action = "BUY" 
+        if score > 0.6: action = "BUY"
+        elif score < 0.4: action = "SELL"
+            
+        print(f"   🎯 DECISION: {action}")
 
-        print(f"   🎯 FINAL DECISION: {action}")
-
+        # SWAP EXECUTION (Using WETH)
         if action == "BUY":
-            self.trading_engine.execute_swap("USDC", "CRO", 10.0)
+            self.trading_engine.execute_swap("USDC", "WETH", 50.0) # Buy $50 ETH
         elif action == "SELL":
-            self.trading_engine.execute_swap("CRO", "USDC", 100.0)
+            self.trading_engine.execute_swap("WETH", "USDC", 0.02) # Sell 0.02 ETH
+
+        return {"action": action}
