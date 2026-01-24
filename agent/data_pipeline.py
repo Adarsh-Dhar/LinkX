@@ -1,64 +1,71 @@
 import requests
 import numpy as np
+import time
 from agent.data_consumer import fetch_node_data
 
 class DataPipeline:
     def __init__(self, market_manager):
         self.market = market_manager
-        # Use 127.0.0.1 to force IPv4 and avoid localhost resolution delays
-        self.chart_api_url = "http://127.0.0.1:3600/api/dashboard/chart"
-        self.nodes_api_url = "http://127.0.0.1:3600/api/market/nodes"
+        # Use localhost to hit the Next.js API
+        self.chart_api_url = "http://localhost:3600/api/dashboard/chart"
+        self.nodes_api_url = "http://localhost:3600/api/market/nodes"
 
     def fetch_chart_history(self):
-        """
-        Fetches real-time candles from the frontend API.
-        Returns a list of closing prices.
-        """
         try:
-            # Short timeout because we want speed
-            response = requests.get(self.chart_api_url, timeout=2)
-            
+            # Short timeout, we want real-time data or fail fast
+            response = requests.get(self.chart_api_url, timeout=1.5)
             if response.status_code == 200:
                 data = response.json()
                 if not data: return []
-
-                # Extract 'value' (Close Price)
-                prices = [float(p['value']) for p in data]
-                
-                # Basic validation
-                if len(prices) > 0:
-                    print(f"   📈 [Pipeline] Chart Data: {len(prices)} points. Current: ${prices[-1]:.4f}")
-                    return prices
-            
-        except Exception as e:
-            # print(f"   ⚠️ [Pipeline] Data Fetch Error: {e}")
+                # Return list of prices
+                return [float(p['value']) for p in data]
+        except:
             pass
-            
         return []
 
     async def fetch_specific_nodes(self, target_categories):
-        """Buys data from nodes matching the strategy categories."""
+        """
+        Finds the BEST provider for the requested category and pays for it.
+        """
         try:
-            res = requests.get(self.nodes_api_url, timeout=2)
+            # 1. Fetch Registry
+            res = requests.get(self.nodes_api_url, timeout=1)
             if res.status_code != 200: return []
-            
             all_nodes = res.json()
-            targets = [n for n in all_nodes if n.get('category') in target_categories]
             
             signals = []
-            if targets:
-                print(f"   🛒 [Pipeline] Analyzing {len(targets)} providers for {target_categories}...")
-                for node in targets:
-                    # Triggers Payment & Fetch
-                    signal = fetch_node_data(
-                        node['id'], node['endpointUrl'], node.get('apiKey'), node['category']
-                    )
-                    signals.append(signal.value if signal else 0.5)
             
+            # 2. Iterate through requirements
+            for category in target_categories:
+                # Find the 'best' node for this category (highest reputation)
+                candidates = [n for n in all_nodes if n.get('category') == category]
+                if not candidates:
+                    print(f"   ⚠️ [Intel] No provider found for {category}")
+                    continue
+                
+                # Pick top rep node
+                best_node = sorted(candidates, key=lambda x: x.get('reputation', 0), reverse=True)[0]
+                
+                print(f"   💸 [Payment] Buying report from: {best_node['name']} ({best_node['price']} USDC)")
+                
+                # Execute Data Purchase (Wallet Transaction)
+                signal = fetch_node_data(
+                    best_node['id'], 
+                    best_node['endpointUrl'], 
+                    best_node.get('apiKey'), 
+                    best_node['category']
+                )
+                
+                if signal:
+                    val = signal.value
+                    sentiment = "Bullish" if val > 0.6 else "Bearish" if val < 0.4 else "Neutral"
+                    print(f"      📄 Report Received: {category} is {sentiment} ({val:.2f})")
+                    signals.append(val)
+                else:
+                    print(f"      ❌ Failed to get report from {best_node['name']}")
+                    
             return signals
-        except Exception as e:
-            print(f"   ❌ [Pipeline] Node Error: {e}")
-            return []
 
-    async def get_market_state(self):
-        return np.zeros(10)
+        except Exception as e:
+            print(f"   ❌ Pipeline Error: {e}")
+            return []
