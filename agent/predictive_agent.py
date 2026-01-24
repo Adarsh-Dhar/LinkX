@@ -1,5 +1,6 @@
 import asyncio
 import numpy as np
+import pandas as pd
 from datetime import datetime
 
 try:
@@ -13,125 +14,109 @@ class PredictiveAgent:
         self.trading_engine = trading_engine
 
     async def run_cycle(self):
-        print("\n" + "─"*60)
-        print(f"🤖 EXPERT TRADER (ALPHA-CONSUMER) - {datetime.now().strftime('%H:%M:%S')}")
+        print("\n" + "─"*65)
+        print(f"🧠 EXPERT CONTEXT ANALYSIS - {datetime.now().strftime('%H:%M:%S')}")
 
-        # ---------------------------------------------------------
-        # PHASE 1: MARKET STRUCTURE ANALYSIS (The "Eyes")
-        # ---------------------------------------------------------
-        prices = self.pipeline.fetch_chart_history()
+        # 1. FETCH & PROCESS DATA (The Tape)
+        df = self.pipeline.fetch_candles()
         
-        if len(prices) < 20:
-            print("   ⏳ [Market] Insufficient liquidity/data. Waiting for candle close...")
+        if df is None:
+            print("   ⏳ [Tape] Insufficient market data. Collecting candles...")
             return
 
-        current_price = prices[-1]
+        current_price = df['close'].iloc[-1]
         
-        # Calculate Advanced Metrics
-        # 1. Short Trend (Last 10 mins)
-        short_trend_pct = ((current_price - prices[-10]) / prices[-10]) * 100
-        # 2. Medium Trend (Last 50 mins)
-        medium_trend_pct = ((current_price - prices[0]) / prices[0]) * 100
-        # 3. Volatility (Standard Deviation normalized)
-        volatility = np.std(prices[-20:]) / np.mean(prices[-20:]) * 100
+        # 2. INTERNAL TOOLKIT CALCULATIONS
+        # RSI (14)
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs)).iloc[-1]
+
+        # Bollinger Band Width
+        sma = df['close'].rolling(window=20).mean()
+        std = df['close'].rolling(window=20).std()
+        bb_width = ((sma + (std * 2)) - (sma - (std * 2)) / sma).iloc[-1] * 100
+
+        # VWAP
+        vwap = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+        vwap_val = vwap.iloc[-1]
+
+        # Volume Delta
+        vol_ma = df['volume'].rolling(window=20).mean().iloc[-1]
+        vol_current = df['volume'].iloc[-1]
+        vol_ratio = vol_current / vol_ma if vol_ma > 0 else 0
+
+        # Trend (5-candle slope)
+        trend_slope = (current_price - df['close'].iloc[-5]) / 5
         
-        # Determine Market Phase
-        market_phase = "UNDEFINED"
-        if volatility < 0.05:
-            market_phase = "ACCUMULATION (Ranging)"
-        elif short_trend_pct > 0.1 and medium_trend_pct > 0.2:
-            market_phase = "BULLISH EXPANSION"
-        elif short_trend_pct < -0.1 and medium_trend_pct < -0.2:
-            market_phase = "BEARISH CORRECTION"
-        elif volatility > 0.2:
-            market_phase = "HIGH VOLATILITY (Choppy)"
+        print(f"   📉 Chart: ${current_price:.2f} | RSI: {rsi:.1f} | VWAP: ${vwap_val:.2f}")
+        print(f"   📊 Volatility: {bb_width:.3f} | Vol Ratio: {vol_ratio:.2f}x")
+
+        # 3. FORMULATE THESIS & SHOPPING LIST
+        hypothesis = "NEUTRAL"
+        required_alpha = []
+
+        # SCENARIO A: SQUEEZE BREAKOUT
+        if bb_width < 0.5 and vol_ratio > 1.5:
+            hypothesis = "BREAKOUT"
+            print("   🚀 Setup: Volatility Squeeze with Volume Spike!")
+            required_alpha = ["NEWS", "ON_CHAIN"] 
+
+        # SCENARIO B: OVERBOUGHT/OVERSOLD
+        elif rsi > 70:
+            hypothesis = "SHORT"
+            print("   ⚠️ Setup: RSI Overbought. Looking for Top.")
+            required_alpha = ["SENTIMENT", "TECHNICAL"]
+        elif rsi < 30:
+            hypothesis = "LONG"
+            print("   💎 Setup: RSI Oversold. Looking for Bounce.")
+            required_alpha = ["SENTIMENT", "ON_CHAIN"]
+            
+        # SCENARIO C: TREND CONTINUATION
+        elif current_price > vwap_val and trend_slope > 0:
+             hypothesis = "LONG"
+             print("   📈 Setup: Price above VWAP. Trend Following.")
+             required_alpha = ["ON_CHAIN"]
+             
+        # SCENARIO D: CONSOLIDATION (The "Chopping" Fix)
         else:
-            market_phase = "CONSOLIDATION"
+            hypothesis = "ACCUMULATION_WATCH"
+            print("   😴 Setup: Market is chopping (Consolidation).")
+            print("      👉 Expert Thesis: Checking for hidden whale accumulation or pending news.")
+            # Even in chop, we want to know if whales are buying the floor
+            required_alpha = ["ON_CHAIN", "NEWS"]
 
-        print(f"   📊 [Chart] Price: ${current_price:.2f} | Vol: {volatility:.3f}%")
-        print(f"   📐 [Structure] Phase: {market_phase}")
-
-        # ---------------------------------------------------------
-        # PHASE 2: STRATEGIC PLANNING (The "Brain")
-        # ---------------------------------------------------------
-        # The agent decides WHAT data it needs based on the Phase
+        # 4. ACQUIRE & VERIFY EXTERNAL DATA
+        # This will try to buy the data. If it fails (DB issue), 'intel' will be missing keys.
+        intel = await self.pipeline.fetch_specific_nodes(required_alpha)
         
-        shopping_list = []
-        hypothesis = ""
-
-        if market_phase == "BULLISH EXPANSION":
-            hypothesis = "Momentum is strong. Is this retail FOMO or real volume?"
-            shopping_list = ["ON_CHAIN", "SENTIMENT"] # Check Volume & Hype
-            
-        elif market_phase == "BEARISH CORRECTION":
-            hypothesis = "Price falling. Looking for support or panic selling."
-            shopping_list = ["TECHNICAL", "SENTIMENT"] # Check Support Levels & Panic
-            
-        elif market_phase == "ACCUMULATION (Ranging)":
-            hypothesis = "Market is sleeping. Scanning for breakout catalysts."
-            shopping_list = ["NEWS", "ON_CHAIN"] # Check for News or Whale Buys
-            
-        elif market_phase == "HIGH VOLATILITY (Choppy)":
-            hypothesis = "Dangerous chop. checking for trend reversal signals."
-            shopping_list = ["TECHNICAL", "VOLATILITY"] # Safe Technicals
-
-        else:
-            hypothesis = "No clear trend. Maintaining baseline awareness."
-            shopping_list = ["NEWS"]
-
-        print(f"   🤔 [Hypothesis] \"{hypothesis}\"")
-        print(f"   🛒 [Strategy] Required Data: {', '.join(shopping_list)}")
-
-        # ---------------------------------------------------------
-        # PHASE 3: INTELLIGENCE GATHERING (The "Action")
-        # ---------------------------------------------------------
-        # This triggers actual blockchain payments for the selected nodes
-        data_signals = await self.pipeline.fetch_specific_nodes(shopping_list)
+        # LOG MISSING DATA EXPLICITLY
+        missing_data = [req for req in required_alpha if req not in intel]
         
-        # If we paid for data but got nothing (e.g., API errors), abort
-        if not data_signals and shopping_list:
-            print("   ⚠️ [Alert] Failed to acquire intelligence. Aborting trade.")
+        if missing_data:
+            print(f"   ⚠️ [INCOMPLETE INTELLIGENCE] I cannot make a decision.")
+            print(f"      I specifically need the following data sources:")
+            for req in missing_data:
+                 print(f"      ❌ [MISSING] {req} Provider")
+            
+            print("   🛑 [DECISION] HOLD. Waiting for data providers to come online.")
             return
 
-        # Calculate a "Confirmation Score" based on the bought data
-        # 0.0 (Bearish) -> 1.0 (Bullish)
-        confirmation_score = np.mean(data_signals) if data_signals else 0.5
-        
-        print(f"   🧠 [Intel] Data Consensus: {confirmation_score:.2f}")
+        # 5. EXECUTION (Only if we have data)
+        score = 0
+        for cat, val in intel.items():
+            if hypothesis in ["LONG", "BREAKOUT", "ACCUMULATION_WATCH"] and val > 0.6: score += 1
+            if hypothesis == "SHORT" and val < 0.4: score += 1
+            
+        print(f"   ⚖️ Thesis Score: {score}/{len(required_alpha)}")
 
-        # ---------------------------------------------------------
-        # PHASE 4: EXECUTION MATRIX (The "Trigger")
-        # ---------------------------------------------------------
-        action = "HOLD"
-        reason = "Waiting for setup"
-
-        # Trading Rules
-        if market_phase == "BULLISH EXPANSION":
-            if confirmation_score > 0.6:
-                action = "BUY"
-                reason = "Trend Up + Data Confirms Strength"
-            elif confirmation_score < 0.4:
-                action = "HOLD"
-                reason = "Trend Up but Data is Weak (Fakeout Warning)"
-
-        elif market_phase == "BEARISH CORRECTION":
-            if confirmation_score < 0.4:
-                action = "SELL"
-                reason = "Trend Down + Data Confirms Weakness"
-            elif confirmation_score > 0.7:
-                action = "BUY"
-                reason = "Oversold Bounce Detected (Contrarian)"
-
-        elif market_phase == "ACCUMULATION (Ranging)":
-            if confirmation_score > 0.8:
-                action = "BUY"
-                reason = "Whale Accumulation / News Catalyst in Range"
-
-        # Execute
-        print(f"   🎯 [Decision] {action} | Reason: {reason}")
-
-        if action == "BUY":
-            # Dynamic position sizing could go here
-            self.trading_engine.execute_swap("USDC", "WETH", 100.0) 
-        elif action == "SELL":
-            self.trading_engine.execute_swap("WETH", "USDC", 0.05)
+        if score == len(required_alpha):
+            print(f"   ✅ [EXECUTE] {hypothesis} Confirmed.")
+            if hypothesis in ["LONG", "BREAKOUT", "ACCUMULATION_WATCH"]:
+                self.trading_engine.execute_swap("USDC", "WETH", 50.0)
+            elif hypothesis == "SHORT":
+                self.trading_engine.execute_swap("WETH", "USDC", 0.1)
+        else:
+            print("   ⏸️ [ABORT] Data does not confirm hypothesis.")
