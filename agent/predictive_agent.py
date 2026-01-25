@@ -47,6 +47,8 @@ class PredictiveAgent:
     async def run_cycle(self):
         print("\n" + "═"*70)
         print(f"♟️  EXPERT TRADER CONTEXT ENGINE - {datetime.now().strftime('%H:%M:%S')}")
+        decision_mode = "STANDARD"
+        risk_multiplier = 1.0
 
         # --- FORCE_ACTION OVERRIDE BLOCK ---
         force_action = os.getenv("FORCE_ACTION")
@@ -108,26 +110,32 @@ class PredictiveAgent:
         print(f"   🧠 Context: {situation}")
         print(f"   📋 [REQUIREMENTS] Ideal Arsenal: {', '.join(toolkit_names)}")
 
-        # 4. DYNAMIC FETCH (ENFORCED)
-        intel, fetch_failed = await self.pipeline.fetch_dynamic_tools(toolkit_names)
+
+        # 4. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
+        # This call now performs the 'Fetch All -> Filter -> Buy' logic
+        result = await self.pipeline.fetch_dynamic_tools(toolkit_names)
+        if result is None:
+            intel, fetch_failed = {}, True
+        else:
+            intel, fetch_failed = result
 
         acquired_count = len(intel)
         needed_count = len(toolkit_names)
 
-        # NEW: Strict Requirement Check
+        # NEW REQUIREMENT: Only proceed if all filtered tools are purchased
         if needed_count > 0 and (fetch_failed or acquired_count < needed_count):
-            print(f"⚠️ [SKEPTICAL] Failed to acquire full arsenal. Found {acquired_count}/{needed_count} tools.")
-            self.log_decision("HOLD", "INSUFFICIENT_DATA", "Missing mandatory paid signals")
+            print(f"   ⚠️ [SKEPTICAL] Incomplete arsenal. Buying data failed for required nodes.")
+            self.log_decision("HOLD", "INCOMPLETE_INTEL", f"Required {needed_count}, but only bought {acquired_count}")
             return
 
-        # 6. SCORING LOGIC
+        # 5. CONCLUSION (Only proceeds if paid data is present)
         score = 0
         for name, val in intel.items():
             print(f"      ✅ Report from {name}: {val:.2f}")
             if val > 0.6: score += 1
             elif val < 0.4: score -= 1
 
-        # 7. EXECUTION
+        # 6. EXECUTION
         action = "HOLD"
         
         # Bullish Situations

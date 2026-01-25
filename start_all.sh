@@ -31,12 +31,14 @@ sleep 5
 # 3. Setup Database
 echo "🗄️  Setting up Database..."
 cd "$SCRIPT_DIR/frontend"
-export DATABASE_URL="file:./agent/agent_state.db"
+DB_PATH="$SCRIPT_DIR/agent/agent_state.db"
+export DATABASE_URL="file:$DB_PATH"
 npx prisma db push --accept-data-loss
 npx prisma db seed
 
 # 4. Start Frontend
 echo "🖥️  Starting Frontend..."
+export DATABASE_URL="file:$DB_PATH"
 pnpm run dev &
 FRONTEND_PID=$!
 echo "   ✅ Frontend PID: $FRONTEND_PID"
@@ -49,7 +51,7 @@ cd "$SCRIPT_DIR/agent"
 if [ ! -d "venv" ]; then python3 -m venv venv; fi
 source venv/bin/activate
 pip install -r requirements.txt
-export DATABASE_URL="file:../frontend/agent/agent_state.db"
+export DATABASE_URL="file:$DB_PATH"
 export RPC_URL="https://evm-t3.cronos.org"
 export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
 

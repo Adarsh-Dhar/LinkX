@@ -45,67 +45,62 @@ class DataPipeline:
             print(f"   ⚠️ Fetch Error: {e}")
         return None
 
-    async def fetch_dynamic_tools(self, tool_names):
+    async def fetch_dynamic_tools(self, toolkit_names):
         """
-        Tries to find exact tool -> Falls back to Category -> Returns nothing if empty.
-        """
-        results = {}
-        """
-        Tries to find exact tool -> Falls back to Category -> Returns nothing if empty.
+        NEW LOGIC:
+        1. Get ALL data nodes from DB first.
+        2. Filter based on what the agent 'thinks' it needs.
+        3. Buy only those matches.
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
         results = {}
         failure_flag = False
-        if not tool_names:
-            return results, False
-
+        if not toolkit_names:
+            return results, failure_flag
         try:
-            # 1. LIVE SYNC: Fetch current inventory and build category map
-            all_nodes = await self.refresh_market_knowledge()
-            if not all_nodes:
-                return {}, True
+            # STEP 1: Get ALL data from DB first
+            res = requests.get(self.nodes_api_url, timeout=5)
+            if res.status_code != 200:
+                print("   ⚠️ Database API unreachable.")
+                return results, True
+            inventory = res.json()
+            active_inventory = [n for n in inventory if n.get('status') == 'active']
+            print(f"   📂 [DB] Fetched {len(active_inventory)} active nodes from inventory.")
 
-            # Filter for active nodes only to prevent buying from "dead" nodes
-            active_nodes = [n for n in all_nodes if n.get('status') == 'active']
+            # STEP 2: 'Think' - Filter inventory for what is needed
+            for name in toolkit_names:
+                # Look for exact match first
+                target_node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
 
-            print(f"   🕵️ [Intel] Scanning Market for: {tool_names}...")
-
-            for name in tool_names:
-                # STRATEGY A: EXACT MATCH (using live active nodes)
-                target_node = next((n for n in active_nodes if n['name'].lower() == name.lower()), None)
-
-                # STRATEGY B: CATEGORY FALLBACK (using dynamic map)
+                # If no exact match, filter by category to find a substitute
                 if not target_node:
-                    category = self.TOOL_CATEGORIES.get(name)
+                    category = next((n['category'] for n in inventory if n['name'].lower() == name.lower()), None)
                     if category:
-                        substitutes = [n for n in active_nodes if n['category'] == category]
+                        substitutes = [n for n in active_inventory if n['category'] == category]
                         if substitutes:
-                            # Pick highest reputation substitute available in DB
+                            # Select best substitute (highest reputation)
                             target_node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
-                            print(f"      ⚠️ Tool '{name}' missing. Using available substitute: '{target_node['name']}'")
-                if not target_node:
-                    print(f"      ❌ {name} unavailable. No substitutes found.")
-                    failure_flag = True
-                    continue
+                            print(f"      🤔 [Thought] '{name}' not found. Using substitute '{target_node['name']}' from category '{category}'.")
 
-                # STRATEGY C: EXECUTE TRANSACTION
-                print(f"   🛒 [Purchase] Paying {target_node['price']} USDC for: {target_node['name']}...")
-
-                signal = fetch_node_data(
-                    target_node['id'],
-                    target_node.get('endpointUrl'),
-                    target_node.get('apiKey'),
-                    target_node['category']
-                )
-
-                if signal:
-                    results[name] = signal.value # Store under original requested name for logic compatibility
+                # STEP 3: Execute the purchase for filtered nodes
+                if target_node:
+                    print(f"   🛒 [Action] Buying data from: {target_node['name']}...")
+                    signal = fetch_node_data(
+                        target_node['id'],
+                        target_node.get('endpointUrl'),
+                        target_node.get('apiKey'),
+                        target_node['category']
+                    )
+                    if signal:
+                        results[name] = signal.value
+                    else:
+                        print(f"      ❌ Failed to acquire data for {name}.")
+                        failure_flag = True
                 else:
-                    print(f"      ❌ Failed to acquire data for {name}.")
+                    print(f"      ❌ [Thought] No relevant node found for '{name}' in DB.")
                     failure_flag = True
-
         except Exception as e:
-            print(f"   ⚠️ Pipeline Error: {e}")
+            print(f"   ⚠️ [Error] Pipeline failure during DB filter: {e}")
             failure_flag = True
-
+            return results, failure_flag
         return results, failure_flag

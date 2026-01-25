@@ -4,7 +4,14 @@ from .wallet_manager import WalletManager
 
 def fetch_node_data(node_id, endpoint_url, api_key, category):
     from .wallet_manager import log_data_purchase
-    wallet = WalletManager()
+    import os
+    from dotenv import load_dotenv
+    from pathlib import Path
+    # Load .env from project root if not already loaded
+    load_dotenv(Path(__file__).parent.parent / '.env')
+    private_key = os.getenv("WALLET_PRIVATE_KEY")
+    rpc_url = os.getenv("CRONOS_RPC_URL", os.getenv("RPC_URL"))
+    wallet = WalletManager(private_key, rpc_url)
     headers = {"Content-Type": "application/json"}
     if not endpoint_url or "http" not in endpoint_url:
         print("      ❌ Error: Invalid Endpoint URL.")
