@@ -50,14 +50,20 @@ class DataPipeline:
         Tries to find exact tool -> Falls back to Category -> Returns nothing if empty.
         """
         results = {}
+        """
+        Tries to find exact tool -> Falls back to Category -> Returns nothing if empty.
+        Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
+        """
+        results = {}
+        failure_flag = False
         if not tool_names:
-            return results
+            return results, False
 
         try:
             # 1. LIVE SYNC: Fetch current inventory and build category map
             all_nodes = await self.refresh_market_knowledge()
             if not all_nodes:
-                return {}
+                return {}, True
 
             # Filter for active nodes only to prevent buying from "dead" nodes
             active_nodes = [n for n in all_nodes if n.get('status') == 'active']
@@ -77,9 +83,9 @@ class DataPipeline:
                             # Pick highest reputation substitute available in DB
                             target_node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
                             print(f"      ⚠️ Tool '{name}' missing. Using available substitute: '{target_node['name']}'")
-
                 if not target_node:
                     print(f"      ❌ {name} unavailable. No substitutes found.")
+                    failure_flag = True
                     continue
 
                 # STRATEGY C: EXECUTE TRANSACTION
@@ -95,9 +101,11 @@ class DataPipeline:
                 if signal:
                     results[name] = signal.value # Store under original requested name for logic compatibility
                 else:
-                    print(f"      ❌ Failed to acquire data.")
+                    print(f"      ❌ Failed to acquire data for {name}.")
+                    failure_flag = True
 
         except Exception as e:
             print(f"   ⚠️ Pipeline Error: {e}")
+            failure_flag = True
 
-        return results
+        return results, failure_flag

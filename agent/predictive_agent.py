@@ -108,38 +108,24 @@ class PredictiveAgent:
         print(f"   🧠 Context: {situation}")
         print(f"   📋 [REQUIREMENTS] Ideal Arsenal: {', '.join(toolkit_names)}")
 
-        # 4. DYNAMIC FETCH (With Fallback)
-        intel = await self.pipeline.fetch_dynamic_tools(toolkit_names)
+        # 4. DYNAMIC FETCH (ENFORCED)
+        intel, fetch_failed = await self.pipeline.fetch_dynamic_tools(toolkit_names)
 
-        # Handle missing data gracefully
         acquired_count = len(intel)
         needed_count = len(toolkit_names)
 
-        risk_multiplier = 1.0
-        decision_mode = "STANDARD"
+        # NEW: Strict Requirement Check
+        if needed_count > 0 and (fetch_failed or acquired_count < needed_count):
+            print(f"⚠️ [SKEPTICAL] Failed to acquire full arsenal. Found {acquired_count}/{needed_count} tools.")
+            self.log_decision("HOLD", "INSUFFICIENT_DATA", "Missing mandatory paid signals")
+            return
 
-        if needed_count > 0 and acquired_count == 0:
-            decision_mode = "BLIND_TECHNICALS"
-            risk_multiplier = 0.1 # Trade 10% size only
-            print("   ⚠️ [SKEPTICAL] Zero external data found. Relying purely on Chart.")
-        elif acquired_count < needed_count:
-            decision_mode = "PARTIAL_INTEL"
-            risk_multiplier = 0.5 # Trade 50% size
-            print(f"   ⚠️ [CAUTION] Only {acquired_count}/{needed_count} tools available. Reducing size.")
-        
         # 6. SCORING LOGIC
         score = 0
-        # If we have NO data, we infer score from the chart itself (Fallback)
-        if decision_mode == "BLIND_TECHNICALS":
-            if situation == "PARABOLIC_PUMP": score = -1 # Assume fade
-            elif situation == "LIQUIDATION_CASCADE": score = 1 # Assume bounce
-            elif situation == "ESTABLISHED_TREND": score = 1
-        else:
-            # Standard Data Scoring
-            for name, val in intel.items():
-                print(f"      ✅ Report from {name}: {val:.2f}")
-                if val > 0.6: score += 1
-                elif val < 0.4: score -= 1
+        for name, val in intel.items():
+            print(f"      ✅ Report from {name}: {val:.2f}")
+            if val > 0.6: score += 1
+            elif val < 0.4: score -= 1
 
         # 7. EXECUTION
         action = "HOLD"
