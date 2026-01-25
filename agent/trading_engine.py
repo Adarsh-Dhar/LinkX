@@ -10,6 +10,36 @@ load_dotenv(Path(__file__).parent.parent / '.env')
 from typing import Optional, Any, Dict
 
 class TradingEngine:
+    def ensure_allowance(self, token_address, spender_address, amount):
+        """
+        Ensure the DEX router (spender) has enough allowance to spend the token (e.g., USDC) from our wallet.
+        This is required for ERC20 tokens: the router cannot transfer tokens from our wallet unless
+        we have previously approved it. If allowance is insufficient, approve an infinite amount
+        (2**256 - 1) to avoid repeated approvals and reduce gas costs.
+        """
+        token_abi = getattr(self.wallet, 'usdc_abi', self.wallet.ERC20_ABI)
+        token_contract = self.w3.eth.contract(address=token_address, abi=token_abi)
+        current_allowance = token_contract.functions.allowance(self.wallet.address, spender_address).call()
+        if current_allowance < amount:
+            print(f"🔓 [Auth] Approving {spender_address} to spend tokens...")
+            approve_tx = token_contract.functions.approve(
+                spender_address,
+                2**256 - 1
+            ).build_transaction({
+                'from': self.wallet.address,
+                'nonce': self.w3.eth.get_transaction_count(self.wallet.address),
+                'gas': 100000,
+                'gasPrice': self.w3.eth.gas_price
+            })
+            signed_tx = self.w3.eth.account.sign_transaction(approve_tx, private_key=self.wallet.private_key)
+            tx_bytes = getattr(signed_tx, 'rawTransaction', None)
+            if tx_bytes is None:
+                tx_bytes = getattr(signed_tx, 'raw_transaction', None)
+            if tx_bytes is None:
+                raise Exception("SignedTransaction object has no rawTransaction or raw_transaction attribute.")
+            tx_hash = self.w3.eth.send_raw_transaction(tx_bytes)
+            self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            print("✅ [Auth] Approval confirmed.")
     def __init__(self, wallet_manager):
         self.wallet = wallet_manager
         self.w3 = self.wallet.w3
@@ -21,7 +51,11 @@ class TradingEngine:
             print("   (Trades will fail with raw network errors)")
 
     def execute_swap(self, token_in, token_out, amount_in, slippage_tolerance=1.0):
-        """Executes a real swap and returns the actual Tx Hash, with robust error reporting."""
+        """
+        Executes a real swap and returns the actual Tx Hash, with robust error reporting.
+        Before swapping, ensures the router has permission to spend the token (calls ensure_allowance).
+        This prevents 'execution reverted' errors due to missing ERC20 approval.
+        """
         try:
             print(f"⚡ [TradingEngine] Attempting REAL Swap {amount_in} {token_in} -> {token_out}")
             # 1. Setup Addresses (from wallet_manager fields)
@@ -49,6 +83,9 @@ class TradingEngine:
             if balance < amount:
                 raise Exception(f"Insufficient {token_in} balance. Have: {balance/10**decimals}, Need: {amount_in}")
 
+            # 4b. Ensure allowance for router (for USDC or token_in)
+            self.ensure_allowance(token_addr, router_addr, amount)
+
             # 5. Build Transaction
             deadline = int(time.time()) + 600
             router_abi = getattr(self.wallet, 'router_abi', getattr(self.wallet, 'VVS_ROUTER_ABI', self.wallet.ERC20_ABI))
@@ -67,7 +104,7 @@ class TradingEngine:
             })
 
             # 6. Sign and Broadcast
-            signed_tx = self.w3.eth.account.sign_transaction(swap_tx, private_key=self.wallet.key)
+            signed_tx = self.w3.eth.account.sign_transaction(swap_tx, private_key=self.wallet.private_key)
             print("   📡 Broadcasting to network...")
             # Use correct attribute for Web3.py SignedTransaction
             tx_bytes = getattr(signed_tx, 'rawTransaction', None)

@@ -127,7 +127,7 @@ class WalletManager:
     router_address = "0x87AE95401447ef92c32f047a79F51Ed4879D516f"
     """Manages blockchain wallet operations for the agent"""
 
-    # Standard ERC20 ABI for balance checking
+    # Standard ERC20 ABI for balance checking and allowance
     ERC20_ABI = [
         {
             "constant": True,
@@ -141,6 +141,26 @@ class WalletManager:
             "inputs": [],
             "name": "decimals",
             "outputs": [{"name": "", "type": "uint8"}],
+            "type": "function"
+        },
+        {
+            "constant": False,
+            "inputs": [
+                {"name": "_spender", "type": "address"},
+                {"name": "_value", "type": "uint256"}
+            ],
+            "name": "approve",
+            "outputs": [{"name": "", "type": "bool"}],
+            "type": "function"
+        },
+        {
+            "constant": True,
+            "inputs": [
+                {"name": "_owner", "type": "address"},
+                {"name": "_spender", "type": "address"}
+            ],
+            "name": "allowance",
+            "outputs": [{"name": "remaining", "type": "uint256"}],
             "type": "function"
         }
     ]
@@ -239,7 +259,8 @@ class WalletManager:
         try:
             self.account = Account.from_key(private_key)
             self.address = self.account.address
-            self.key = private_key  # Ensure key is available for TradingEngine
+            self.key = private_key  # legacy, for compatibility
+            self.private_key = private_key  # Expose for TradingEngine
         except Exception as e:
             print(f"[WalletManager] ❌ Error initializing account from private key: {type(e).__name__}: {e}")
             traceback.print_exc()

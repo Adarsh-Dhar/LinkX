@@ -2,6 +2,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import os
 
 try:
     from .data_pipeline import DataPipeline
@@ -9,6 +10,31 @@ except ImportError:
     from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
+    async def execute_trade(self, action, risk_factor=1.0):
+        """
+        Execute a forced BUY or SELL action with the given risk factor.
+        """
+        if action == "BUY":
+            amount = 100.0 * risk_factor
+            print(f"   🚀 [FORCED] Executing BUY for {amount} USDC")
+            tx_hash = self.trading_engine.execute_swap("USDC", "WETH", amount)
+            if tx_hash:
+                self.log_decision("BUY", "SUCCESS", f"Tx: {tx_hash}")
+            else:
+                print(f"   ⚠️ [TRADE_FAILED] Agent aborting cycle due to execution error.")
+                self.log_decision("BUY", "FAILED", "Execution engine returned no hash")
+        elif action == "SELL":
+            amount = 0.1 * risk_factor
+            print(f"   📉 [FORCED] Executing SELL for {amount} WETH")
+            tx_hash = self.trading_engine.execute_swap("WETH", "USDC", amount)
+            if tx_hash:
+                self.log_decision("SELL", "SUCCESS", f"Tx: {tx_hash}")
+            else:
+                print(f"   ⚠️ [TRADE_FAILED] Agent aborting cycle due to execution error.")
+                self.log_decision("SELL", "FAILED", "Execution engine returned no hash")
+        else:
+            print(f"   ⚠️ [FORCED] Unknown action: {action}")
+            self.log_decision(action, "FAILED", "Unknown forced action")
 
     def log_decision(self, action, status, details):
         """Log trade decision (stub: print, or extend to file/db as needed)."""
@@ -21,6 +47,18 @@ class PredictiveAgent:
     async def run_cycle(self):
         print("\n" + "═"*70)
         print(f"♟️  EXPERT TRADER CONTEXT ENGINE - {datetime.now().strftime('%H:%M:%S')}")
+
+        # --- FORCE_ACTION OVERRIDE BLOCK ---
+        force_action = os.getenv("FORCE_ACTION")
+        if force_action == "SELL":
+            print(f"🚨 [OVERRIDE] Manual SELL triggered via environment variable.")
+            await self.execute_trade("SELL", risk_factor=1.0)
+            return  # End cycle after forced trade
+        elif force_action == "BUY":
+            print(f"🚨 [OVERRIDE] Manual BUY triggered via environment variable.")
+            await self.execute_trade("BUY", risk_factor=1.0)
+            return  # End cycle after forced trade
+        # --- END OVERRIDE BLOCK ---
 
         # 1. READ THE TAPE
         df = self.pipeline.fetch_candles()
