@@ -67,19 +67,18 @@ class PredictiveAgent:
 
         # 4. DYNAMIC FETCH (With Fallback)
         intel = await self.pipeline.fetch_dynamic_tools(toolkit_names)
-        
-        # 5. RISK & CONFIDENCE CALCULATION
+
+        # Handle missing data gracefully
         acquired_count = len(intel)
         needed_count = len(toolkit_names)
-        
+
         risk_multiplier = 1.0
         decision_mode = "STANDARD"
 
-        if acquired_count == 0 and needed_count > 0:
+        if needed_count > 0 and acquired_count == 0:
             decision_mode = "BLIND_TECHNICALS"
             risk_multiplier = 0.1 # Trade 10% size only
             print("   ⚠️ [SKEPTICAL] Zero external data found. Relying purely on Chart.")
-            
         elif acquired_count < needed_count:
             decision_mode = "PARTIAL_INTEL"
             risk_multiplier = 0.5 # Trade 50% size

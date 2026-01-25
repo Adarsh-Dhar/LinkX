@@ -3,6 +3,10 @@ import os
 import time
 from web3 import Web3
 
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
 from typing import Optional, Any, Dict
 
 class TradingEngine:

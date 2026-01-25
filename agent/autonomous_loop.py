@@ -1,6 +1,10 @@
 import time
 import threading
 
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
 from agent.data_consumer import fetch_node_data
 from agent.trading_engine import TradingEngine
 from agent.wallet_manager import get_daily_spend, can_spend

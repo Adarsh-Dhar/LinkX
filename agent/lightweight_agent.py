@@ -6,6 +6,10 @@ Integrated with 48-Node Ecosystem via SmartRouter
 Powered by Neural Network Brain for AI-driven decisions
 """
 
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
 import os
 import json
 import requests

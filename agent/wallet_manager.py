@@ -1,5 +1,9 @@
 # --- Autonomous Loop Spend Controls (Production Logic) ---
 
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
 import os
 import datetime
 import subprocess
@@ -196,6 +200,7 @@ class WalletManager:
         try:
             self.account = Account.from_key(private_key)
             self.address = self.account.address
+            self.key = private_key  # Ensure key is available for TradingEngine
         except Exception as e:
             print(f"[WalletManager] ❌ Error initializing account from private key: {type(e).__name__}: {e}")
             traceback.print_exc()

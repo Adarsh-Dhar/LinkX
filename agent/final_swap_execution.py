@@ -12,6 +12,10 @@ This demonstrates the complete trading flow:
 For production: Would use real router after liquidity is added
 """
 
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
 from pathlib import Path
 from web3 import Web3
 from eth_account import Account

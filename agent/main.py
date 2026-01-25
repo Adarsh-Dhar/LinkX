@@ -23,9 +23,14 @@ class MarketManager:
 
 class IntelligentAgent:
     def __init__(self):
-        load_dotenv()
+        # Always load .env from workspace root
+        from pathlib import Path
+        env_path = Path(__file__).parent.parent / '.env'
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
         print("🤖 [Main] Initializing Intelligent Agent...")
         # 1. Wallet
+        print("DEBUG WALLET_PRIVATE_KEY:", os.getenv("WALLET_PRIVATE_KEY"))
         private_key = os.getenv("WALLET_PRIVATE_KEY")
         rpc_url = os.getenv("CRONOS_RPC_URL", os.getenv("RPC_URL", "https://evm-t3.cronos.org"))
         self.wallet = WalletManager(private_key, rpc_url)
