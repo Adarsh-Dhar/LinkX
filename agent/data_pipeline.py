@@ -47,10 +47,10 @@ class DataPipeline:
 
     async def fetch_dynamic_tools(self, toolkit_names):
         """
-        NEW LOGIC:
-        1. Get ALL data nodes from DB first.
-        2. Filter based on what the agent 'thinks' it needs.
-        3. Buy only those matches.
+        x402 Payment Flow:
+        1. Get ALL from DB first (Thinking phase)
+        2. Filter for the specific tool or category fallback
+        3. Execute x402 payment and return test data if payment is successful
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
         results = {}
@@ -58,7 +58,6 @@ class DataPipeline:
         if not toolkit_names:
             return results, failure_flag
         try:
-            # STEP 1: Get ALL data from DB first
             res = requests.get(self.nodes_api_url, timeout=5)
             if res.status_code != 200:
                 print("   ⚠️ Database API unreachable.")
@@ -67,29 +66,26 @@ class DataPipeline:
             active_inventory = [n for n in inventory if n.get('status') == 'active']
             print(f"   📂 [DB] Fetched {len(active_inventory)} active nodes from inventory.")
 
-            # STEP 2: 'Think' - Filter inventory for what is needed
             for name in toolkit_names:
-                # Look for exact match first
+                # Filter for the specific tool
                 target_node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
 
-                # If no exact match, filter by category to find a substitute
+                # Category Fallback logic
                 if not target_node:
                     category = next((n['category'] for n in inventory if n['name'].lower() == name.lower()), None)
                     if category:
                         substitutes = [n for n in active_inventory if n['category'] == category]
                         if substitutes:
-                            # Select best substitute (highest reputation)
                             target_node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
-                            print(f"      🤔 [Thought] '{name}' not found. Using substitute '{target_node['name']}' from category '{category}'.")
 
-                # STEP 3: Execute the purchase for filtered nodes
                 if target_node:
-                    print(f"   🛒 [Action] Buying data from: {target_node['name']}...")
+                    # 2. Trigger the x402 Payment Flow
                     signal = fetch_node_data(
                         target_node['id'],
                         target_node.get('endpointUrl'),
                         target_node.get('apiKey'),
-                        target_node['category']
+                        target_node['category'],
+                        price=float(target_node.get('price', 0.0))
                     )
                     if signal:
                         results[name] = signal.value
@@ -97,10 +93,10 @@ class DataPipeline:
                         print(f"      ❌ Failed to acquire data for {name}.")
                         failure_flag = True
                 else:
-                    print(f"      ❌ [Thought] No relevant node found for '{name}' in DB.")
+                    print(f"      ❌ [DB] No active nodes found for '{name}'.")
                     failure_flag = True
+            return results, failure_flag
         except Exception as e:
-            print(f"   ⚠️ [Error] Pipeline failure during DB filter: {e}")
+            print(f"   ⚠️ Pipeline Sync Error: {e}")
             failure_flag = True
             return results, failure_flag
-        return results, failure_flag

@@ -86,6 +86,49 @@ from eth_account import Account
 from pathlib import Path
 
 class WalletManager:
+    def transfer_usdc(self, to_address: str, amount: float):
+        """
+        Transfer USDC tokens to a recipient address.
+        Args:
+            to_address (str): The recipient's wallet address.
+            amount (float): Amount of USDC to send (in human units, e.g., 0.45).
+        Returns:
+            str: Transaction hash if successful, None otherwise.
+        """
+        if not self.usdc_address:
+            print("❌ USDC contract address not configured.")
+            return None
+        try:
+            contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(self.usdc_address),
+                abi=self.ERC20_ABI
+            )
+            # Get decimals
+            try:
+                decimals = contract.functions.decimals().call()
+            except:
+                decimals = 6  # Default for USDC
+            amount_wei = int(amount * (10 ** decimals))
+            nonce = self.w3.eth.get_transaction_count(self.address)
+            tx = contract.functions.transfer(
+                Web3.to_checksum_address(to_address),
+                amount_wei
+            ).build_transaction({
+                'from': self.address,
+                'nonce': nonce,
+                'gas': 100000,
+                'gasPrice': self.w3.eth.gas_price
+            })
+            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            self.log_transaction(tx_hash.hex(), "USDC_TRANSFER", f"Sent {amount} USDC to {to_address}")
+            print(f"✅ USDC transfer broadcasted: {tx_hash.hex()}")
+            return tx_hash.hex()
+        except Exception as e:
+            print(f"❌ Error sending USDC: {e}")
+            self.log_transaction(None, "USDC_TRANSFER_FAIL", f"Failed to send {amount} USDC to {to_address}", error=str(e))
+            return None
+
     # Full VVS Router ABI (from abi/vvsrouter.ts)
     VVS_ROUTER_ABI = [
         {"type": "function", "name": "swapExactTokensForTokens", "inputs": [
@@ -161,6 +204,16 @@ class WalletManager:
             ],
             "name": "allowance",
             "outputs": [{"name": "remaining", "type": "uint256"}],
+            "type": "function"
+        },
+        {
+            "constant": False,
+            "inputs": [
+                {"name": "_to", "type": "address"},
+                {"name": "_value", "type": "uint256"}
+            ],
+            "name": "transfer",
+            "outputs": [{"name": "", "type": "bool"}],
             "type": "function"
         }
     ]
