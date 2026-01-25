@@ -19,8 +19,9 @@ class PredictiveAgent:
 
         # 1. READ THE TAPE
         df = self.pipeline.fetch_candles()
+        # This condition now enforces your '20 discrete minutes' rule
         if df is None or len(df) < 20:
-            print("   ⏳ [Tape] Insufficient market data...")
+            print("   ⏳ [Tape] Synchronizing real-time minutes (Waiting for 20/20)...")
             return
 
         curr = df['close'].iloc[-1]
