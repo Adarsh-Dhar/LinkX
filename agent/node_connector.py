@@ -350,21 +350,32 @@ class NodeConnector:
         }
     
     async def execute_batch(self, requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Execute multiple provider fetches in parallel"""
+        """
+        Execute multiple provider fetches in parallel, supporting multiple categories and simulating 402 payment loop for each node.
+        Each request can specify a method, params, and category. Results are returned in the same order as requests.
+        """
         if not self.session:
             await self.connect()
-        
-        tasks = [
-            self.get_data(
-                req.get("method", "fetch"),
-                req.get("params", []),
-                req.get("category")
-            )
-            for req in requests
-        ]
-        
+
+        async def fetch_one(req):
+            # Each request can specify a method, params, and category
+            method = req.get("method", "fetch")
+            params = req.get("params", [])
+            category = req.get("category")
+            # get_data handles the simulated 402 payment loop and returns node data
+            result = await self.get_data(method, params, category)
+            return result
+
+        tasks = [fetch_one(req) for req in requests]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return results
+        # Optionally filter out exceptions and log errors
+        clean_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                clean_results.append({"data": None, "error": str(res), "success": False})
+            else:
+                clean_results.append(res)
+        return clean_results
 
     async def get_feature_vector(self) -> Dict[str, Any]:
         """Fetch from all nodes and return a normalized 48-feature vector"""

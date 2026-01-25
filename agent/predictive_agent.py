@@ -10,6 +10,34 @@ except ImportError:
     from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
+    # Map market situations to required nodes and consensus thresholds
+    SITUATION_REQUIREMENTS = {
+        "PARABOLIC_PUMP": {
+            "nodes": ["Whale Alert", "Social Pulse", "Chainlink Sentinel", "Sentiment Surge", "Macro News AI"],
+            "consensus": 0.8
+        },
+        "LIQUIDATION_CASCADE": {
+            "nodes": ["Chainlink Sentinel", "Sentiment Surge", "Whale Alert"],
+            "consensus": 0.7
+        },
+        "VOLATILITY_SQUEEZE": {
+            "nodes": ["Macro News AI", "Neural Oracle", "On-Chain Watcher"],
+            "consensus": 0.6
+        },
+        "PRICE_ANOMALY": {
+            "nodes": ["Quantum Scanner", "Flash Arbitrage", "Chainlink Sentinel"],
+            "consensus": 0.7
+        },
+        "ESTABLISHED_TREND": {
+            "nodes": ["On-Chain Watcher", "Macro News AI"],
+            "consensus": 0.5
+        },
+        "NOISE": {
+            "nodes": ["On-Chain Watcher"],
+            "consensus": 0.5
+        }
+    }
+
     async def execute_trade(self, action, risk_factor=1.0):
         """
         Execute a forced BUY or SELL action with the given risk factor.
@@ -89,26 +117,24 @@ class PredictiveAgent:
 
         # 3. SITUATION MAPPING
         situation = "NOISE"
-        toolkit_names = []
-
+        # Determine situation
         if rsi > 70 and vol_ratio > 1.5:
             situation = "PARABOLIC_PUMP"
-            toolkit_names = ["Whale Alert", "Social Pulse"] 
         elif rsi < 30:
             situation = "LIQUIDATION_CASCADE"
-            toolkit_names = ["Chainlink Sentinel", "Sentiment Surge"]
         elif bb_width.iloc[-1] < 0.005:
             situation = "VOLATILITY_SQUEEZE"
-            toolkit_names = ["Macro News AI", "Neural Oracle"]
         elif abs(df['close'].pct_change().iloc[-1]) > 0.005 and vol_ratio < 0.8:
             situation = "PRICE_ANOMALY"
-            toolkit_names = ["Quantum Scanner", "Flash Arbitrage"]
         else:
             situation = "ESTABLISHED_TREND"
-            toolkit_names = ["On-Chain Watcher"]
+
+        toolkit_names = self.SITUATION_REQUIREMENTS[situation]["nodes"]
+        consensus_threshold = self.SITUATION_REQUIREMENTS[situation]["consensus"]
 
         print(f"   🧠 Context: {situation}")
         print(f"   📋 [REQUIREMENTS] Ideal Arsenal: {', '.join(toolkit_names)}")
+        print(f"   📊 Consensus Threshold: {consensus_threshold*100:.0f}%")
 
 
         # 4. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
@@ -129,22 +155,46 @@ class PredictiveAgent:
             return
 
         # 5. CONCLUSION (Only proceeds if paid data is present)
-        score = 0
-        for name, val in intel.items():
-            print(f"      ✅ Report from {name}: {val:.2f}")
-            if val > 0.6: score += 1
-            elif val < 0.4: score -= 1
+        bullish_signals = 0
+        bearish_signals = 0
+        node_reports = {}
+        now = datetime.utcnow()
+        stale_nodes = []
+        # Node report logging and data age check
+        for name, report in intel.items():
+            # If report is a tuple: (value, timestamp), else just value
+            if isinstance(report, tuple) and len(report) == 2:
+                val, ts = report
+                age_sec = (now - ts).total_seconds() if isinstance(ts, datetime) else None
+                if age_sec is not None and age_sec > 60:
+                    stale_nodes.append(name)
+                node_reports[name] = {"value": val, "age_sec": age_sec}
+            else:
+                val = report
+                node_reports[name] = {"value": val, "age_sec": None}
+            print(f"      ✅ Report from {name}: {val:.2f} (Age: {node_reports[name]['age_sec'] if node_reports[name]['age_sec'] is not None else 'N/A'}s)")
+            if val > 0.6:
+                bullish_signals += 1
+            elif val < 0.4:
+                bearish_signals += 1
 
-        # 6. EXECUTION
+        total_nodes = len(toolkit_names)
+        consensus = (bullish_signals - bearish_signals) / total_nodes if total_nodes > 0 else 0
+        print(f"   📈 Consensus: {consensus:.2f} | Bullish: {bullish_signals} | Bearish: {bearish_signals} | Total: {total_nodes}")
+        print(f"   📝 Node Reports: {node_reports}")
+
+        # Data Age Check: If any node is stale, re-verify others
+        if stale_nodes:
+            print(f"   ⏳ [DATA AGE] Stale node data detected: {', '.join(stale_nodes)}. Re-verifying other nodes...")
+            self.log_decision("HOLD", "STALE_DATA", f"Stale nodes: {', '.join(stale_nodes)}")
+            return
+
+        # Consensus threshold logic
         action = "HOLD"
-        
-        # Bullish Situations
-        if situation in ["LIQUIDATION_CASCADE", "VOLATILITY_SQUEEZE", "ESTABLISHED_TREND"]:
-            if score > 0: action = "BUY"
-            
-        # Bearish/Fading Situations
-        elif situation in ["PARABOLIC_PUMP", "PRICE_ANOMALY"]:
-            if score < 0: action = "SELL"
+        if consensus >= consensus_threshold:
+            action = "BUY"
+        elif consensus <= -consensus_threshold:
+            action = "SELL"
             
         # Specific overrides for Blind Mode
         if decision_mode == "BLIND_TECHNICALS" and situation == "NOISE":

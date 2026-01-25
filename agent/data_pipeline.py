@@ -47,10 +47,10 @@ class DataPipeline:
 
     async def fetch_dynamic_tools(self, toolkit_names):
         """
-        x402 Payment Flow:
+        x402 Payment Flow (Async):
         1. Get ALL from DB first (Thinking phase)
         2. Filter for the specific tool or category fallback
-        3. Execute x402 payment and return test data if payment is successful
+        3. Execute x402 payment in parallel and return (value, timestamp) if payment is successful
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
         results = {}
@@ -66,10 +66,9 @@ class DataPipeline:
             active_inventory = [n for n in inventory if n.get('status') == 'active']
             print(f"   📂 [DB] Fetched {len(active_inventory)} active nodes from inventory.")
 
-            for name in toolkit_names:
+            async def fetch_one(name):
                 # Filter for the specific tool
                 target_node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
-
                 # Category Fallback logic
                 if not target_node:
                     category = next((n['category'] for n in inventory if n['name'].lower() == name.lower()), None)
@@ -77,23 +76,32 @@ class DataPipeline:
                         substitutes = [n for n in active_inventory if n['category'] == category]
                         if substitutes:
                             target_node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
-
                 if target_node:
-                    # 2. Trigger the x402 Payment Flow
-                    signal = fetch_node_data(
+                    # Simulate async x402 payment flow (wrap sync in executor if needed)
+                    loop = asyncio.get_event_loop()
+                    signal = await loop.run_in_executor(None, fetch_node_data,
                         target_node['id'],
                         target_node.get('endpointUrl'),
                         target_node.get('apiKey'),
                         target_node['category'],
-                        price=float(target_node.get('price', 0.0))
+                        float(target_node.get('price', 0.0))
                     )
                     if signal:
-                        results[name] = signal.value
+                        # Expect signal.value and signal.timestamp
+                        return (name, (getattr(signal, 'value', None), getattr(signal, 'timestamp', datetime.utcnow())))
                     else:
                         print(f"      ❌ Failed to acquire data for {name}.")
-                        failure_flag = True
+                        return (name, None)
                 else:
                     print(f"      ❌ [DB] No active nodes found for '{name}'.")
+                    return (name, None)
+
+            fetch_tasks = [fetch_one(name) for name in toolkit_names]
+            fetch_results = await asyncio.gather(*fetch_tasks)
+            for name, result in fetch_results:
+                if result is not None and result[0] is not None:
+                    results[name] = result
+                else:
                     failure_flag = True
             return results, failure_flag
         except Exception as e:
