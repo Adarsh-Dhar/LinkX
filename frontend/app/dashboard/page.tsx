@@ -48,12 +48,12 @@ export default function DashboardPage() {
   return (
     <>
       <Dashboard />
-      <Card className="mt-8">
+      <Card className="mt-8 w-full">
         <CardHeader>
           <CardTitle>CRO/USDC Price Graph</CardTitle>
         </CardHeader>
-        <CardContent className="pl-2">
-          <div className="h-[350px]">
+        <CardContent className="pl-2 w-full">
+          <div className="h-[350px] w-full">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>

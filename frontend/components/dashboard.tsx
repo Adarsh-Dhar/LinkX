@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+// Type for chart data points
+interface ChartPoint {
+  time: string;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  value?: number;
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Activity, ArrowUpRight, DollarSign, Wallet, Brain, BarChart3 } from "lucide-react";
@@ -23,7 +35,9 @@ const defaultStats = {
 
 export default function Dashboard() {
   const [stats, setStats] = useState(defaultStats);
-  const [chartData, setChartData] = useState([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
+  // Derived chart data with 'value' key for Recharts
+  const chartDataWithValue: ChartPoint[] = chartData.map((d) => ({ ...d, value: d.close }));
   const [loading, setLoading] = useState(true);
 
   // FETCH DATA
@@ -58,7 +72,6 @@ export default function Dashboard() {
     const interval = setInterval(fetchDashboardData, 10000);
     return () => clearInterval(interval);
   }, []);
-  // ...existing code...
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6">
@@ -101,17 +114,17 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 w-full">
             {/* CHART CARD */}
-            <Card className="col-span-4">
+            <Card className="col-span-4 w-full min-w-0">
               <CardHeader>
                 <CardTitle>Cumulative Returns</CardTitle>
               </CardHeader>
-              <CardContent className="pl-2">
-                <div className="h-[350px]">
-                  {chartData.length > 0 ? (
+              <CardContent className="pl-2 w-full">
+                <div className="h-[350px] w-full">
+                  {chartDataWithValue.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
+                      <LineChart data={chartDataWithValue}>
                         <XAxis
                           dataKey="time"
                           stroke="#888888"
