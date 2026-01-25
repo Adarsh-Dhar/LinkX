@@ -47,17 +47,16 @@ class DataPipeline:
 
     async def fetch_dynamic_tools(self, toolkit_names):
         """
-        x402 Payment Flow (Async):
-        1. Get ALL from DB first (Thinking phase)
-        2. Filter for the specific tool or category fallback
-        3. Execute x402 payment in parallel and return (value, timestamp) if payment is successful
+        Fetches data from all required nodes in parallel using NodeConnector.execute_batch.
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
+        from agent.node_connector import get_connector
         results = {}
         failure_flag = False
         if not toolkit_names:
             return results, failure_flag
         try:
+            # Fetch all nodes from DB to map names to categories
             res = requests.get(self.nodes_api_url, timeout=5)
             if res.status_code != 200:
                 print("   ⚠️ Database API unreachable.")
@@ -66,43 +65,49 @@ class DataPipeline:
             active_inventory = [n for n in inventory if n.get('status') == 'active']
             print(f"   📂 [DB] Fetched {len(active_inventory)} active nodes from inventory.")
 
-            async def fetch_one(name):
-                # Filter for the specific tool
-                target_node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
-                # Category Fallback logic
-                if not target_node:
+            # Build batch requests for all toolkit_names
+            batch_requests = []
+            name_to_node = {}
+            for name in toolkit_names:
+                # Try to find the node by name
+                node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
+                if not node:
+                    # Fallback: find by category if name not found
                     category = next((n['category'] for n in inventory if n['name'].lower() == name.lower()), None)
                     if category:
                         substitutes = [n for n in active_inventory if n['category'] == category]
                         if substitutes:
-                            target_node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
-                if target_node:
-                    # Simulate async x402 payment flow (wrap sync in executor if needed)
-                    loop = asyncio.get_event_loop()
-                    signal = await loop.run_in_executor(None, fetch_node_data,
-                        target_node['id'],
-                        target_node.get('endpointUrl'),
-                        target_node.get('apiKey'),
-                        target_node['category'],
-                        float(target_node.get('price', 0.0))
-                    )
-                    if signal:
-                        # Expect signal.value and signal.timestamp
-                        return (name, (getattr(signal, 'value', None), getattr(signal, 'timestamp', datetime.utcnow())))
-                    else:
-                        print(f"      ❌ Failed to acquire data for {name}.")
-                        return (name, None)
+                            node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
+                if node:
+                    batch_requests.append({
+                        "method": "fetch",
+                        "params": [],
+                        "category": node['category'],
+                        "node_name": node['name'],
+                    })
+                    name_to_node[name] = node['name']
                 else:
                     print(f"      ❌ [DB] No active nodes found for '{name}'.")
-                    return (name, None)
-
-            fetch_tasks = [fetch_one(name) for name in toolkit_names]
-            fetch_results = await asyncio.gather(*fetch_tasks)
-            for name, result in fetch_results:
-                if result is not None and result[0] is not None:
-                    results[name] = result
-                else:
                     failure_flag = True
+
+            # If no valid nodes, return early
+            if not batch_requests:
+                return results, True
+
+            connector = await get_connector()
+            batch_results = await connector.execute_batch(batch_requests)
+
+            for idx, res in enumerate(batch_results):
+                requested_name = toolkit_names[idx]
+                node_name = name_to_node.get(requested_name, requested_name)
+                if res.get("success", True) and res.get("data") is not None:
+                    val = res["data"].get("value")
+                    ts = res["data"].get("timestamp", datetime.utcnow())
+                    results[requested_name] = (val, ts)
+                else:
+                    print(f"      ❌ Failed to acquire data for {requested_name} (node: {node_name}). Error: {res.get('error')}")
+                    failure_flag = True
+
             return results, failure_flag
         except Exception as e:
             print(f"   ⚠️ Pipeline Sync Error: {e}")

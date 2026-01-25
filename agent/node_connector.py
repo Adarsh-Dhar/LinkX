@@ -353,29 +353,32 @@ class NodeConnector:
         """
         Execute multiple provider fetches in parallel, supporting multiple categories and simulating 402 payment loop for each node.
         Each request can specify a method, params, and category. Results are returned in the same order as requests.
+        Enhanced: Adds per-node logging and ensures payment/data flows are non-blocking.
         """
         if not self.session:
             await self.connect()
 
         async def fetch_one(req):
-            # Each request can specify a method, params, and category
             method = req.get("method", "fetch")
             params = req.get("params", [])
             category = req.get("category")
-            # get_data handles the simulated 402 payment loop and returns node data
-            result = await self.get_data(method, params, category)
-            return result
+            node_name = req.get("node_name", "unknown")
+            try:
+                result = await self.get_data(method, params, category)
+                if result and result.get("data") is not None:
+                    print(f"   ✅ [BATCH] Node '{node_name}' ({category}) fetch succeeded.")
+                    return {**result, "success": True, "node_name": node_name}
+                else:
+                    print(f"   ❌ [BATCH] Node '{node_name}' ({category}) fetch failed: No data returned.")
+                    return {"data": None, "error": "No data returned", "success": False, "node_name": node_name}
+            except Exception as e:
+                print(f"   ❌ [BATCH] Node '{node_name}' ({category}) fetch error: {e}")
+                return {"data": None, "error": str(e), "success": False, "node_name": node_name}
 
         tasks = [fetch_one(req) for req in requests]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        # Optionally filter out exceptions and log errors
-        clean_results = []
-        for res in results:
-            if isinstance(res, Exception):
-                clean_results.append({"data": None, "error": str(res), "success": False})
-            else:
-                clean_results.append(res)
-        return clean_results
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        # All results are dicts with success/error fields
+        return results
 
     async def get_feature_vector(self) -> Dict[str, Any]:
         """Fetch from all nodes and return a normalized 48-feature vector"""

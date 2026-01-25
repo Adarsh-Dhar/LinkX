@@ -129,6 +129,7 @@ class PredictiveAgent:
         else:
             situation = "ESTABLISHED_TREND"
 
+
         toolkit_names = self.SITUATION_REQUIREMENTS[situation]["nodes"]
         consensus_threshold = self.SITUATION_REQUIREMENTS[situation]["consensus"]
 
@@ -136,9 +137,7 @@ class PredictiveAgent:
         print(f"   📋 [REQUIREMENTS] Ideal Arsenal: {', '.join(toolkit_names)}")
         print(f"   📊 Consensus Threshold: {consensus_threshold*100:.0f}%")
 
-
         # 4. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
-        # This call now performs the 'Fetch All -> Filter -> Buy' logic
         result = await self.pipeline.fetch_dynamic_tools(toolkit_names)
         if result is None:
             intel, fetch_failed = {}, True
@@ -148,21 +147,18 @@ class PredictiveAgent:
         acquired_count = len(intel)
         needed_count = len(toolkit_names)
 
-        # NEW REQUIREMENT: Only proceed if all filtered tools are purchased
+        # Skeptical check: must acquire all required nodes for this situation
         if needed_count > 0 and (fetch_failed or acquired_count < needed_count):
-            print(f"   ⚠️ [SKEPTICAL] Incomplete arsenal. Buying data failed for required nodes.")
+            print(f"   ⚠️ [SKEPTICAL] Incomplete arsenal. Required {needed_count}, acquired {acquired_count}. Returning HOLD.")
             self.log_decision("HOLD", "INCOMPLETE_INTEL", f"Required {needed_count}, but only bought {acquired_count}")
             return
 
-        # 5. CONCLUSION (Only proceeds if paid data is present)
-        bullish_signals = 0
-        bearish_signals = 0
+        # 5. Consensus calculation
+        total_signals = 0
         node_reports = {}
         now = datetime.utcnow()
         stale_nodes = []
-        # Node report logging and data age check
         for name, report in intel.items():
-            # If report is a tuple: (value, timestamp), else just value
             if isinstance(report, tuple) and len(report) == 2:
                 val, ts = report
                 age_sec = (now - ts).total_seconds() if isinstance(ts, datetime) else None
@@ -173,14 +169,15 @@ class PredictiveAgent:
                 val = report
                 node_reports[name] = {"value": val, "age_sec": None}
             print(f"      ✅ Report from {name}: {val:.2f} (Age: {node_reports[name]['age_sec'] if node_reports[name]['age_sec'] is not None else 'N/A'}s)")
-            if val > 0.6:
-                bullish_signals += 1
-            elif val < 0.4:
-                bearish_signals += 1
+            if val is not None:
+                if val > 0.6:
+                    total_signals += 1
+                elif val < 0.4:
+                    total_signals -= 1
 
-        total_nodes = len(toolkit_names)
-        consensus = (bullish_signals - bearish_signals) / total_nodes if total_nodes > 0 else 0
-        print(f"   📈 Consensus: {consensus:.2f} | Bullish: {bullish_signals} | Bearish: {bearish_signals} | Total: {total_nodes}")
+        # Consensus is normalized by number of acquired nodes
+        confidence = total_signals / acquired_count if acquired_count > 0 else 0
+        print(f"   📈 Consensus: {confidence:.2f} | Total Signals: {total_signals} | Nodes: {acquired_count}")
         print(f"   📝 Node Reports: {node_reports}")
 
         # Data Age Check: If any node is stale, re-verify others
@@ -189,13 +186,13 @@ class PredictiveAgent:
             self.log_decision("HOLD", "STALE_DATA", f"Stale nodes: {', '.join(stale_nodes)}")
             return
 
-        # Consensus threshold logic
+        # Threshold-based execution
         action = "HOLD"
-        if consensus >= consensus_threshold:
+        if confidence >= consensus_threshold:
             action = "BUY"
-        elif consensus <= -consensus_threshold:
+        elif confidence <= -consensus_threshold:
             action = "SELL"
-            
+
         # Specific overrides for Blind Mode
         if decision_mode == "BLIND_TECHNICALS" and situation == "NOISE":
             action = "HOLD"
