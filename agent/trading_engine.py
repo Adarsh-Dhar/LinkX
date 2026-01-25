@@ -21,51 +21,76 @@ class TradingEngine:
             print("   (Trades will fail with raw network errors)")
 
     def execute_swap(self, token_in, token_out, amount_in, slippage_tolerance=1.0):
-        print(f"⚡ TradingEngine: Attempting REAL Swap {amount_in} {token_in} -> {token_out}")
-        # 1. Strict Requirement Checks
-        if not self.w3 or not self.w3.is_connected():
-            error_msg = f"RAW ERROR: Disconnected from RPC {getattr(self.wallet, 'rpc_url', 'UNKNOWN')}"
-            print(f"   ❌ {error_msg}")
-            return None # Return None signals failure to the agent
-
-        if not getattr(self.wallet, 'key', None):
-            error_msg = "RAW ERROR: No Wallet Private Key configured in .env"
-            print(f"   ❌ {error_msg}")
-            return None
-
-        # 2. Real Execution Logic
+        """Executes a real swap and returns the actual Tx Hash, with robust error reporting."""
         try:
-            # Build Transaction (Self-send for testing connectivity, Swap for production)
-            tx = {
-                'to': self.wallet.address, # In prod: Router Address
-                'value': 0, # In prod: Amount if swapping CRO
-                'gas': 21000,
-                'gasPrice': self.wallet.get_gas_price(),
-                'nonce': self.wallet.get_nonce(),
-                'chainId': self.w3.eth.chain_id
-            }
+            print(f"⚡ [TradingEngine] Attempting REAL Swap {amount_in} {token_in} -> {token_out}")
+            # 1. Setup Addresses (from wallet_manager fields)
+            usdc_addr = self.wallet.usdc_address
+            weth_addr = getattr(self.wallet, 'weth_address', None)
+            router_addr = getattr(self.wallet, 'router_address', None)
+            if not (usdc_addr and weth_addr and router_addr):
+                raise Exception("Missing contract address (USDC, WETH, or Router) in WalletManager.")
 
-            # Sign
-            signed_tx = self.w3.eth.account.sign_transaction(tx, self.wallet.key)
-            # Broadcast (This is the moment of truth)
+            # 2. Convert Amount to Wei (USDC usually has 6 decimals)
+            decimals = 6 if token_in.upper() == "USDC" else 18
+            amount = int(float(amount_in) * 10**decimals)
+
+            # 3. Path: USDC <-> WETH
+            if token_in.upper() == "USDC":
+                path = [Web3.to_checksum_address(usdc_addr), Web3.to_checksum_address(weth_addr)]
+            else:
+                path = [Web3.to_checksum_address(weth_addr), Web3.to_checksum_address(usdc_addr)]
+
+            # 4. Check Balance before starting
+            token_addr = usdc_addr if token_in.upper() == "USDC" else weth_addr
+            token_abi = getattr(self.wallet, 'usdc_abi', self.wallet.ERC20_ABI) if token_in.upper() == "USDC" else getattr(self.wallet, 'weth_abi', self.wallet.ERC20_ABI)
+            token_contract = self.w3.eth.contract(address=token_addr, abi=token_abi)
+            balance = token_contract.functions.balanceOf(self.wallet.address).call()
+            if balance < amount:
+                raise Exception(f"Insufficient {token_in} balance. Have: {balance/10**decimals}, Need: {amount_in}")
+
+            # 5. Build Transaction
+            deadline = int(time.time()) + 600
+            router_abi = getattr(self.wallet, 'router_abi', getattr(self.wallet, 'VVS_ROUTER_ABI', self.wallet.ERC20_ABI))
+            router_contract = self.w3.eth.contract(address=router_addr, abi=router_abi)
+            swap_tx = router_contract.functions.swapExactTokensForTokens(
+                amount,
+                0, # Slippage: 0 for testing, change to a calculation for production
+                path,
+                self.wallet.address,
+                deadline
+            ).build_transaction({
+                'from': self.wallet.address,
+                'nonce': self.w3.eth.get_transaction_count(self.wallet.address),
+                'gas': 250000,
+                'gasPrice': self.w3.eth.gas_price,
+            })
+
+            # 6. Sign and Broadcast
+            signed_tx = self.w3.eth.account.sign_transaction(swap_tx, private_key=self.wallet.key)
             print("   📡 Broadcasting to network...")
-            tx_hash_bytes = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-            tx_hash = tx_hash_bytes.hex()
+            # Use correct attribute for Web3.py SignedTransaction
+            tx_bytes = getattr(signed_tx, 'rawTransaction', None)
+            if tx_bytes is None:
+                tx_bytes = getattr(signed_tx, 'raw_transaction', None)
+            if tx_bytes is None:
+                raise Exception("SignedTransaction object has no rawTransaction or raw_transaction attribute.")
+            tx_hash = self.w3.eth.send_raw_transaction(tx_bytes)
+            hash_str = tx_hash.hex()
+            print(f"   ✅ TRANSACTION BROADCAST SUCCESS!")
+            print(f"   🔗 Tx Hash: {hash_str}")
 
-            print(f"   ✅ TRANSACTION SENT. Hash: {tx_hash}")
-
-            # Log the successful submission
-            if hasattr(self.wallet, 'log_transaction'):
-                self.wallet.log_transaction(tx_hash, "SWAP", f"{amount_in} {token_in} -> {token_out}")
-
-            return tx_hash
-
+            # 7. Wait for receipt to confirm it didn't fail on-chain
+            print("   ⏳ Waiting for confirmation...")
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            if receipt.status == 1:
+                print("   🎉 Swap Confirmed!")
+                return hash_str
+            else:
+                raise Exception("Transaction failed on-chain (reverted).")
         except Exception as e:
-            # 3. Output EXACT Raw Error
-            import os
-            import time
-            from web3 import Web3
-            from typing import Optional, Any, Dict, List
+            print(f"   ❌ [CRITICAL ERROR] Swap Failed: {str(e)}")
+            return None
     async def get_market_data(self, category: Optional[str] = None) -> Dict[str, Any]:
         """
         Fetch aggregated market data from 48 nodes

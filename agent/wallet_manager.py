@@ -86,6 +86,45 @@ from eth_account import Account
 from pathlib import Path
 
 class WalletManager:
+    # Full VVS Router ABI (from abi/vvsrouter.ts)
+    VVS_ROUTER_ABI = [
+        {"type": "function", "name": "swapExactTokensForTokens", "inputs": [
+            {"name": "amountIn", "type": "uint256", "internalType": "uint256"},
+            {"name": "amountOutMin", "type": "uint256", "internalType": "uint256"},
+            {"name": "path", "type": "address[]", "internalType": "address[]"},
+            {"name": "to", "type": "address", "internalType": "address"},
+            {"name": "deadline", "type": "uint256", "internalType": "uint256"}
+        ], "outputs": [
+            {"name": "amounts", "type": "uint256[]", "internalType": "uint256[]"}
+        ], "stateMutability": "nonpayable"},
+        {"type": "function", "name": "getAmountsOut", "inputs": [
+            {"name": "amountIn", "type": "uint256", "internalType": "uint256"},
+            {"name": "path", "type": "address[]", "internalType": "address[]"}
+        ], "outputs": [
+            {"name": "amounts", "type": "uint256[]", "internalType": "uint256[]"}
+        ], "stateMutability": "view"},
+        {"type": "function", "name": "swapExactETHForTokens", "inputs": [
+            {"name": "amountOutMin", "type": "uint256", "internalType": "uint256"},
+            {"name": "path", "type": "address[]", "internalType": "address[]"},
+            {"name": "to", "type": "address", "internalType": "address"},
+            {"name": "deadline", "type": "uint256", "internalType": "uint256"}
+        ], "outputs": [
+            {"name": "amounts", "type": "uint256[]", "internalType": "uint256[]"}
+        ], "stateMutability": "payable"},
+        {"type": "function", "name": "swapExactTokensForETH", "inputs": [
+            {"name": "amountIn", "type": "uint256", "internalType": "uint256"},
+            {"name": "amountOutMin", "type": "uint256", "internalType": "uint256"},
+            {"name": "path", "type": "address[]", "internalType": "address[]"},
+            {"name": "to", "type": "address", "internalType": "address"},
+            {"name": "deadline", "type": "uint256", "internalType": "uint256"}
+        ], "outputs": [
+            {"name": "amounts", "type": "uint256[]", "internalType": "uint256[]"}
+        ], "stateMutability": "nonpayable"}
+    ]
+    # Add contract addresses from tools.py
+    usdc_address = "0xE373E44E5e64496BD092A5ad097881C0fa31D326"
+    weth_address = "0x8F65e9482DB43F403400C6Cb7B20E7dc132d21D2"  # WCRO as WETH equivalent
+    router_address = "0x87AE95401447ef92c32f047a79F51Ed4879D516f"
     """Manages blockchain wallet operations for the agent"""
 
     # Standard ERC20 ABI for balance checking
@@ -207,8 +246,10 @@ class WalletManager:
             self.account = None
             self.address = None
 
-        # Load contract addresses from environment
-        self.usdc_address = os.getenv("USDC_CONTRACT", "")
+        # Load contract addresses from environment only if present
+        env_usdc = os.getenv("USDC_CONTRACT")
+        if env_usdc:
+            self.usdc_address = env_usdc
 
     def get_tcro_balance(self):
         """

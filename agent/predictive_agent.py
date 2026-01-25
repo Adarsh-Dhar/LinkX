@@ -9,6 +9,11 @@ except ImportError:
     from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
+
+    def log_decision(self, action, status, details):
+        """Log trade decision (stub: print, or extend to file/db as needed)."""
+        print(f"[DecisionLog] {action} | {status} | {details}")
+
     def __init__(self, market_manager, trading_engine, simulation_mode=True):
         self.pipeline = DataPipeline(market_manager)
         self.trading_engine = trading_engine
@@ -118,8 +123,18 @@ class PredictiveAgent:
         if action == "BUY":
             amount = 100.0 * risk_multiplier
             print(f"   🚀 Executing BUY for {amount} USDC")
-            self.trading_engine.execute_swap("USDC", "WETH", amount)
+            tx_hash = self.trading_engine.execute_swap("USDC", "WETH", amount)
+            if tx_hash:
+                self.log_decision("BUY", "SUCCESS", f"Tx: {tx_hash}")
+            else:
+                print(f"   ⚠️ [TRADE_FAILED] Agent aborting cycle due to execution error.")
+                self.log_decision("BUY", "FAILED", "Execution engine returned no hash")
         elif action == "SELL":
             amount = 0.1 * risk_multiplier
             print(f"   📉 Executing SELL for {amount} WETH")
-            self.trading_engine.execute_swap("WETH", "USDC", amount)
+            tx_hash = self.trading_engine.execute_swap("WETH", "USDC", amount)
+            if tx_hash:
+                self.log_decision("SELL", "SUCCESS", f"Tx: {tx_hash}")
+            else:
+                print(f"   ⚠️ [TRADE_FAILED] Agent aborting cycle due to execution error.")
+                self.log_decision("SELL", "FAILED", "Execution engine returned no hash")
