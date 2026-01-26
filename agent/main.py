@@ -1,8 +1,13 @@
 
+
 import os
 import sys
 import threading
 from dotenv import load_dotenv
+
+# Fix import path if run as a script
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from agent.wallet_manager import WalletManager
 from agent.trading_engine import TradingEngine

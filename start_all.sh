@@ -29,6 +29,13 @@ REGISTRY_PID=$!
 echo "   ✅ Registry PID: $REGISTRY_PID"
 sleep 2
 
+# 2b. Start Demo Provider Server
+echo "📡 Starting Demo Node Providers..."
+node demo_providers.cjs &
+DEMO_PROVIDERS_PID=$!
+echo "   ✅ Demo Providers PID: $DEMO_PROVIDERS_PID"
+sleep 2
+
 # 3. Start All Provider Microservices
 echo "🌐 Starting Provider Microservices..."
 for cat in {0..23}
@@ -82,9 +89,12 @@ export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
 
 # Run uvicorn from project root so 'agent' is a package
 cd "$SCRIPT_DIR"
+
+# Run agent in the background and capture its PID
 uvicorn agent.api_real:app --host 0.0.0.0 --port 8000 --reload &
 AGENT_PID=$!
 
 echo "✅ System Online. Watch terminal for '🤖 EXPERT AGENT ANALYSIS'..."
 trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID; pkill -f provider.js; exit" SIGINT SIGTERM
+trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID $DEMO_PROVIDERS_PID; pkill -f provider.js; exit" SIGINT SIGTERM
 wait
