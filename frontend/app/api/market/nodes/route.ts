@@ -1,42 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { Facilitator, CronosNetwork, Contract } from '@crypto.com/facilitator-client';
-import { ethers } from 'ethers';
 
-console.log("🔹 LOADED ROUTE: Real Price + Hash Fix");
-
-// --- CONFIGURATION ---
-const RPC_URL = "https://evm-t3.cronos.org"; 
-const PROVIDER_ADDRESS = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9";
-
-const facilitator = new Facilitator({
-  network: CronosNetwork.CronosTestnet 
-});
+// All node-related API logic has been removed.
+// This endpoint is now disabled.
 
 export async function GET() {
-  try {
-    const nodes = await prisma.alphaNode.findMany({
-      orderBy: { price: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        description: true,
-        price: true,
-        reputation: true,
-        status: true,
-        isPurchased: true,
-        icon: true,
-        endpointUrl: true, 
-        apiKey: true
-      }
-    });
-    console.log('AlphaNode query result:', nodes);
-    return NextResponse.json(nodes);
-  } catch (error) {
-    console.error('AlphaNode API error:', error);
-    return NextResponse.json({ error: String(error), stack: error?.stack }, { status: 500 });
-  }
+  return NextResponse.json({ error: "Node API is disabled. All node features have been removed." }, { status: 410 });
 }
 
 export async function POST(req: Request) {

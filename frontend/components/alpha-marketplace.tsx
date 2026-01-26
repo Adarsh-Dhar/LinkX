@@ -1,43 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, ShoppingCart, Check, Activity, Zap, BarChart, Globe, Lock } from "lucide-react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-
-// Interface matches your Prisma Model
-interface AlphaNode {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  price: number;
-  reputation: number;
-  status: string;
-  isPurchased: boolean;
-  icon: string;
-}
-
-// Icon mapper
-const IconMap: any = {
-  activity: Activity,
-  zap: Zap,
-  "bar-chart": BarChart,
-  globe: Globe
-};
+// ...existing code...
+// This component previously displayed AlphaNode marketplace UI.
+// All node-related logic and UI have been removed as requested.
 
 export default function AlphaMarketplace() {
-  const [nodes, setNodes] = useState<AlphaNode[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [purchasing, setPurchasing] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  // 1. Fetch Real Data on Mount
+  return (
+    <div style={{ padding: 32, textAlign: 'center' }}>
+      <h2>Marketplace Unavailable</h2>
+      <p>All node-related features have been removed.</p>
+    </div>
+  );
+}
   useEffect(() => {
     async function fetchMarket() {
       try {

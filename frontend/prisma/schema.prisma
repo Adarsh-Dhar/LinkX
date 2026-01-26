@@ -97,36 +97,14 @@ model SystemState {
 // --------------------------------------------------------
 // 5. ALPHA MARKET (The 48 Data Providers)
 // --------------------------------------------------------
-model AlphaNode {
-  id          String   @id @default(uuid())
-  name        String
-  category    String   // e.g. "Sentiment", "On-Chain", "Technical", "News"
-  description String
-  price       Float    // Cost in USDC
-  reputation  Int      // 0-100 Score
-
-  // Visuals
-  icon        String   @default("activity") // lucide icon name
-  status      String   @default("active")   // active, offline
-
-  // Relation to purchase history
-  isPurchased Boolean  @default(false)      // Simplified for single-user agent
-
-  // New fields for endpoint and API key
-  endpointUrl String?
-  apiKey      String?
-
-  createdAt   DateTime @default(now())
-  dataLogs    DataLog[]
-}
+// AlphaNode model removed
 
 // --------------------------------------------------------
 // 6. DATA LOG (History of Data Points Fetched)
 // --------------------------------------------------------
 model DataLog {
   id          String   @id @default(uuid())
-  nodeId      String
-  node        AlphaNode @relation(fields: [nodeId], references: [id])
+  // nodeId and node relation removed
   data        String   // Raw data fetched (JSON, text, etc.)
   normalized  Float?   // Normalized signal value, if applicable
   fetchedAt   DateTime @default(now())
