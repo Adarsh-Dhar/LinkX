@@ -45,60 +45,43 @@ class DataPipeline:
             print(f"   ⚠️ Fetch Error: {e}")
         return None
 
-    async def fetch_dynamic_tools(self, toolkit_names):
+    async def fetch_dynamic_tools(self, node_objs):
         """
-        Fetches data from all required nodes in parallel using NodeConnector.execute_batch.
+        Fetches data from a list of node objects (with name, category, price, etc). Handles x402 payment batch if needed.
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
         from agent.node_connector import get_connector
         results = {}
         failure_flag = False
-        if not toolkit_names:
+        if not node_objs:
             return results, failure_flag
         try:
-            # Fetch all nodes from DB to map names to categories
-            res = requests.get(self.nodes_api_url, timeout=5)
-            if res.status_code != 200:
-                print("   ⚠️ Database API unreachable.")
-                return results, True
-            inventory = res.json()
-            active_inventory = [n for n in inventory if n.get('status') == 'active']
-            print(f"   📂 [DB] Fetched {len(active_inventory)} active nodes from inventory.")
-
-            # Build batch requests for all toolkit_names
+            # Build batch requests for all node_objs
             batch_requests = []
             name_to_node = {}
-            for name in toolkit_names:
-                # Try to find the node by name
-                node = next((n for n in active_inventory if n['name'].lower() == name.lower()), None)
-                if not node:
-                    # Fallback: find by category if name not found
-                    category = next((n['category'] for n in inventory if n['name'].lower() == name.lower()), None)
-                    if category:
-                        substitutes = [n for n in active_inventory if n['category'] == category]
-                        if substitutes:
-                            node = sorted(substitutes, key=lambda x: x.get('reputation', 0), reverse=True)[0]
-                if node:
-                    batch_requests.append({
-                        "method": "fetch",
-                        "params": [],
-                        "category": node['category'],
-                        "node_name": node['name'],
-                    })
-                    name_to_node[name] = node['name']
-                else:
-                    print(f"      ❌ [DB] No active nodes found for '{name}'.")
-                    failure_flag = True
+            for node in node_objs:
+                batch_requests.append({
+                    "method": "fetch",
+                    "params": [],
+                    "category": node["category"],
+                    "node_name": node["name"],
+                })
+                name_to_node[node["name"]] = node["name"]
 
             # If no valid nodes, return early
             if not batch_requests:
                 return results, True
 
+            # --- x402 payment batch logic (stub, expand as needed) ---
+            # total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
+            # if total_cost > 0:
+            #     pay_x402_batch(node_objs)
+
             connector = await get_connector()
             batch_results = await connector.execute_batch(batch_requests)
 
             for idx, res in enumerate(batch_results):
-                requested_name = toolkit_names[idx]
+                requested_name = node_objs[idx]["name"]
                 node_name = name_to_node.get(requested_name, requested_name)
                 if res.get("success", True) and res.get("data") is not None:
                     val = res["data"].get("value")

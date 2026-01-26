@@ -1,8 +1,10 @@
+
 import asyncio
 import numpy as np
 import pandas as pd
 from datetime import datetime
 import os
+from agent.situational_logic import SITUATION_WEIGHTS
 
 try:
     from .data_pipeline import DataPipeline
@@ -10,6 +12,62 @@ except ImportError:
     from agent.data_pipeline import DataPipeline
 
 class PredictiveAgent:
+    def optimize_node_selection(self, market_nodes, situation, mode="BALANCED", min_accuracy=15, max_cost=50.0):
+        """
+        Selects nodes based on situation, mode, min_accuracy, and max_cost.
+        Returns a list of selected node dicts.
+        """
+        # 1. Assign importance from SITUATION_WEIGHTS
+        cat_weights = SITUATION_WEIGHTS.get(situation, {})
+        for node in market_nodes:
+            node["importance"] = cat_weights.get(node["category"], 1)
+            node["price"] = float(node.get("price", 0.0))
+            node["efficiency"] = node["importance"] / max(node["price"], 0.1)
+        # 2. Sort and select nodes by mode
+        selected = []
+        total_cost, total_accuracy = 0.0, 0
+        sorted_nodes = []
+        if mode == "ACCURATE":
+            sorted_nodes = sorted(market_nodes, key=lambda n: -n["importance"])
+            for node in sorted_nodes:
+                if total_cost + node["price"] > max_cost:
+                    break
+                selected.append(node)
+                total_cost += node["price"]
+        elif mode == "ECONOMY":
+            sorted_nodes = sorted(market_nodes, key=lambda n: -n["efficiency"])
+            for node in sorted_nodes:
+                if total_accuracy >= min_accuracy:
+                    break
+                selected.append(node)
+                total_accuracy += node["importance"]
+        else:  # BALANCED
+            sorted_nodes = sorted(market_nodes, key=lambda n: -n["efficiency"])
+            for node in sorted_nodes:
+                if total_cost + node["price"] > max_cost/2 and total_accuracy >= min_accuracy/2:
+                    break
+                selected.append(node)
+                total_cost += node["price"]
+                total_accuracy += node["importance"]
+        return selected
+
+    def cost_accuracy_graph(self, market_nodes, situation):
+        """
+        Returns array of {nodes_count, cumulative_cost, cumulative_accuracy} for graphing.
+        """
+        cat_weights = SITUATION_WEIGHTS.get(situation, {})
+        for node in market_nodes:
+            node["importance"] = cat_weights.get(node["category"], 1)
+            node["price"] = float(node.get("price", 0.0))
+            node["efficiency"] = node["importance"] / max(node["price"], 0.1)
+        sorted_nodes = sorted(market_nodes, key=lambda n: -n["efficiency"])
+        arr = []
+        cost, acc = 0.0, 0
+        for i, node in enumerate(sorted_nodes, 1):
+            cost += node["price"]
+            acc += node["importance"]
+            arr.append({"nodes_count": i, "cumulative_cost": cost, "cumulative_accuracy": acc})
+        return arr
     # Map market situations to required nodes and consensus thresholds
     SITUATION_REQUIREMENTS = {
         "PARABOLIC_PUMP": {
@@ -72,7 +130,7 @@ class PredictiveAgent:
         self.pipeline = DataPipeline(market_manager)
         self.trading_engine = trading_engine
 
-    async def run_cycle(self):
+    async def run_cycle(self, min_accuracy=15, max_cost=50.0, mode="BALANCED"):
         print("\n" + "═"*70)
         print(f"♟️  EXPERT TRADER CONTEXT ENGINE - {datetime.now().strftime('%H:%M:%S')}")
         decision_mode = "STANDARD"
@@ -115,9 +173,9 @@ class PredictiveAgent:
         
         print(f"   📉 Price: ${curr:.2f} | RSI: {rsi:.1f} | Vol Ratio: {vol_ratio:.2f}x")
 
+
         # 3. SITUATION MAPPING
         situation = "NOISE"
-        # Determine situation
         if rsi > 70 and vol_ratio > 1.5:
             situation = "PARABOLIC_PUMP"
         elif rsi < 30:
@@ -129,15 +187,17 @@ class PredictiveAgent:
         else:
             situation = "ESTABLISHED_TREND"
 
-
-        toolkit_names = self.SITUATION_REQUIREMENTS[situation]["nodes"]
-        consensus_threshold = self.SITUATION_REQUIREMENTS[situation]["consensus"]
+        # 4. Fetch all nodes and optimize selection
+        all_nodes = await self.pipeline.refresh_market_knowledge()
+        selected_nodes = self.optimize_node_selection(all_nodes, situation, mode, min_accuracy, max_cost)
+        toolkit_names = [n["name"] for n in selected_nodes]
+        consensus_threshold = self.SITUATION_REQUIREMENTS.get(situation, {}).get("consensus", 0.7)
 
         print(f"   🧠 Context: {situation}")
-        print(f"   📋 [REQUIREMENTS] Ideal Arsenal: {', '.join(toolkit_names)}")
+        print(f"   📋 [OPTIMIZED] Arsenal: {', '.join(toolkit_names)}")
         print(f"   📊 Consensus Threshold: {consensus_threshold*100:.0f}%")
 
-        # 4. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
+        # 5. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
         result = await self.pipeline.fetch_dynamic_tools(toolkit_names)
         if result is None:
             intel, fetch_failed = {}, True
@@ -146,18 +206,17 @@ class PredictiveAgent:
 
         acquired_count = len(intel)
         needed_count = len(toolkit_names)
-
-        # Skeptical check: must acquire all required nodes for this situation
         if needed_count > 0 and (fetch_failed or acquired_count < needed_count):
             print(f"   ⚠️ [SKEPTICAL] Incomplete arsenal. Required {needed_count}, acquired {acquired_count}. Returning HOLD.")
             self.log_decision("HOLD", "INCOMPLETE_INTEL", f"Required {needed_count}, but only bought {acquired_count}")
             return
 
-        # 5. Consensus calculation
-        total_signals = 0
+        # 6. Weighted Consensus calculation
         node_reports = {}
         now = datetime.utcnow()
         stale_nodes = []
+        weighted_sum = 0.0
+        total_weight = 0.0
         for name, report in intel.items():
             if isinstance(report, tuple) and len(report) == 2:
                 val, ts = report
@@ -168,16 +227,25 @@ class PredictiveAgent:
             else:
                 val = report
                 node_reports[name] = {"value": val, "age_sec": None}
-            print(f"      ✅ Report from {name}: {val:.2f} (Age: {node_reports[name]['age_sec'] if node_reports[name]['age_sec'] is not None else 'N/A'}s)")
+            # Find node weight (importance)
+            node_weight = 1
+            for n in selected_nodes:
+                if n["name"] == name:
+                    node_weight = n.get("importance", 1)
+                    break
+            # Signal binning
+            signal = 0
             if val is not None:
                 if val > 0.6:
-                    total_signals += 1
+                    signal = 1
                 elif val < 0.4:
-                    total_signals -= 1
+                    signal = -1
+            weighted_sum += signal * node_weight
+            total_weight += node_weight
+            print(f"      ✅ Report from {name}: {val:.2f} (Age: {node_reports[name]['age_sec'] if node_reports[name]['age_sec'] is not None else 'N/A'}s, Weight: {node_weight})")
 
-        # Consensus is normalized by number of acquired nodes
-        confidence = total_signals / acquired_count if acquired_count > 0 else 0
-        print(f"   📈 Consensus: {confidence:.2f} | Total Signals: {total_signals} | Nodes: {acquired_count}")
+        confidence = weighted_sum / total_weight if total_weight > 0 else 0
+        print(f"   📈 Weighted Consensus: {confidence:.2f} | Weighted Sum: {weighted_sum} | Total Weight: {total_weight}")
         print(f"   📝 Node Reports: {node_reports}")
 
         # Data Age Check: If any node is stale, re-verify others
