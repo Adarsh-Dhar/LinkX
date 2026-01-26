@@ -17,51 +17,54 @@ class PredictiveAgent:
 
     def calculate_ai_importance(self, node_category, market_state):
         """
-        AI-powered logic to determine how important a node is 
-        given the current technical state.
+        Returns a high score (8-10) only when the data is vital, and a low score (1-3) when the data is noise.
         """
         rsi = market_state.get('rsi', 50)
         vol_ratio = market_state.get('vol_ratio', 1)
         bb_width = market_state.get('bb_width', 0.05)
 
-        # AI logic: If RSI is extreme, 'Chainlink Sentinel' (liquidations) becomes critical.
-        if node_category == "Chainlink Sentinel":
-            return 10 if (rsi > 75 or rsi < 25) else 3
-
-        # AI logic: If Volume is spiking, 'Whale Alert' importance scales with volume.
-        if node_category == "Whale Alert":
-            return min(10, int(vol_ratio * 4))
-
-        # AI logic: If Volatility is low (Squeeze), 'Macro News' and 'Neural Oracle' spike.
+        # 1. Macro/News is only relevant during "Squeezes" (low volatility)
         if bb_width < 0.02:
             if node_category in ["Macro News AI", "Neural Oracle"]:
-                return 9
+                return 10
 
-        return 5 # Default baseline importance
+        # 2. Whale/Volume data is only relevant during High Volume
+        if vol_ratio > 2.5:
+            if node_category == "Whale Alert":
+                return 10
+            if node_category == "Social Pulse":
+                return 8
+
+        # 3. Liquidation data is only relevant at RSI extremes
+        if rsi > 75 or rsi < 25:
+            if node_category == "Chainlink Sentinel":
+                return 10
+
+        # 4. Baseline Technicals (always relevant but medium priority)
+        if node_category == "Technical":
+            return 7
+
+        return 2  # Low relevance for everything else in this specific context
 
     def optimize_node_selection(self, market_nodes, market_state, mode="BALANCED"):
         """
-        Selects the best set of nodes based on AI importance scoring and mode.
+        Selects only nodes above a dynamic relevance threshold. No fixed Top N.
         """
-        # Score all nodes
         scored_nodes = []
+        # Set threshold based on mode
+        # Accurate: take anything > 6 | Balanced: take > 7 | Economy: take > 8
+        threshold = 6 if mode == "ACCURATE" else (8 if mode == "ECONOMY" else 7)
+
         for node in market_nodes:
-            category = node.get("category", "Unknown")
-            importance = self.calculate_ai_importance(category, market_state)
-            node["importance"] = importance
-            scored_nodes.append(node)
+            importance = self.calculate_ai_importance(node.get("category"), market_state)
+            # Only add nodes that meet the relevance threshold
+            if importance >= threshold:
+                node["importance"] = importance
+                scored_nodes.append(node)
 
-        # Sort nodes by importance (descending)
+        # Sort so we process highest relevance first
         scored_nodes.sort(key=lambda n: n["importance"], reverse=True)
-
-        # Mode logic: ACCURATE = top 15, ECONOMY = top 7, BALANCED = top 10
-        if mode == "ACCURATE":
-            num = 15
-        elif mode == "ECONOMY":
-            num = 7
-        else:
-            num = 10
-        return scored_nodes[:num]
+        return scored_nodes
 
     def identify_context(self, df):
         """Analyze indicators to define the market scene."""
@@ -101,12 +104,16 @@ class PredictiveAgent:
 
         # 3. Choose the Arsenal using the AI Optimizer
         optimized_arsenal = self.optimize_node_selection(
-            market_nodes=all_nodes, 
-            market_state=market_state, 
+            market_nodes=all_nodes,
+            market_state=market_state,
             mode="BALANCED"
         )
 
         print(f"🤖 AI Arsenal: Selected {len(optimized_arsenal)} nodes for this trade.")
+        if len(optimized_arsenal) > 0:
+            print("   📝 Node Relevance Scores:")
+            for node in optimized_arsenal:
+                print(f"      - {node.get('name', node.get('category'))}: category={node.get('category')}, importance={node.get('importance')}")
 
         # 4. Fetch the chosen nodes (pass node objects)
         intel, failure_flag = await self.pipeline.fetch_dynamic_tools(optimized_arsenal)
@@ -117,24 +124,31 @@ class PredictiveAgent:
 
         # --- Weighted Decision Making ---
         if len(intel) > 0:
-            weighted_sum = 0
-            total_weight = 0
+            total_weighted_signal = 0
+            sum_of_weights = 0
             print("   📝 Node Scores:")
-            for node in optimized_arsenal:
-                category = node.get("category", "Unknown")
-                name = node.get("name", "Unknown")
-                signal = intel.get(name, 0.5)
+            for category, signal in intel.items():
+                # Try to match node by both category and name for robustness
+                node = next((n for n in optimized_arsenal if n.get('category') == category or n.get('name') == category), None)
+                if node and 'importance' in node:
+                    weight = node['importance']
+                else:
+                    print(f"      [DEBUG] Could not find node for category '{category}' in optimized_arsenal, defaulting weight to 2. Arsenal: {[n.get('category') for n in optimized_arsenal]}")
+                    weight = 2
                 # If signal is a Signal object, extract its value
                 if hasattr(signal, 'value'):
                     signal_value = signal.value
                 else:
                     signal_value = signal
-                weight = self.calculate_ai_importance(category, market_state)
-                score = 1 if signal_value > 0.6 else (-1 if signal_value < 0.4 else 0)
-                print(f"      - {name} [{category}]: signal={signal_value:.3f}, score={score}, weight={weight}")
-                weighted_sum += (score * weight)
-                total_weight += weight
-            confidence = weighted_sum / total_weight if total_weight > 0 else 0
+                # Handle NoneType signal values gracefully
+                if signal_value is None:
+                    print(f"      [WARN] Signal value for {category} is None. Skipping in consensus.")
+                    continue
+                score = (signal_value - 0.5) * 2
+                print(f"      - {category}: weight={weight}")
+                total_weighted_signal += (score * weight)
+                sum_of_weights += weight
+            confidence = total_weighted_signal / sum_of_weights if sum_of_weights > 0 else 0
             decision = "BUY" if confidence > 0.2 else ("SELL" if confidence < -0.2 else "HOLD")
             print(f"   🎯 [Decision] {decision} (Confidence: {confidence:.2f})")
 
