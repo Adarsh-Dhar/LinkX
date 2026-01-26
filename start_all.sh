@@ -22,38 +22,24 @@ sleep 2
 
 # 2. Start Registry/Discovery Service
 echo "📒 Starting Registry/Discovery Service..."
-cd "$SCRIPT_DIR/server"
-if [ ! -d "node_modules" ]; then pnpm install; fi
-node registry.js &
-REGISTRY_PID=$!
-echo "   ✅ Registry PID: $REGISTRY_PID"
-sleep 2
 
-# 2b. Start Demo Provider Server
+# 2. Start Demo Provider Microservices (Unified)
 echo "📡 Starting Demo Node Providers..."
-node demo_providers.cjs &
+"$SCRIPT_DIR/start_demo_providers.sh" &
 DEMO_PROVIDERS_PID=$!
-echo "   ✅ Demo Providers PID: $DEMO_PROVIDERS_PID"
+echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID)"
 sleep 2
 
-# 3. Start All Provider Microservices
-echo "🌐 Starting Provider Microservices..."
-for cat in {0..23}
-do
-    for comp in 0 1
-    do
-        node provider.js $cat $comp &
-    done
-done
-echo "   ✅ All Providers Launched"
-sleep 5
+# 3. (SKIPPED) Provider Microservices (legacy provider.js) are not used. All providers are now in demo_providers.js
+echo "🌐 Provider Microservices are now handled by demo_providers.js."
+sleep 2
 
 # 4. Start Real Data Source (Market Analyst Server)
 echo "📈 Starting Market Analyst Server..."
 if [ -f "index.js" ]; then
         node index.js &
 else
-        node index.cjs &
+        node server/index.cjs &
 fi
 SERVER_PID=$!
 echo "   ✅ Analyst Server PID: $SERVER_PID"

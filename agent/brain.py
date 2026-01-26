@@ -6,43 +6,53 @@ import os
 from datetime import datetime
 
 class TradingNetwork(nn.Module):
-    """
-    Deep Neural Network for trading decisions.
-    Architecture: 48 inputs -> 64 hidden -> 64 hidden -> 3 outputs (HOLD, BUY, SELL)
-    """
     def __init__(self, input_size=48, hidden_size=64, output_size=3):
-        super(TradingNetwork, self).__init__()
-        
-        # Layer 1: Input Layer (48 market features)
+        super().__init__()
+        # Define the neural network layers
         self.fc1 = nn.Linear(input_size, hidden_size)
-        self.bn1 = nn.BatchNorm1d(hidden_size)  # Batch normalization for stability
-        self.relu = nn.ReLU()
-        self.dropout1 = nn.Dropout(0.2)  # Prevent overfitting
+        self.fc2 = nn.Linear(hidden_size, output_size)
         
-        # Layer 2: Hidden Layer (Pattern Recognition)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.bn2 = nn.BatchNorm1d(hidden_size)
-        self.dropout2 = nn.Dropout(0.2)
-        
-        # Layer 3: Output Layer (Decision Probabilities)
-        # Output: [P(HOLD), P(BUY), P(SELL)]
-        self.fc3 = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.Softmax(dim=1)
+        # Initialize weights
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """Initialize weights using Kaiming uniform distribution."""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, a=np.sqrt(5))
+                if m.bias is not None:
+                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                    bound = 1 / np.sqrt(fan_in)
+                    nn.init.uniform_(m.bias, -bound, bound)
 
     def forward(self, x):
-        # Forward pass through the network
-        out = self.fc1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.dropout1(out)
-        
-        out = self.fc2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-        out = self.dropout2(out)
-        
-        out = self.fc3(out)
-        return self.softmax(out)
+        """Forward pass through the network."""
+        x = torch.relu(self.fc1(x))
+        x = torch.softmax(self.fc2(x), dim=1)  # Probability distribution over actions
+        return x
+
+
+class NeuralBrain(TradingNetwork):
+    def __init__(self, input_size=48, hidden_size=64, output_size=3):
+        super().__init__(input_size, hidden_size, output_size)
+        # You can add custom initialization or methods here if needed
+
+    def conclude(self, df, intel):
+        """
+        Make a trading decision based on market data (df) and proprietary intel (dict).
+        Returns (decision, confidence).
+        """
+        # Example: Use last close price and dummy logic for demonstration
+        close = df['close'].iloc[-1] if 'close' in df.columns else 0.0
+        # Optionally use intel data if available
+        # For now, just return HOLD with 0.5 confidence if no logic
+        # Replace with your real decision logic
+        action = "HOLD"
+        confidence = 0.5
+        if close > 0:
+            action = "BUY" if close % 2 == 0 else "SELL"
+            confidence = 0.8
+        return action, confidence
 
 
 class RLAgent:

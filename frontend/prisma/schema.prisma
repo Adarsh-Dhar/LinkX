@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:../agent/agent_state.db"
+  url      = "file:./prisma/dev.db"
 }
 
 
@@ -48,25 +48,42 @@ model Trade {
   status          String   @default("CONFIRMED") // PENDING, CONFIRMED, FAILED
   
   timestamp       DateTime @default(now())
-  alphaSignals    AlphaSignal[]
+  alphaNodes      AlphaNode[] @relation("TradeAlphaNodes")
   tradeDecisions TradeDecision[]
 }
 
 // --------------------------------------------------------
 // 2. ALPHA / SIGNALS (Populates: "Alpha Purchased")
 // --------------------------------------------------------
-model AlphaSignal {
-  id              String   @id @default(uuid())
-  source          String   // e.g. "Human RPC", "Magical Headlines", "Dopamine Calc"
-  rawSignal       String   // The text or JSON data received
-  costUsd         Float    // Cost to buy this data (if using x402)
+
+model AlphaNode {
+    trades          Trade[]     @relation("TradeAlphaNodes")
+  id                 String   @id @default(uuid())
+  name               String
+  category           String
+  description        String?
+  price              Float    @default(0.0)
+  reputation         Int      @default(0)
+  status             String   @default("active") // "active", "inactive"
+  isPurchased        Boolean  @default(false)
   
-  // Did we act on it?
-  executed        Boolean  @default(false)
-  tradeId         String?
-  trade           Trade?   @relation(fields: [tradeId], references: [id])
+  // --- NEW: Technical Connectivity ---
+  endpointUrl        String?
+  apiKey             String?
+  icon               String   @default("activity")
   
-  timestamp       DateTime @default(now())
+  // --- NEW: Professional Data Metadata ---
+  qualityScore       Int      @default(0)      // 0-100 metric
+  latencyMs          Int      @default(0)      // For HFT strategy matching
+  assetCoverage      String?                   // Comma-separated tickers (e.g., "WETH, USDC")
+  granularity        String?                   // e.g., "Tick", "1m", "Daily"
+  lastUpdated        DateTime @default(now())  // Freshness check
+  
+  // --- NEW: Strategy Integrity ---
+  hasPitFlag         Boolean  @default(false)  // Point-in-Time Flag
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 // --------------------------------------------------------
