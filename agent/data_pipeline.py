@@ -56,8 +56,13 @@ class DataPipeline:
         abi_path = os.path.join(os.path.dirname(__file__), "usdc_abi.json")
         with open(abi_path, "r") as f:
             usdc_abi = json.load(f)
+        # Load batch unlock contract ABI (replace with actual ABI file as needed)
+        unlock_abi_path = os.path.join(os.path.dirname(__file__), "../abi/vvsrouter.ts")  # Example, replace as needed
+        with open(unlock_abi_path, "r") as f:
+            unlock_abi = f.read()  # In production, parse as JSON if ABI is in JSON format
         cronos_rpc = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
         usdc_contract_addr = os.getenv("USDC_CONTRACT", "0xE373E44E5e64496BD092A5ad097881C0fa31D326")
+        unlock_contract_addr = "0x1234567890abcdef1234567890abcdef12345678"  # Placeholder address
         private_key = os.getenv("WALLET_PRIVATE_KEY")
         if not private_key:
             print("      ❌ Missing wallet private key for payment.")
@@ -72,28 +77,33 @@ class DataPipeline:
             print("      ⚠️ No payment required for batch (total cost is zero).")
             return True
         try:
-            # Get decimals
             decimals = usdc_contract.functions.decimals().call()
             total_cost_wei = int(total_cost * (10 ** decimals))
-            # Check balance
             balance = usdc_contract.functions.balanceOf(my_addr).call()
             if balance < total_cost_wei:
                 print(f"      ❌ Insufficient USDC balance. Have: {balance/(10**decimals):.2f}, Need: {total_cost:.2f}")
                 return False
-            # Approve if needed
-            allowance = usdc_contract.functions.allowance(my_addr, usdc_contract_addr).call()
+            allowance = usdc_contract.functions.allowance(my_addr, unlock_contract_addr).call()
             if allowance < total_cost_wei:
-                print("      🔐 Approving USDC contract for batch payment...")
+                print("      🔐 Approving unlock contract for batch payment...")
                 nonce = w3.eth.get_transaction_count(my_addr)
-                tx = usdc_contract.functions.approve(usdc_contract_addr, total_cost_wei).build_transaction({
+                tx = usdc_contract.functions.approve(unlock_contract_addr, total_cost_wei).build_transaction({
                     'from': my_addr, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
                 })
                 signed = w3.eth.account.sign_transaction(tx, private_key)
                 w3.eth.send_raw_transaction(signed.raw_transaction)
-            # Simulate unlock: Replace with actual contract call to unlock nodes
-            print(f"      💸 Executing batch payment for {len(node_objs)} nodes. Total cost: {total_cost:.2f} USDC.")
-            # TODO: Replace with actual unlock contract call if available
-            print("      ✅ Batch payment successful.")
+            # Call the unlock contract's batch unlock method (replace with actual method and params)
+            unlock_contract = w3.eth.contract(address=unlock_contract_addr, abi=unlock_abi)
+            node_ids = [int(n.get("id", 0)) for n in node_objs]
+            nonce = w3.eth.get_transaction_count(my_addr)
+            # Replace 'batchUnlock' and params with actual contract method
+            tx = unlock_contract.functions.batchUnlock(node_ids, total_cost_wei).build_transaction({
+                'from': my_addr, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
+            })
+            signed = w3.eth.account.sign_transaction(tx, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            print(f"      💸 Executed batch unlock for {len(node_objs)} nodes. Tx: {tx_hash.hex()}")
+            print("      ✅ Batch payment and unlock successful.")
             return True
         except Exception as e:
             print(f"      ❌ Batch payment error: {e}")

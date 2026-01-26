@@ -1,3 +1,18 @@
+# Expose optimization graph data for dashboard
+@app.get("/optimization-graph")
+async def optimization_graph(
+    situation: str,
+    mode: str = "BALANCED",
+    min_accuracy: int = 15,
+    max_cost: float = 50.0
+):
+    if data_pipeline is None:
+        raise HTTPException(status_code=500, detail="Data pipeline not initialized")
+    all_nodes = await data_pipeline.refresh_market_knowledge()
+    from agent.predictive_agent import PredictiveAgent
+    agent = PredictiveAgent()
+    graph_data = agent.get_optimization_graph_data(all_nodes, situation)
+    return {"graph": graph_data, "situation": situation, "mode": mode}
 @app.get("/cost-accuracy-graph")
 async def cost_accuracy_graph(
     situation: str,
