@@ -4,8 +4,6 @@ import sys
 import threading
 from dotenv import load_dotenv
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from agent.wallet_manager import WalletManager
 from agent.trading_engine import TradingEngine
 from agent.autonomous_loop import run_autonomous_loop

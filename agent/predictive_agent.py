@@ -1,3 +1,18 @@
+# Allow running this file directly for loop testing
+if __name__ == "__main__":
+    import asyncio
+    from agent.trading_engine import TradingEngine
+    from agent.main import MarketManager
+    print("[Standalone] Running PredictiveAgent autonomous loop...")
+    agent = PredictiveAgent(MarketManager(), TradingEngine(None), simulation_mode=True)
+    async def main_loop():
+        while True:
+            try:
+                await agent.run_cycle()
+            except Exception as e:
+                print(f"[StandaloneLoop] Exception: {e}")
+            await asyncio.sleep(10)
+    asyncio.run(main_loop())
 
 import asyncio
 import numpy as np
@@ -188,7 +203,7 @@ class PredictiveAgent:
         print(f"   📊 Consensus Threshold: {consensus_threshold*100:.0f}%")
 
         # 5. FILTERED FETCH FROM DB (Proactive: Fetch All, Filter, Buy)
-        result = await self.pipeline.fetch_dynamic_tools(toolkit_names)
+        result = await self.pipeline.fetch_dynamic_tools(selected_nodes)
         if result is None:
             intel, fetch_failed = {}, True
         else:

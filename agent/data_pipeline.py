@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from agent.data_consumer import fetch_node_data
+from .data_consumer import fetch_node_data
 
 class DataPipeline:
     def __init__(self, market_manager):
@@ -57,12 +57,13 @@ class DataPipeline:
         with open(abi_path, "r") as f:
             usdc_abi = json.load(f)
         # Load batch unlock contract ABI (replace with actual ABI file as needed)
-        unlock_abi_path = os.path.join(os.path.dirname(__file__), "../abi/vvsrouter.ts")  # Example, replace as needed
+        unlock_abi_path = os.path.join(os.path.dirname(__file__), "../abi/vvsrouter.json")
         with open(unlock_abi_path, "r") as f:
-            unlock_abi = f.read()  # In production, parse as JSON if ABI is in JSON format
+            unlock_abi = json.load(f)
         cronos_rpc = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
         usdc_contract_addr = os.getenv("USDC_CONTRACT", "0xE373E44E5e64496BD092A5ad097881C0fa31D326")
         unlock_contract_addr = "0x1234567890abcdef1234567890abcdef12345678"  # Placeholder address
+        unlock_contract_addr = Web3.to_checksum_address(unlock_contract_addr)
         private_key = os.getenv("WALLET_PRIVATE_KEY")
         if not private_key:
             print("      ❌ Missing wallet private key for payment.")
@@ -92,18 +93,30 @@ class DataPipeline:
                 })
                 signed = w3.eth.account.sign_transaction(tx, private_key)
                 w3.eth.send_raw_transaction(signed.raw_transaction)
-            # Call the unlock contract's batch unlock method (replace with actual method and params)
+            # Call the VVS Router's swapExactTokensForTokens as a placeholder for payment logic
             unlock_contract = w3.eth.contract(address=unlock_contract_addr, abi=unlock_abi)
-            node_ids = [int(n.get("id", 0)) for n in node_objs]
+            # Example: swap USDC for WCRO (or another token) as a payment simulation
+            # You must replace these addresses with real token addresses for your use case
+            usdc_token = usdc_contract_addr
+            wcro_token = os.getenv("WCRO_CONTRACT", "0x8F65e9482DB43F403400C6Cb7B20E7dc132d21D2")
+            path = [Web3.to_checksum_address(usdc_token), Web3.to_checksum_address(wcro_token)]
+            amount_in = total_cost_wei
+            amount_out_min = 1  # Accept any amount out for now
+            to_addr = my_addr
+            deadline = int(datetime.utcnow().timestamp()) + 600
             nonce = w3.eth.get_transaction_count(my_addr)
-            # Replace 'batchUnlock' and params with actual contract method
-            tx = unlock_contract.functions.batchUnlock(node_ids, total_cost_wei).build_transaction({
-                'from': my_addr, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
+            tx = unlock_contract.functions.swapExactTokensForTokens(
+                amount_in, amount_out_min, path, to_addr, deadline
+            ).build_transaction({
+                'from': my_addr,
+                'nonce': nonce,
+                'gasPrice': int(w3.eth.gas_price * 1.2),
+                'gas': 120000  # Increased gas limit
             })
             signed = w3.eth.account.sign_transaction(tx, private_key)
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-            print(f"      💸 Executed batch unlock for {len(node_objs)} nodes. Tx: {tx_hash.hex()}")
-            print("      ✅ Batch payment and unlock successful.")
+            print(f"      💸 Executed swapExactTokensForTokens for {len(node_objs)} nodes. Tx: {tx_hash.hex()}")
+            print("      ✅ Batch payment and unlock (swap) successful.")
             return True
         except Exception as e:
             print(f"      ❌ Batch payment error: {e}")

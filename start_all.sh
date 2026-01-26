@@ -5,30 +5,54 @@ cd "$SCRIPT_DIR"
 echo "🚀 STARTING ALPHA CONSUMER (EXPERT MODE)"
 echo "------------------------------------------------"
 
+
 # 1. Cleanup
 echo "🧹 Cleaning up..."
 pkill -f "python3.*agent"
 pkill -f "node.*server"
+pkill -f "node.*provider.js"
+pkill -f "node.*registry.js"
 pkill -f "next-server"
 lsof -ti:8000 | xargs kill -9 2>/dev/null
 lsof -ti:3050 | xargs kill -9 2>/dev/null
+lsof -ti:3999 | xargs kill -9 2>/dev/null
+lsof -ti:4000-4047 | xargs kill -9 2>/dev/null
+sleep 2
 
-# 2. Start Real Data Source (Market Analyst Server)
-echo "📈 Starting Market Analyst Server..."
+
+# 2. Start Registry/Discovery Service
+echo "📒 Starting Registry/Discovery Service..."
 cd "$SCRIPT_DIR/server"
 if [ ! -d "node_modules" ]; then pnpm install; fi
+node registry.js &
+REGISTRY_PID=$!
+echo "   ✅ Registry PID: $REGISTRY_PID"
+sleep 2
 
-# Robust start for index.js or index.cjs
+# 3. Start All Provider Microservices
+echo "🌐 Starting Provider Microservices..."
+for cat in {0..23}
+do
+    for comp in 0 1
+    do
+        node provider.js $cat $comp &
+    done
+done
+echo "   ✅ All Providers Launched"
+sleep 5
+
+# 4. Start Real Data Source (Market Analyst Server)
+echo "📈 Starting Market Analyst Server..."
 if [ -f "index.js" ]; then
-    node index.js &
+        node index.js &
 else
-    node index.cjs &
+        node index.cjs &
 fi
 SERVER_PID=$!
 echo "   ✅ Analyst Server PID: $SERVER_PID"
 sleep 5
 
-# 3. Setup Database
+# 5. Setup Database
 echo "🗄️  Setting up Database..."
 cd "$SCRIPT_DIR/frontend"
 DB_PATH="$SCRIPT_DIR/agent/agent_state.db"
@@ -36,7 +60,7 @@ export DATABASE_URL="file:$DB_PATH"
 npx prisma db push --accept-data-loss
 npx prisma db seed
 
-# 4. Start Frontend
+# 6. Start Frontend
 echo "🖥️  Starting Frontend..."
 export DATABASE_URL="file:$DB_PATH"
 pnpm run dev &
@@ -45,19 +69,22 @@ echo "   ✅ Frontend PID: $FRONTEND_PID"
 echo "   ⏳ Waiting 15s for Frontend to boot..."
 sleep 15
 
-# 5. Start Agent (WITH UNBUFFERED LOGS)
+# 7. Start Agent (WITH UNBUFFERED LOGS)
 echo "🤖 Starting Agent..."
-cd "$SCRIPT_DIR/agent"
-if [ ! -d "venv" ]; then python3 -m venv venv; fi
-source venv/bin/activate
-pip install -r requirements.txt
+
+# Ensure venv exists and activate from agent dir, but run uvicorn from project root
+if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
+source "$SCRIPT_DIR/agent/venv/bin/activate"
+pip install -r "$SCRIPT_DIR/agent/requirements.txt"
 export DATABASE_URL="file:$DB_PATH"
 export RPC_URL="https://evm-t3.cronos.org"
 export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
 
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload &
+# Run uvicorn from project root so 'agent' is a package
+cd "$SCRIPT_DIR"
+uvicorn agent.api_real:app --host 0.0.0.0 --port 8000 --reload &
 AGENT_PID=$!
 
 echo "✅ System Online. Watch terminal for '🤖 EXPERT AGENT ANALYSIS'..."
-trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID; exit" SIGINT SIGTERM
+trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID; pkill -f provider.js; exit" SIGINT SIGTERM
 wait

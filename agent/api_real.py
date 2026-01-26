@@ -1,3 +1,33 @@
+from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+import os
+import sys
+from datetime import datetime
+import json
+import asyncio
+import numpy as np
+import torch
+from pathlib import Path
+from agent.brain import RLAgent
+from agent.data_pipeline import DataPipeline
+from agent.main import MarketManager
+
+# FastAPI app definition and CORS setup (must be before any @app decorators)
+app = FastAPI(title="Alpha-Consumer Agent API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3600"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global state
+brain = None
+data_pipeline = None
+
 # Expose optimization graph data for dashboard
 @app.get("/optimization-graph")
 async def optimization_graph(
@@ -29,84 +59,39 @@ async def cost_accuracy_graph(
     agent = PredictiveAgent()
     graph = agent.cost_accuracy_graph(all_nodes, situation)
     return {"graph": graph, "situation": situation, "mode": mode}
-"""
-Real FastAPI Agent - Minimal implementation without broken dependencies
-Uses real neural network and data pipeline without crypto_com_agent_client
-"""
-from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import os
-import sys
-from datetime import datetime
-import json
-import asyncio
-import numpy as np
-import torch
-from pathlib import Path
-
-# Import neural components directly
-from brain import RLAgent
-try:
-    from data_pipeline import DataPipeline
-except ImportError:
-    import thriftpy2 as thriftpy
-    class DataPipeline:
-        def __init__(self, *args, **kwargs):
-            pass
-        def get_market_state(self):
-            raise NotImplementedError("DataPipeline.get_market_state is not implemented.")
-        def get_feature_names(self):
-            return []
-        def get_raw_values(self):
-            return []
-        def get_normalized_vector(self):
-            return []
-
-app = FastAPI(title="Alpha-Consumer Agent API", version="1.0.0")
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3600"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Global state
-brain = None
-data_pipeline = None
 connected_websockets: List[WebSocket] = []
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize neural components on startup"""
+    """Initialize neural components and start background trading loop on startup"""
+    import logging
+    import asyncio
     global brain, data_pipeline
-    
-    print("🚀 Initializing Real Agent API...")
-    
-    # Load the brain (neural network). Create if not exists.
-    brain_path = Path(__file__).parent / "brain.pth"
-    
-    if brain_path.exists():
-        brain = RLAgent(model_path=str(brain_path))
-        print("✅ Neural network loaded from brain.pth")
-    else:
-        print("🆕 Creating new untrained neural network (brain.pth not found)")
-        brain = RLAgent(model_path=str(brain_path))
-        # Save the freshly initialized model
-        torch.save(brain.model.state_dict(), str(brain_path))
-        print(f"💾 Saved initialized model to {brain_path}")
-    
-    brain.model.eval()
-    
-    # Initialize data pipeline. Fail hard if broken.
-    data_pipeline = DataPipeline()
-    print("✅ Data pipeline initialized")
-    
-    print("✨ Agent API ready")
+    try:
+        print("🚀 Initializing Real Agent API...")
+        # Load the brain (neural network). Create if not exists.
+        brain_path = Path(__file__).parent / "brain.pth"
+        if brain_path.exists():
+            brain = RLAgent(model_path=str(brain_path))
+            print("✅ Neural network loaded from brain.pth")
+        else:
+            print("🆕 Creating new untrained neural network (brain.pth not found)")
+            brain = RLAgent(model_path=str(brain_path))
+            torch.save(brain.model.state_dict(), str(brain_path))
+            print(f"💾 Saved initialized model to {brain_path}")
+        brain.model.eval()
+        # Initialize data pipeline. Fail hard if broken.
+        data_pipeline = DataPipeline(MarketManager())
+        print("✅ Data pipeline initialized")
+        # Start threaded autonomous loop using the same logic as CLI
+        from agent.main import IntelligentAgent
+        from agent.autonomous_loop import start_background_loop
+        agent = IntelligentAgent()
+        start_background_loop(agent)
+        print("✨ Agent API ready and autonomous loop started (threaded)")
+    except Exception as e:
+        logging.exception(f"[Startup] Exception during initialization: {e}")
+        print(f"[Startup] Exception during initialization: {e}")
 
 @app.get("/")
 async def root():
