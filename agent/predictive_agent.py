@@ -173,7 +173,15 @@ class PredictiveAgent:
         all_nodes = await self.pipeline.refresh_market_knowledge()
         selected_nodes = self.optimize_node_selection(all_nodes, situation, mode, min_accuracy, max_cost)
         toolkit_names = [n["name"] for n in selected_nodes]
-        consensus_threshold = self.SITUATION_REQUIREMENTS.get(situation, {}).get("consensus", 0.7)
+        # Allow override via environment variable
+        env_threshold = os.getenv("CONSENSUS_THRESHOLD")
+        if env_threshold is not None:
+            try:
+                consensus_threshold = float(env_threshold)
+            except ValueError:
+                consensus_threshold = self.SITUATION_REQUIREMENTS.get(situation, {}).get("consensus", 0.7)
+        else:
+            consensus_threshold = self.SITUATION_REQUIREMENTS.get(situation, {}).get("consensus", 0.7)
 
         print(f"   🧠 Context: {situation}")
         print(f"   📋 [OPTIMIZED] Arsenal: {', '.join(toolkit_names)}")

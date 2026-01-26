@@ -1,3 +1,19 @@
+@app.get("/cost-accuracy-graph")
+async def cost_accuracy_graph(
+    situation: str,
+    mode: str = "BALANCED",
+    min_accuracy: int = 15,
+    max_cost: float = 50.0
+):
+    if data_pipeline is None:
+        raise HTTPException(status_code=500, detail="Data pipeline not initialized")
+    all_nodes = await data_pipeline.refresh_market_knowledge()
+    # Use optimizer to get node list for the situation
+    # Import PredictiveAgent locally to avoid circular import
+    from agent.predictive_agent import PredictiveAgent
+    agent = PredictiveAgent()
+    graph = agent.cost_accuracy_graph(all_nodes, situation)
+    return {"graph": graph, "situation": situation, "mode": mode}
 """
 Real FastAPI Agent - Minimal implementation without broken dependencies
 Uses real neural network and data pipeline without crypto_com_agent_client

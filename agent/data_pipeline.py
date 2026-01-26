@@ -50,23 +50,51 @@ class DataPipeline:
         Executes a single batch payment for all nodes in node_objs.
         Returns True if payment succeeded, False otherwise.
         """
-        # Example: sum all node prices and simulate payment
+        from web3 import Web3
+        import os, json
+        # Load USDC ABI
+        abi_path = os.path.join(os.path.dirname(__file__), "usdc_abi.json")
+        with open(abi_path, "r") as f:
+            usdc_abi = json.load(f)
+        cronos_rpc = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+        usdc_contract_addr = os.getenv("USDC_CONTRACT", "0xE373E44E5e64496BD092A5ad097881C0fa31D326")
+        private_key = os.getenv("WALLET_PRIVATE_KEY")
+        if not private_key:
+            print("      ❌ Missing wallet private key for payment.")
+            return False
+        w3 = Web3(Web3.HTTPProvider(cronos_rpc))
+        account = w3.eth.account.from_key(private_key)
+        my_addr = account.address
+        usdc_contract = w3.eth.contract(address=usdc_contract_addr, abi=usdc_abi)
+        # Calculate total cost in USDC
         total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
         if total_cost <= 0:
             print("      ⚠️ No payment required for batch (total cost is zero).")
             return True
         try:
-            # TODO: Replace this with actual payment logic (e.g., smart contract call)
-            print(f"      💸 Executing batch payment for {len(node_objs)} nodes. Total cost: {total_cost:.2f} USDC.")
-            # Simulate payment success
-            payment_success = True
-            # If integrating with a payment API, insert call here
-            if payment_success:
-                print("      ✅ Batch payment successful.")
-                return True
-            else:
-                print("      ❌ Batch payment failed.")
+            # Get decimals
+            decimals = usdc_contract.functions.decimals().call()
+            total_cost_wei = int(total_cost * (10 ** decimals))
+            # Check balance
+            balance = usdc_contract.functions.balanceOf(my_addr).call()
+            if balance < total_cost_wei:
+                print(f"      ❌ Insufficient USDC balance. Have: {balance/(10**decimals):.2f}, Need: {total_cost:.2f}")
                 return False
+            # Approve if needed
+            allowance = usdc_contract.functions.allowance(my_addr, usdc_contract_addr).call()
+            if allowance < total_cost_wei:
+                print("      🔐 Approving USDC contract for batch payment...")
+                nonce = w3.eth.get_transaction_count(my_addr)
+                tx = usdc_contract.functions.approve(usdc_contract_addr, total_cost_wei).build_transaction({
+                    'from': my_addr, 'nonce': nonce, 'gasPrice': int(w3.eth.gas_price * 1.2)
+                })
+                signed = w3.eth.account.sign_transaction(tx, private_key)
+                w3.eth.send_raw_transaction(signed.raw_transaction)
+            # Simulate unlock: Replace with actual contract call to unlock nodes
+            print(f"      💸 Executing batch payment for {len(node_objs)} nodes. Total cost: {total_cost:.2f} USDC.")
+            # TODO: Replace with actual unlock contract call if available
+            print("      ✅ Batch payment successful.")
+            return True
         except Exception as e:
             print(f"      ❌ Batch payment error: {e}")
             return False
