@@ -55,6 +55,7 @@ class WalletManager:
         signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
+        self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
         return tx_hash.hex()
 
     def execute_swap(self, token_in, token_out, amount):
