@@ -12,47 +12,34 @@ class Signal:
         self.value = value
 
 def fetch_node_data(*args, **kwargs) -> Any:
-    """
-    Fetch data from a node endpoint, handling x402 handshake if required.
-    Args:
-        node_url (str): The endpoint URL to fetch from.
-        api_key (str, optional): API key for the node, if required.
-        wallet_manager (WalletManager, optional): WalletManager instance for payments.
-        price (float, optional): Expected price for the data (for test/mocks).
-        destination (str, optional): Payment destination (for test/mocks).
-    Returns:
-        dict: The fetched data.
-    """
     import requests
     from agent.wallet_manager import WalletManager
     node_url = kwargs.get('node_url') or (args[0] if args else None)
     api_key = kwargs.get('api_key')
-    wallet_manager = kwargs.get('wallet_manager')
+    price = kwargs.get('price')
+    category = kwargs.get('category')
+    wallet = WalletManager()
     headers = {}
     if api_key:
         headers['x-api-key'] = api_key
-    resp = requests.get(node_url, headers=headers, timeout=5)
-    if resp.status_code == 200:
-        return resp.json()
-    if resp.status_code == 402:
-        invoice = resp.json()
-        price = float(invoice.get("price", 0))
-        destination = invoice.get("destination")
-        if not price or not destination:
-            raise Exception("Invalid x402 invoice")
-        if not wallet_manager:
-            raise Exception("WalletManager required for payment")
-        # 1. Pay via WalletManager (returns tx_hash)
-        tx_hash = wallet_manager.send_transaction(destination=destination, amount=price)
-        if not tx_hash:
-            raise Exception("USDC payment failed")
-        # 2. Retry with X-Payment-Proof
-        headers['x-payment-proof'] = tx_hash
-        paid_resp = requests.get(node_url, headers=headers, timeout=5)
-        if paid_resp.status_code == 200:
-            return paid_resp.json()
-        raise Exception(f"Payment proof rejected: {paid_resp.text}")
-    raise Exception(f"Node fetch failed: {resp.status_code} {resp.text}")
+    try:
+        res = requests.get(node_url, headers=headers, timeout=5)
+        if res.status_code == 402:
+            target_wallet = res.headers.get("X-Payment-Wallet")
+            actual_price = float(res.headers.get("X-Payment-Price", price or 0))
+            print(f"   💸 [x402] Paying {actual_price} USDC to unlock {category or node_url}...")
+            tx_hash = wallet.transfer_usdc(target_wallet, actual_price)
+            if tx_hash:
+                res = requests.get(node_url, headers={"X-Payment-Proof": tx_hash}, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            # Return a real Signal object with the value
+            from collections import namedtuple
+            Signal = namedtuple('Signal', ['value'])
+            return Signal(value=data.get('value', 0.5))
+    except Exception as e:
+        print(f"   ❌ [x402 Error] {e}")
+    return None
 
 def normalize_data(category: str, data: dict) -> Signal:
     # TODO: Implement actual normalization logic

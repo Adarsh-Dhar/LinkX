@@ -114,10 +114,18 @@ class DataPipeline:
                 'gas': 120000  # Increased gas limit
             })
             signed = w3.eth.account.sign_transaction(tx, private_key)
-            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-            print(f"      💸 Executed swapExactTokensForTokens for {len(node_objs)} nodes. Tx: {tx_hash.hex()}")
-            print("      ✅ Batch payment and unlock (swap) successful.")
-            return True
+            try:
+                tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+                if tx_hash:
+                    print(f"      💸 Executed swapExactTokensForTokens for {len(node_objs)} nodes. Tx: {tx_hash.hex()}")
+                    print("      ✅ Batch payment and unlock (swap) successful.")
+                    return True
+                else:
+                    print("      ❌ No transaction hash returned (transaction may have failed to broadcast).")
+                    return False
+            except Exception as e:
+                print(f"      ❌ Error sending transaction: {e}")
+                return False
         except Exception as e:
             print(f"      ❌ Batch payment error: {e}")
             return False
