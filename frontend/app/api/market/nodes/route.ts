@@ -1,10 +1,16 @@
-import { NextResponse } from "next/server";
 
-// All node-related API logic has been removed.
-// This endpoint is now disabled.
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 
 export async function GET() {
-  return NextResponse.json({ error: "Node API is disabled. All node features have been removed." }, { status: 410 });
+  try {
+    const nodes = await prisma.alphaNode.findMany({
+      where: { status: 'active' }
+    });
+    return NextResponse.json(nodes);
+  } catch (error) {
+    return NextResponse.json({ error: 'Database failure' }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {

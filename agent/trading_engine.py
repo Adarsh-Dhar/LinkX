@@ -1,7 +1,8 @@
+from agent.wallet_manager import WalletManager
+
 class TradingEngine:
     def __init__(self, wallet=None):
-        self.wallet = wallet
-        # Initialize any other required attributes here
+        self.wallet = wallet or WalletManager()
 
     def trade(self, *args, **kwargs):
         # Implement trading logic here
@@ -9,9 +10,8 @@ class TradingEngine:
 
     def execute_swap(self, from_token, to_token, amount):
         """
-        Execute a token swap. This is a stub for demonstration.
-        Returns a mock transaction hash.
+        Execute a token swap using WalletManager. Returns the real transaction hash.
         """
         print(f"[TradingEngine] Swapping {amount} {from_token} to {to_token}...")
-        # In real implementation, interact with blockchain or exchange
-        return "0xMOCKED_TX_HASH"
+        tx_hash = self.wallet.send_transaction(token_in=from_token, token_out=to_token, amount=amount)
+        return tx_hash

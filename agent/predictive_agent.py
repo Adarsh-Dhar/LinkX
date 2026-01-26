@@ -53,18 +53,15 @@ class PredictiveAgent:
         print(f"   📋 [Arsenal] Required: {', '.join(required_tools)}")
 
         # STEP 3: THINK & PURCHASE (Paid Data via x402)
-        # The pipeline now fetches all nodes, chooses the best, and pays USDC
-        intel = await self.pipeline.fetch_dynamic_tools(required_tools)
+        intel, failure_flag = await self.pipeline.fetch_dynamic_tools(required_tools)
 
         # BLOCKER: Do not trade on incomplete information
-        if len(intel) < len(required_tools):
+        if failure_flag or len(intel) < len(required_tools):
             print(f"   ⚠️ [Skeptical] Failed to buy full arsenal. found {len(intel)}/{len(required_tools)} tools.")
             return
 
         # STEP 4: CONCLUDE & EXECUTE
-        # Pass indicators + bought proprietary data to the Neural Brain
         decision, confidence = self.brain.conclude(df, intel)
-        
         print(f"   🎯 [Decision] {decision} (Confidence: {confidence:.2f})")
 
         if decision in ["BUY", "SELL"] and confidence > 0.75:

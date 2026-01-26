@@ -122,55 +122,44 @@ class DataPipeline:
             print(f"      ❌ Batch payment error: {e}")
             return False
 
-    async def fetch_dynamic_tools(self, node_objs):
+    async def fetch_dynamic_tools(self, required_tools):
         """
-        Fetches data from a list of node objects (with name, category, price, etc). Handles x402 payment batch if needed.
+        Professional Fetch-Think-Pay:
+        1. Fetch all nodes from DB API.
+        2. Filter/sort for best match by reputation, qualityScore, etc.
+        3. Initiate payment-based fetch for selected nodes.
         Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
         """
-        from agent.node_connector import get_connector
+        from agent.wallet_manager import WalletManager
         results = {}
         failure_flag = False
-        if not node_objs:
-            return results, failure_flag
         try:
-            # Build batch requests for all node_objs
-            batch_requests = []
-            name_to_node = {}
-            for node in node_objs:
-                batch_requests.append({
-                    "method": "fetch",
-                    "params": [],
-                    "category": node["category"],
-                    "node_name": node["name"],
-                })
-                name_to_node[node["name"]] = node["name"]
-
-            # If no valid nodes, return early
-            if not batch_requests:
-                return results, True
-
-            # --- x402 payment batch logic ---
-            total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
-            if total_cost > 0:
-                payment_ok = await self.pay_x402_batch(node_objs)
-                if not payment_ok:
-                    print("      ❌ Aborting batch fetch due to payment failure.")
-                    return results, True
-
-            connector = await get_connector()
-            batch_results = await connector.execute_batch(batch_requests)
-
-            for idx, res in enumerate(batch_results):
-                requested_name = node_objs[idx]["name"]
-                node_name = name_to_node.get(requested_name, requested_name)
-                if res.get("success", True) and res.get("data") is not None:
-                    val = res["data"].get("value")
-                    ts = res["data"].get("timestamp", datetime.utcnow())
-                    results[requested_name] = (val, ts)
+            # 1. Fetch all nodes
+            res = requests.get(self.nodes_api_url, timeout=2)
+            all_nodes = res.json() if res.status_code == 200 else []
+            # 2. Filter for required tools, fallback to best substitute
+            selected_nodes = []
+            for tool in required_tools:
+                candidates = [n for n in all_nodes if n.get("name") == tool or n.get("category") == tool]
+                if not candidates:
+                    candidates = [n for n in all_nodes if n.get("category") == tool]
+                if candidates:
+                    best = sorted(
+                        candidates,
+                        key=lambda n: (-int(n.get("reputation", 0)), -int(n.get("qualityScore", 0)), int(n.get("latencyMs", 99999)))
+                    )[0]
+                    selected_nodes.append(best)
                 else:
-                    print(f"      ❌ Failed to acquire data for {requested_name} (node: {node_name}). Error: {res.get('error')}")
+                    print(f"   ❌ No available node for tool: {tool}")
+            # 3. Initiate payment-based fetch for each selected node
+            wallet_manager = WalletManager()
+            for node in selected_nodes:
+                try:
+                    data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
+                    results[node.get("name")] = data
+                except Exception as e:
+                    print(f"   ❌ Failed to fetch {node.get('name')}: {e}")
                     failure_flag = True
-
             return results, failure_flag
         except Exception as e:
             print(f"   ⚠️ Pipeline Sync Error: {e}")
