@@ -68,32 +68,14 @@ class PredictiveAgent:
             acc += node["importance"]
             arr.append({"nodes_count": i, "cumulative_cost": cost, "cumulative_accuracy": acc})
         return arr
-    # Map market situations to required nodes and consensus thresholds
+    # Map market situations to consensus thresholds only (arsenal is now dynamic)
     SITUATION_REQUIREMENTS = {
-        "PARABOLIC_PUMP": {
-            "nodes": ["Whale Alert", "Social Pulse", "Chainlink Sentinel", "Sentiment Surge", "Macro News AI"],
-            "consensus": 0.8
-        },
-        "LIQUIDATION_CASCADE": {
-            "nodes": ["Chainlink Sentinel", "Sentiment Surge", "Whale Alert"],
-            "consensus": 0.7
-        },
-        "VOLATILITY_SQUEEZE": {
-            "nodes": ["Macro News AI", "Neural Oracle", "On-Chain Watcher"],
-            "consensus": 0.6
-        },
-        "PRICE_ANOMALY": {
-            "nodes": ["Quantum Scanner", "Flash Arbitrage", "Chainlink Sentinel"],
-            "consensus": 0.7
-        },
-        "ESTABLISHED_TREND": {
-            "nodes": ["On-Chain Watcher", "Macro News AI"],
-            "consensus": 0.5
-        },
-        "NOISE": {
-            "nodes": ["On-Chain Watcher"],
-            "consensus": 0.5
-        }
+        "PARABOLIC_PUMP": {"consensus": 0.8},
+        "LIQUIDATION_CASCADE": {"consensus": 0.7},
+        "VOLATILITY_SQUEEZE": {"consensus": 0.6},
+        "PRICE_ANOMALY": {"consensus": 0.7},
+        "ESTABLISHED_TREND": {"consensus": 0.5},
+        "NOISE": {"consensus": 0.5},
     }
 
     async def execute_trade(self, action, risk_factor=1.0):

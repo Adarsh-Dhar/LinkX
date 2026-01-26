@@ -18,5 +18,29 @@ SITUATION_WEIGHTS = {
         "Macro": 6,
         "Sentiment": 4,
     },
+    "VOLATILITY_SQUEEZE": {
+        "Whale Alert": 3,
+        "Social Pulse": 4,
+        "Technical": 10,
+        "On-chain": 7,
+        "Macro": 5,
+        "Sentiment": 2,
+    },
+    "PRICE_ANOMALY": {
+        "Whale Alert": 7,
+        "Social Pulse": 3,
+        "Technical": 8,
+        "On-chain": 9,
+        "Macro": 4,
+        "Sentiment": 2,
+    },
+    "ESTABLISHED_TREND": {
+        "Whale Alert": 2,
+        "Social Pulse": 3,
+        "Technical": 6,
+        "On-chain": 5,
+        "Macro": 10,
+        "Sentiment": 4,
+    },
     # Add more situations and their category weights as needed
 }

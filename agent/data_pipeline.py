@@ -45,6 +45,32 @@ class DataPipeline:
             print(f"   ⚠️ Fetch Error: {e}")
         return None
 
+    async def pay_x402_batch(self, node_objs):
+        """
+        Executes a single batch payment for all nodes in node_objs.
+        Returns True if payment succeeded, False otherwise.
+        """
+        # Example: sum all node prices and simulate payment
+        total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
+        if total_cost <= 0:
+            print("      ⚠️ No payment required for batch (total cost is zero).")
+            return True
+        try:
+            # TODO: Replace this with actual payment logic (e.g., smart contract call)
+            print(f"      💸 Executing batch payment for {len(node_objs)} nodes. Total cost: {total_cost:.2f} USDC.")
+            # Simulate payment success
+            payment_success = True
+            # If integrating with a payment API, insert call here
+            if payment_success:
+                print("      ✅ Batch payment successful.")
+                return True
+            else:
+                print("      ❌ Batch payment failed.")
+                return False
+        except Exception as e:
+            print(f"      ❌ Batch payment error: {e}")
+            return False
+
     async def fetch_dynamic_tools(self, node_objs):
         """
         Fetches data from a list of node objects (with name, category, price, etc). Handles x402 payment batch if needed.
@@ -72,10 +98,13 @@ class DataPipeline:
             if not batch_requests:
                 return results, True
 
-            # --- x402 payment batch logic (stub, expand as needed) ---
-            # total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
-            # if total_cost > 0:
-            #     pay_x402_batch(node_objs)
+            # --- x402 payment batch logic ---
+            total_cost = sum(float(n.get("price", 0.0)) for n in node_objs)
+            if total_cost > 0:
+                payment_ok = await self.pay_x402_batch(node_objs)
+                if not payment_ok:
+                    print("      ❌ Aborting batch fetch due to payment failure.")
+                    return results, True
 
             connector = await get_connector()
             batch_results = await connector.execute_batch(batch_requests)
