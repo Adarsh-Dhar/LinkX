@@ -130,46 +130,20 @@ class DataPipeline:
             print(f"      ❌ Batch payment error: {e}")
             return False
 
-    async def fetch_dynamic_tools(self, required_tools):
+    async def fetch_dynamic_tools(self, node_objs):
         """
-        Professional Fetch-Think-Pay:
-        1. Fetch all nodes from DB API.
-        2. Filter/sort for best match by reputation, qualityScore, etc.
-        3. Initiate payment-based fetch for selected nodes.
-        Returns (results, failure_flag): failure_flag is True if any required tool could not be bought.
+        Accepts a list of node objects (not just names), fetches their data, and returns results.
+        Returns (results, failure_flag): failure_flag is True if any node could not be bought.
         """
         from agent.wallet_manager import WalletManager
         results = {}
         failure_flag = False
-        try:
-            # 1. Fetch all nodes
-            res = requests.get(self.nodes_api_url, timeout=2)
-            all_nodes = res.json() if res.status_code == 200 else []
-            # 2. Filter for required tools, fallback to best substitute
-            selected_nodes = []
-            for tool in required_tools:
-                candidates = [n for n in all_nodes if n.get("name") == tool or n.get("category") == tool]
-                if not candidates:
-                    candidates = [n for n in all_nodes if n.get("category") == tool]
-                if candidates:
-                    best = sorted(
-                        candidates,
-                        key=lambda n: (-int(n.get("reputation", 0)), -int(n.get("qualityScore", 0)), int(n.get("latencyMs", 99999)))
-                    )[0]
-                    selected_nodes.append(best)
-                else:
-                    print(f"   ❌ No available node for tool: {tool}")
-            # 3. Initiate payment-based fetch for each selected node
-            wallet_manager = WalletManager()
-            for node in selected_nodes:
-                try:
-                    data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
-                    results[node.get("name")] = data
-                except Exception as e:
-                    print(f"   ❌ Failed to fetch {node.get('name')}: {e}")
-                    failure_flag = True
-            return results, failure_flag
-        except Exception as e:
-            print(f"   ⚠️ Pipeline Sync Error: {e}")
-            failure_flag = True
-            return results, failure_flag
+        wallet_manager = WalletManager()
+        for node in node_objs:
+            try:
+                data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
+                results[node.get("name")] = data
+            except Exception as e:
+                print(f"   ❌ Failed to fetch {node.get('name')}: {e}")
+                failure_flag = True
+        return results, failure_flag
