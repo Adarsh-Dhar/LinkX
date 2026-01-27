@@ -6,11 +6,26 @@
 
 # Expose optimization graph data for dashboard (must be after app is defined)
 
+
 from fastapi import FastAPI, Query
 from contextlib import asynccontextmanager
 import threading
 import os
 import sys
+
+# --- OpenRouter Client Setup ---
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+    # You must install openai: pip install openai
+
+client = None
+if OpenAI:
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent
@@ -20,30 +35,64 @@ from agent.autonomous_loop import run_autonomous_loop
 
 from pydantic import BaseModel
 
+
 app = FastAPI()
 agent_instance = None
+
+# --- INTENT PARSER USING OPENROUTER ---
+import json
+def parse_human_intent(user_message: str):
+    if not client:
+        return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
+    system_prompt = """
+    You are a trading assistant. Convert user speech into a JSON command.
+    Possible Actions: 
+    - TRADE (side: \"BUY\"/\"SELL\", amount: float)
+    - SET_LIMIT (limit: float)
+    - PAUSE ()
+    - RESUME ()
+    - IGNORE ()
+    
+    Example: \"Grab me fifty bucks of CRO\" -> {\"action\": \"TRADE\", \"side\": \"BUY\", \"amount\": 50.0}
+    Example: \"Stop for a bit\" -> {\"action\": \"PAUSE\"}
+    Return ONLY JSON.
+    """
+    try:
+        response = client.chat.completions.create(
+            model="openai/gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        return {"action": "IGNORE", "error": str(e)}
 
 # Chat request model
 class ChatRequest(BaseModel):
     message: str
 
-# --- INTENT-DRIVEN CHAT ENDPOINT ---
+
+# --- INTENT-DRIVEN CHAT ENDPOINT (OpenRouter) ---
 @app.post("/chat")
 async def handle_chat(request: ChatRequest):
     global agent_instance
-    msg = request.message.lower()
+    msg = request.message
+    intent = parse_human_intent(msg)
+    print(f"[DEBUG] User message: {msg}")
+    print(f"[DEBUG] Parsed intent: {intent}")
 
-    # 1. Handle Direct Trade Commands
-    if "buy" in msg or "sell" in msg:
-        # Simple extraction: "buy 50 usdc of wcro"
-        amount = 50.0 # default
-        import re
-        if "usdc" in msg:
-            match = re.search(r'(\d+)\s*usdc', msg)
-            if match:
-                amount = float(match.group(1))
-        side = "BUY" if "buy" in msg else "SELL"
-        # Set manual command for agent to pick up
+    # Handle errors from intent parser
+    if intent.get("action") == "IGNORE" and "error" in intent:
+        return {"reply": f"❌ Intent parsing failed: {intent['error']}"}
+
+    # Route intent to agent actions
+    if intent.get("action") == "TRADE":
+        side = intent.get("side")
+        amount = intent.get("amount")
         if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
             agent_instance.current_predictive_instance.manual_command = {
                 'type': 'trade',
@@ -54,36 +103,37 @@ async def handle_chat(request: ChatRequest):
         else:
             return {"reply": "❌ Predictive agent not ready for manual trade."}
 
-    # 2. Handle Risk/Profit Insights
-    if "risk" in msg or "don't spend" in msg:
-        import re
-        match = re.search(r'(\d+)', msg)
-        if match:
-            new_limit = float(match.group(1))
-            if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-                agent_instance.current_predictive_instance.max_cost = new_limit
-                return {"reply": f"✅ Risk profile updated. I will not spend more than {new_limit} USDC on data/trades."}
-            else:
-                return {"reply": "❌ Predictive agent not ready to update risk profile."}
-
-    # 3. Handle Profit Goals
-    if "profit" in msg:
+    if intent.get("action") == "SET_LIMIT":
+        limit = intent.get("limit")
         if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.human_instruction = 'profit_goal'
-            return {"reply": "💰 Profit target noted. I will adjust my exit strategy to prioritize your goal."}
+            min_allowed_cost = 10.0
+            if limit is not None and limit >= min_allowed_cost:
+                agent_instance.current_predictive_instance.max_cost = limit
+            else:
+                agent_instance.current_predictive_instance.max_cost = 100.0
+            agent_instance.current_predictive_instance.block_data_purchases = False  # Reset block if limit is raised
+            return {"reply": f"✅ Risk profile updated. I will not spend more than {agent_instance.current_predictive_instance.max_cost} USDC on data/trades. Block reset."}
         else:
-            return {"reply": "❌ Predictive agent not ready to update profit goal."}
+            return {"reply": "❌ Predictive agent not ready to update risk profile."}
 
-    # 4. Handle Pause/Stop
-    if "pause" in msg or "stop" in msg:
+    if intent.get("action") == "PAUSE":
         if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
             agent_instance.current_predictive_instance.paused = True
             return {"reply": "⏸️ Agent paused. No new trades will be made until resumed."}
         else:
             return {"reply": "❌ Predictive agent not ready to pause."}
 
-    # 5. Default: Forward to LLM/Agent Brain (not implemented)
-    return {"reply": "🤖 Message received. (No intent detected or LLM fallback not implemented.)"}
+    if intent.get("action") == "RESUME":
+        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+            agent_instance.current_predictive_instance.paused = False
+            return {"reply": "▶️ Agent resumed. Trading operations are active."}
+        else:
+            return {"reply": "❌ Predictive agent not ready to resume."}
+
+    if intent.get("action") == "IGNORE":
+        return {"reply": "🤖 Message received. (No actionable intent detected.)"}
+
+    return {"reply": f"🤖 Message received. (Unknown intent: {intent})"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

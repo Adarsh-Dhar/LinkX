@@ -20,11 +20,19 @@ class PredictiveAgent:
         self.mode = os.getenv("AGENT_MODE", "BALANCED")
         self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
         # No default daily spend limit; unlimited unless set by user
-        self.max_cost = None
+        max_cost_env = os.getenv("AGENT_MAX_COST", None)
+        min_allowed_cost = 10.0
+        if max_cost_env is not None:
+            try:
+                parsed = float(max_cost_env)
+                self.max_cost = parsed if parsed >= min_allowed_cost else 100.0
+            except Exception:
+                self.max_cost = 100.0
+        else:
+            self.max_cost = 100.0
 
         # --- Human override/intent-driven attributes ---
         self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}
-        self.human_instruction = None  # e.g. 'profit_goal'
         self.paused = False
         self.block_data_purchases = False  # If True, block all data purchases for the rest of the day
 
@@ -121,25 +129,27 @@ class PredictiveAgent:
         from agent.wallet_manager import can_spend, add_spend, get_daily_spend
 
         # --- Block all data purchases if flag is set ---
-        if getattr(self, 'block_data_purchases', False):
+        if self.block_data_purchases:
             print("🛑 Data purchases are currently blocked by human override. Skipping cycle.")
             return
 
         # --- HUMAN OVERRIDE/INTENT CHECKS ---
-        if getattr(self, 'paused', False):
-            print("🛑 Agent is paused by human command. Skipping cycle.")
+        if self.paused:
+            print("⏸️  AGENT IS PAUSED: Skipping autonomous trade check.")
             return
 
-        if getattr(self, 'manual_command', None):
+        if self.manual_command:
             cmd = self.manual_command
-            print(f"🛑 Autonomous loop paused for manual command: {cmd}")
+            print(f"🚀 HUMAN INTERFERENCE: Executing manual {cmd.get('side', 'BUY')} for {cmd.get('amount', 50.0)} USDC...")
             if cmd.get('type') == 'trade':
                 side = cmd.get('side', 'BUY')
                 amount = cmd.get('amount', 50.0)
-                print(f"🚀 [Manual] Executing {side} for {amount} USDC...")
-                tx_hash = self.engine.execute_swap("USDC", "WCRO", amount)
-                if tx_hash:
-                    print(f"✅ [Manual Trade Success] Tx Hash: {tx_hash}")
+                if hasattr(self, 'engine') and self.engine:
+                    tx_hash = self.engine.execute_swap("USDC", "WCRO", amount)
+                    if tx_hash:
+                        print(f"✅ [Manual Trade Success] Tx Hash: {tx_hash}")
+                else:
+                    print("❌ No trading engine available for manual command.")
             # Clear manual command after execution
             self.manual_command = None
             return

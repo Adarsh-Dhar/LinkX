@@ -25,11 +25,12 @@ def run_autonomous_loop(agent, interval_sec=10):
     time.sleep(5)
 
     # --- Persistent PredictiveAgent instance ---
-    agent.current_predictive_instance = PredictiveAgent(
-        market_manager=agent.market,
-        trading_engine=agent.trader,
-        simulation_mode=False
-    )
+    if not hasattr(agent, 'current_predictive_instance') or agent.current_predictive_instance is None:
+        agent.current_predictive_instance = PredictiveAgent(
+            market_manager=agent.market,
+            trading_engine=agent.trader,
+            simulation_mode=False
+        )
 
     while True:
         try:
