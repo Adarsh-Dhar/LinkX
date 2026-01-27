@@ -15,6 +15,11 @@ class PredictiveAgent:
         self.simulation_mode = simulation_mode
         self.is_running = False
 
+        # Read agent config from environment variables
+        self.mode = os.getenv("AGENT_MODE", "BALANCED")
+        self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
+        self.max_cost = float(os.getenv("AGENT_MAX_COST", "50.0"))
+
     def calculate_ai_importance(self, node_category, market_state):
         """
         Returns a high score (8-10) only when the data is vital, and a low score (1-3) when the data is noise.
@@ -46,14 +51,13 @@ class PredictiveAgent:
 
         return 2  # Low relevance for everything else in this specific context
 
-    def optimize_node_selection(self, market_nodes, market_state, mode="BALANCED"):
+    def optimize_node_selection(self, market_nodes, market_state, mode=None):
         """
         Selects only nodes above a dynamic relevance threshold. No fixed Top N.
         """
         scored_nodes = []
-        # Set threshold based on mode
-        # Accurate: take anything > 6 | Balanced: take > 7 | Economy: take > 8
-        threshold = 6 if mode == "ACCURATE" else (8 if mode == "ECONOMY" else 7)
+        # Use self.min_accuracy as threshold (from env)
+        threshold = self.min_accuracy
 
         for node in market_nodes:
             importance = self.calculate_ai_importance(node.get("category"), market_state)
@@ -106,8 +110,14 @@ class PredictiveAgent:
         optimized_arsenal = self.optimize_node_selection(
             market_nodes=all_nodes,
             market_state=market_state,
-            mode="BALANCED"
+            mode=self.mode
         )
+
+        # Optional: Add a check here for max_cost if your optimizer doesn't handle it yet
+        current_total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
+        if current_total_cost > self.max_cost:
+            print(f"⚠️ [Budget] Selected nodes cost {current_total_cost} USDC, exceeding limit of {self.max_cost}")
+            # Optionally filter or abort here
 
         print(f"🤖 AI Arsenal: Selected {len(optimized_arsenal)} nodes for this trade.")
         if len(optimized_arsenal) > 0:
