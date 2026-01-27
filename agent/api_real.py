@@ -14,6 +14,9 @@ from agent.brain import RLAgent
 from agent.data_pipeline import DataPipeline
 from agent.main import MarketManager
 
+# Global agent instance for chat endpoint
+agent_instance = None
+
 # FastAPI app definition and CORS setup (must be before any @app decorators)
 app = FastAPI(title="Alpha-Consumer Agent API", version="1.0.0")
 app.add_middleware(
@@ -86,8 +89,10 @@ async def startup_event():
         # Start threaded autonomous loop using the same logic as CLI
         from agent.main import IntelligentAgent
         from agent.autonomous_loop import start_background_loop
+        global agent_instance
         agent = IntelligentAgent()
         start_background_loop(agent)
+        agent_instance = agent
         print("✨ Agent API ready and autonomous loop started (threaded)")
     except Exception as e:
         logging.exception(f"[Startup] Exception during initialization: {e}")
@@ -356,14 +361,97 @@ async def execute_trade(data: Dict[str, Any]):
             "error": str(e)
         }
 
+
+# --- INTENT-DRIVEN CHAT ENDPOINT ---
+from pydantic import BaseModel
+class ChatRequest(BaseModel):
+    message: str
+
+# Use the same agent as started in startup_event
+import threading
+agent_instance = None
+
 @app.post("/chat")
-async def chat(request: Dict[str, str]):
-    """Handle chat messages"""
-    message = request.get("message", "")
-    return {
-        "response": f"Echo: {message}",
-        "success": True
-    }
+async def handle_chat(request: ChatRequest):
+    global agent_instance
+    msg = request.message.lower()
+
+    # 1. Handle Direct Trade Commands
+    if "buy" in msg or "sell" in msg:
+        # Simple extraction: "buy 50 usdc of wcro"
+        amount = 50.0 # default
+        import re
+        if "usdc" in msg:
+            match = re.search(r'(\d+)\s*usdc', msg)
+            if match:
+                amount = float(match.group(1))
+        side = "BUY" if "buy" in msg else "SELL"
+        # Set manual command for agent to pick up
+        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+            agent_instance.current_predictive_instance.manual_command = {
+                'type': 'trade',
+                'side': side,
+                'amount': amount
+            }
+            return {"reply": f"🚀 Manual Override: Executing {side} for {amount} USDC."}
+        else:
+            return {"reply": "❌ Predictive agent not ready for manual trade."}
+
+
+    # 2. Handle explicit unblock/resume commands
+    if "unblock" in msg or "resume data" in msg or "resume purchases" in msg:
+        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+            agent = agent_instance.current_predictive_instance
+            if getattr(agent, 'block_data_purchases', False):
+                agent.block_data_purchases = False
+                return {"reply": "✅ Data purchases unblocked. Agent will resume normal operation."}
+            else:
+                return {"reply": "ℹ️ Data purchases are not currently blocked."}
+        else:
+            return {"reply": "❌ Predictive agent not ready to unblock data purchases."}
+
+    # 3. Handle Risk/Profit Insights (budget/risk commands only update limit, do not unblock)
+    import re
+    risk_limit_patterns = [
+        r"(?:risk|limit|don't spend|set daily limit|max(?:imum)?(?: daily)?(?: spend| risk)?|budget)[^\d\.]*([\d]+(?:\.[\d]+)?)\s*(usdc)?",
+        r"([\d]+(?:\.[\d]+)?)\s*usdc.*(risk|limit|budget)"
+    ]
+    for pat in risk_limit_patterns:
+        match = re.search(pat, msg)
+        if match:
+            try:
+                new_limit = float(match.group(1))
+            except Exception:
+                continue
+            if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+                agent = agent_instance.current_predictive_instance
+                agent.max_cost = new_limit
+                # If blocked, inform user that limit is updated but still blocked
+                if getattr(agent, 'block_data_purchases', False):
+                    return {"reply": f"✅ Risk profile updated to {new_limit} USDC, but data purchases remain blocked. Send 'unblock' or 'resume data' to resume."}
+                else:
+                    return {"reply": f"✅ Risk profile updated. I will not spend more than {new_limit} USDC on data/trades."}
+            else:
+                return {"reply": "❌ Predictive agent not ready to update risk profile."}
+
+    # 3. Handle Profit Goals
+    if "profit" in msg:
+        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+            agent_instance.current_predictive_instance.human_instruction = 'profit_goal'
+            return {"reply": "💰 Profit target noted. I will adjust my exit strategy to prioritize your goal."}
+        else:
+            return {"reply": "❌ Predictive agent not ready to update profit goal."}
+
+    # 4. Handle Pause/Stop
+    if "pause" in msg or "stop" in msg:
+        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
+            agent_instance.current_predictive_instance.paused = True
+            return {"reply": "⏸️ Agent paused. No new trades will be made until resumed."}
+        else:
+            return {"reply": "❌ Predictive agent not ready to pause."}
+
+    # 5. Default: Forward to LLM/Agent Brain (not implemented)
+    return {"reply": "🤖 Message received. (No intent detected or LLM fallback not implemented.)"}
 
 @app.websocket("/ws/trading")
 async def websocket_trading(ws: WebSocket):

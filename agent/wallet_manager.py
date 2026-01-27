@@ -5,12 +5,46 @@ Expand with real logic as needed.
 """
 
 def get_daily_spend(*args, **kwargs):
-    """Stub for daily spend calculation."""
-    return 0.0
+    """Return total USDC spent today (persisted in a file)."""
+    import json, os
+    from datetime import datetime
+    spend_file = os.path.join(os.path.dirname(__file__), 'daily_spend.json')
+    today = datetime.now().strftime('%Y-%m-%d')
+    if not os.path.exists(spend_file):
+        return 0.0
+    try:
+        with open(spend_file, 'r') as f:
+            data = json.load(f)
+        return float(data.get(today, 0.0))
+    except Exception:
+        return 0.0
 
 def can_spend(amount, *args, **kwargs):
-    """Stub for spend permission check."""
-    return True
+    """Return True if spending 'amount' will not exceed today's limit."""
+    import os
+    max_limit = kwargs.get('max_cost', None)
+    # If no limit is set, always allow
+    if max_limit is None:
+        return True
+    spent = get_daily_spend()
+    return (spent + float(amount)) <= max_limit
+
+def add_spend(amount):
+    """Add amount to today's spend (persisted in a file)."""
+    import json, os
+    from datetime import datetime
+    spend_file = os.path.join(os.path.dirname(__file__), 'daily_spend.json')
+    today = datetime.now().strftime('%Y-%m-%d')
+    data = {}
+    if os.path.exists(spend_file):
+        try:
+            with open(spend_file, 'r') as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data[today] = float(data.get(today, 0.0)) + float(amount)
+    with open(spend_file, 'w') as f:
+        json.dump(data, f)
 
 
 from web3 import Web3

@@ -7,6 +7,7 @@ from .trading_engine import TradingEngine
 from .brain import NeuralBrain
 
 class PredictiveAgent:
+
     def __init__(self, wallet_manager=None, market_manager=None, trading_engine=None, simulation_mode=False):
         self.market_manager = market_manager
         self.engine = trading_engine if trading_engine is not None else TradingEngine(wallet_manager)
@@ -18,7 +19,14 @@ class PredictiveAgent:
         # Read agent config from environment variables
         self.mode = os.getenv("AGENT_MODE", "BALANCED")
         self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
-        self.max_cost = float(os.getenv("AGENT_MAX_COST", "50.0"))
+        # No default daily spend limit; unlimited unless set by user
+        self.max_cost = None
+
+        # --- Human override/intent-driven attributes ---
+        self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}
+        self.human_instruction = None  # e.g. 'profit_goal'
+        self.paused = False
+        self.block_data_purchases = False  # If True, block all data purchases for the rest of the day
 
     def calculate_ai_importance(self, node_category, market_state):
         """
@@ -72,10 +80,10 @@ class PredictiveAgent:
 
         # 2. Accumulate nodes until we hit the target from environment variables
         for node in scored_nodes:
-            # Check if adding this node exceeds our MAX budget
-            if current_total_cost + node.get("price", 0) > self.max_cost:
-                continue
-            
+            # Only check budget if max_cost is set
+            if self.max_cost is not None:
+                if current_total_cost + node.get("price", 0) > self.max_cost:
+                    continue
             # Add the node to the arsenal
             selected_arsenal.append(node)
             current_cumulative_accuracy += node["importance"]
@@ -110,6 +118,31 @@ class PredictiveAgent:
         """The core 4-step loop: Scene -> Arsenal -> Purchase -> Trade"""
         print(f"\n══════════════════════════════════════════════════════════════")
         print(f"♟️  PREDICTIVE AGENT CYCLE - {datetime.now().strftime('%H:%M:%S')}")
+        from agent.wallet_manager import can_spend, add_spend, get_daily_spend
+
+        # --- Block all data purchases if flag is set ---
+        if getattr(self, 'block_data_purchases', False):
+            print("🛑 Data purchases are currently blocked by human override. Skipping cycle.")
+            return
+
+        # --- HUMAN OVERRIDE/INTENT CHECKS ---
+        if getattr(self, 'paused', False):
+            print("🛑 Agent is paused by human command. Skipping cycle.")
+            return
+
+        if getattr(self, 'manual_command', None):
+            cmd = self.manual_command
+            print(f"🛑 Autonomous loop paused for manual command: {cmd}")
+            if cmd.get('type') == 'trade':
+                side = cmd.get('side', 'BUY')
+                amount = cmd.get('amount', 50.0)
+                print(f"🚀 [Manual] Executing {side} for {amount} USDC...")
+                tx_hash = self.engine.execute_swap("USDC", "WCRO", amount)
+                if tx_hash:
+                    print(f"✅ [Manual Trade Success] Tx Hash: {tx_hash}")
+            # Clear manual command after execution
+            self.manual_command = None
+            return
 
         # STEP 1: READ THE TAPE (Free Data)
         df = self.pipeline.fetch_candles()
@@ -139,9 +172,11 @@ class PredictiveAgent:
 
         # Optional: Add a check here for max_cost if your optimizer doesn't handle it yet
         current_total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
-        if current_total_cost > self.max_cost:
+        if self.max_cost is not None and current_total_cost > self.max_cost:
             print(f"⚠️ [Budget] Selected nodes cost {current_total_cost} USDC, exceeding limit of {self.max_cost}")
-            # Optionally filter or abort here
+            print("🛑 Budget exceeded. Blocking all further data purchases until explicitly unblocked.")
+            self.block_data_purchases = True
+            return
 
         print(f"🤖 AI Arsenal: Selected {len(optimized_arsenal)} nodes for this trade.")
         if len(optimized_arsenal) > 0:
@@ -149,8 +184,22 @@ class PredictiveAgent:
             for node in optimized_arsenal:
                 print(f"      - {node.get('name', node.get('category'))}: category={node.get('category')}, importance={node.get('importance')}")
 
+
+        # --- Enforce daily spend limit before any paid data purchase ---
+
+        total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
+        # Only enforce limit if set
+        if total_cost > 0 and self.max_cost is not None:
+            if not can_spend(total_cost, max_cost=self.max_cost):
+                print(f"🛑 Daily USDC spend limit reached ({get_daily_spend()} / {self.max_cost}). Blocking further data purchases today.")
+                self.block_data_purchases = True
+                return
+
         # 4. Fetch the chosen nodes (pass node objects)
         intel, failure_flag = await self.pipeline.fetch_dynamic_tools(optimized_arsenal)
+        # If payment succeeded, record the spend
+        if total_cost > 0 and not failure_flag:
+            add_spend(total_cost)
 
         if failure_flag or len(intel) < len(optimized_arsenal):
             print(f"   ⚠️ [Skeptical] Failed to buy full arsenal. found {len(intel)}/{len(optimized_arsenal)} tools.")

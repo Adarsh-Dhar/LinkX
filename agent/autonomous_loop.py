@@ -23,6 +23,14 @@ def run_autonomous_loop(agent, interval_sec=10):
     print(f"[AlphaLoop] Starting background loop (Interval: {interval_sec}s)")
     # Wait for startup
     time.sleep(5)
+
+    # --- Persistent PredictiveAgent instance ---
+    agent.current_predictive_instance = PredictiveAgent(
+        market_manager=agent.market,
+        trading_engine=agent.trader,
+        simulation_mode=False
+    )
+
     while True:
         try:
             # Check if trader is initialized
@@ -33,17 +41,10 @@ def run_autonomous_loop(agent, interval_sec=10):
 
             print(f"[AlphaLoop] Starting unified cycle...")
 
-            # Initialize PredictiveAgent with the Trader
-            predictive_agent = PredictiveAgent(
-                market_manager=agent.market,
-                trading_engine=agent.trader,
-                simulation_mode=False
-            )
-
             # Run the async cycle
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(predictive_agent.run_cycle())
+            loop.run_until_complete(agent.current_predictive_instance.run_cycle())
             loop.close()
 
             print(f"[AlphaLoop] Cycle complete. Sleeping...")
