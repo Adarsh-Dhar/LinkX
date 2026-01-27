@@ -51,24 +51,48 @@ class PredictiveAgent:
 
         return 2  # Low relevance for everything else in this specific context
 
-    def optimize_node_selection(self, market_nodes, market_state, mode=None):
+    def optimize_node_selection(self, market_nodes, market_state, mode="BALANCED"):
         """
-        Selects only nodes above a dynamic relevance threshold. No fixed Top N.
+        Cumulative Optimization: Adds nodes one by one until the 
+        SUM of their importance scores meets the target.
         """
         scored_nodes = []
-        # Use self.min_accuracy as threshold (from env)
-        threshold = self.min_accuracy
-
         for node in market_nodes:
             importance = self.calculate_ai_importance(node.get("category"), market_state)
-            # Only add nodes that meet the relevance threshold
-            if importance >= threshold:
-                node["importance"] = importance
-                scored_nodes.append(node)
+            node["importance"] = importance
+            scored_nodes.append(node)
 
-        # Sort so we process highest relevance first
-        scored_nodes.sort(key=lambda n: n["importance"], reverse=True)
-        return scored_nodes
+        # 1. Sort by Efficiency (Importance per USDC) to get the best value first
+        # Use 0.1 as a floor for price to avoid division by zero
+        scored_nodes.sort(key=lambda n: n["importance"] / max(0.1, n.get("price", 0)), reverse=True)
+
+        selected_arsenal = []
+        current_cumulative_accuracy = 0
+        current_total_cost = 0
+
+        # 2. Accumulate nodes until we hit the target from environment variables
+        for node in scored_nodes:
+            # Check if adding this node exceeds our MAX budget
+            if current_total_cost + node.get("price", 0) > self.max_cost:
+                continue
+            
+            # Add the node to the arsenal
+            selected_arsenal.append(node)
+            current_cumulative_accuracy += node["importance"]
+            current_total_cost += node.get("price", 0)
+
+            # 3. STOP once we meet the min_accuracy requirement (The "Adding Up" logic)
+            if current_cumulative_accuracy >= self.min_accuracy:
+                print(f"   ✅ Target Accuracy Reached: {current_cumulative_accuracy}/{self.min_accuracy}")
+                break
+
+        # Final check: If we couldn't reach minAccuracy even with all nodes or budget limits
+        if current_cumulative_accuracy < self.min_accuracy and mode != "ECONOMY":
+            print(f"   ⚠️ Could only reach {current_cumulative_accuracy} accuracy within budget.")
+            # Optional: return empty if you don't want to trade on low-confidence data
+            # return [] 
+
+        return selected_arsenal
 
     def identify_context(self, df):
         """Analyze indicators to define the market scene."""
