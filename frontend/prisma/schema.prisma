@@ -66,6 +66,7 @@ model AlphaNode {
   reputation         Int      @default(0)
   status             String   @default("active") // "active", "inactive"
   isPurchased        Boolean  @default(false)
+  whitelisted        Boolean  @default(false)
   
   // --- NEW: Technical Connectivity ---
   endpointUrl        String?

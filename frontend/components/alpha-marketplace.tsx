@@ -1,17 +1,26 @@
 "use client";
 
-// ...existing code...
-// This component previously displayed AlphaNode marketplace UI.
-// All node-related logic and UI have been removed as requested.
+import { useEffect, useState } from "react";
+import { Search, Activity, ShoppingCart, Check } from "lucide-react";
+import { Input } from "./ui/input";
+import { Skeleton } from "./ui/skeleton";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { toast } from "../hooks/use-toast";
+
+// Temporary IconMap fallback (customize as needed)
+const IconMap: Record<string, any> = {
+  // Example: 'sentiment': SomeIconComponent,
+  // Add your icon mappings here
+};
 
 export default function AlphaMarketplace() {
-  return (
-    <div style={{ padding: 32, textAlign: 'center' }}>
-      <h2>Marketplace Unavailable</h2>
-      <p>All node-related features have been removed.</p>
-    </div>
-  );
-}
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+
   useEffect(() => {
     async function fetchMarket() {
       try {
@@ -31,6 +40,7 @@ export default function AlphaMarketplace() {
     fetchMarket();
   }, []);
 
+
   // 2. Handle Purchase Action
   const handlePurchase = async (nodeId: string, nodeName: string) => {
     setPurchasing(nodeId);
@@ -41,7 +51,6 @@ export default function AlphaMarketplace() {
       });
 
       if (res.ok) {
-        // Update local state immediately
         setNodes(nodes.map(n => n.id === nodeId ? { ...n, isPurchased: true } : n));
         toast({
           title: "Access Granted",
@@ -56,6 +65,37 @@ export default function AlphaMarketplace() {
       });
     } finally {
       setPurchasing(null);
+    }
+  };
+
+  // 2b. Handle Whitelist/Blacklist
+  const handleWhitelist = async (nodeId: string, whitelisted: boolean) => {
+    try {
+      const res = await fetch("/api/market/nodes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId, whitelisted }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNodes(nodes.map(n => n.id === nodeId ? { ...n, whitelisted: data.node.whitelisted } : n));
+        toast({
+          title: whitelisted ? "Node Whitelisted" : "Node Blacklisted",
+          description: `Node has been ${whitelisted ? "whitelisted" : "blacklisted"}.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Could not update whitelist status.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Could not update whitelist status.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -142,29 +182,13 @@ export default function AlphaMarketplace() {
                     </div>
                   </CardContent>
 
-                  <CardFooter className="pt-2">
-                    <Button 
-                      className={`w-full transition-all ${isOwned 
-                        ? "bg-green-900/20 text-green-400 border-green-900/50 hover:bg-green-900/30" 
-                        : "bg-white text-black hover:bg-zinc-200"}`}
-                      variant={isOwned ? "outline" : "default"}
-                      disabled={isOwned || purchasing === node.id}
-                      onClick={() => handlePurchase(node.id, node.name)}
+                  <CardFooter className="pt-2 flex flex-col gap-2">
+                    <Button
+                      className="w-full"
+                      variant={node.whitelisted ? "default" : "outline"}
+                      onClick={() => handleWhitelist(node.id, !node.whitelisted)}
                     >
-                      {isOwned ? (
-                        <>
-                          <Check className="mr-2 h-4 w-4" /> Active
-                        </>
-                      ) : (
-                        <>
-                          {purchasing === node.id ? (
-                            <Activity className="mr-2 h-4 w-4 animate-spin" /> 
-                          ) : (
-                            <ShoppingCart className="mr-2 h-4 w-4" />
-                          )}
-                          Buy ${node.price.toFixed(2)}
-                        </>
-                      )}
+                      {node.whitelisted ? "Blacklist" : "Whitelist"}
                     </Button>
                   </CardFooter>
                 </Card>

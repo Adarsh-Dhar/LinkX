@@ -193,15 +193,20 @@ class PredictiveAgent:
         bb_width = df['bb_width'].iloc[-1] if 'bb_width' in df.columns else 0.05
         market_state = {'rsi': rsi, 'vol_ratio': vol_ratio, 'bb_width': bb_width}
 
-        # 2. Get all nodes from the pipeline
+
+        # 2. Get all nodes from the pipeline and filter to whitelisted only
         all_nodes = await self.pipeline.refresh_market_knowledge()
         if not all_nodes:
             print("   ⚠️ [AI Arsenal] No nodes available from pipeline.")
             return
+        whitelisted_nodes = [n for n in all_nodes if n.get('whitelisted') is True and n.get('status') == 'active']
+        if not whitelisted_nodes:
+            print("   ⚠️ [AI Arsenal] No whitelisted nodes available from pipeline.")
+            return
 
-        # 3. Choose the Arsenal using the AI Optimizer
+        # 3. Choose the Arsenal using the AI Optimizer (only whitelisted nodes)
         optimized_arsenal = self.optimize_node_selection(
-            market_nodes=all_nodes,
+            market_nodes=whitelisted_nodes,
             market_state=market_state,
             mode=self.mode
         )
