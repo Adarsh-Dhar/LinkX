@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 # Set these to control agent behavior from the shell
 export AGENT_MODE="BALANCED"     # Options: ACCURATE, ECONOMY, BALANCED
 export AGENT_MIN_ACCURACY=10   # Equivalent to minScore/threshold
-export AGENT_MAX_COST=500     # Max USDC to spend per cycle
+export AGENT_MAX_COST=1     # Max USDC to spend per cycle
 
 echo "🚀 STARTING ALPHA CONSUMER (EXPERT MODE)"
 echo "------------------------------------------------"
@@ -60,6 +60,7 @@ npx prisma db push --accept-data-loss
 npx prisma db seed
 
 
+
 # 6. Start Backend API (agent/api.py)
 echo "🔌 Starting Backend API (agent/api.py) if not already running..."
 if ! lsof -i:8000 | grep LISTEN; then
@@ -71,19 +72,22 @@ if ! lsof -i:8000 | grep LISTEN; then
         export RPC_URL="https://evm-t3.cronos.org"
         export PYTHONUNBUFFERED=1
         cd "$SCRIPT_DIR"
-        uvicorn agent.api_real:app --host 0.0.0.0 --port 8000 --reload &
-        AGENT_PID=$!
-        echo "   ✅ Backend API started (PID: $AGENT_PID)"
+        uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &
+        AGENT_API_PID=$!
+        echo "   ✅ Backend API started (PID: $AGENT_API_PID)"
         sleep 5
 else
         echo "   ⚠️  Backend API already running on port 8000. Skipping start."
 fi
 
+
 # 7. Start Frontend
 echo "🖥️  Starting Frontend..."
 export DATABASE_URL="file:$DB_PATH"
+cd "$SCRIPT_DIR/frontend"
 pnpm run dev &
 FRONTEND_PID=$!
+cd "$SCRIPT_DIR"
 echo "   ✅ Frontend PID: $FRONTEND_PID"
 echo "   ⏳ Waiting 15s for Frontend to boot..."
 sleep 15
@@ -91,22 +95,22 @@ sleep 15
 # 7. Start Agent (WITH UNBUFFERED LOGS)
 echo "🤖 Starting Agent..."
 
-# Ensure venv exists and activate from agent dir, but run uvicorn from project root
-if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
-source "$SCRIPT_DIR/agent/venv/bin/activate"
-pip install -r "$SCRIPT_DIR/agent/requirements.txt"
-export DATABASE_URL="file:$DB_PATH"
-export RPC_URL="https://evm-t3.cronos.org"
-export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
-
-# Run uvicorn from project root so 'agent' is a package
-cd "$SCRIPT_DIR"
-
-# Run agent in the background and capture its PID
-uvicorn agent.api_real:app --host 0.0.0.0 --port 8000 --reload &
-AGENT_PID=$!
+# Only start the agent if not already running on port 8000
+if ! lsof -i:8000 | grep LISTEN; then
+        if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
+        source "$SCRIPT_DIR/agent/venv/bin/activate"
+        pip install -r "$SCRIPT_DIR/agent/requirements.txt"
+        export DATABASE_URL="file:$DB_PATH"
+        export RPC_URL="https://evm-t3.cronos.org"
+        export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
+        cd "$SCRIPT_DIR"
+        uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &
+        AGENT_PID=$!
+        echo "   ✅ Agent started (PID: $AGENT_PID)"
+else
+        echo "   ⚠️  Agent already running on port 8000. Skipping start."
+fi
 
 echo "✅ System Online. Watch terminal for '🤖 EXPERT AGENT ANALYSIS'..."
-trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID; pkill -f provider.js; exit" SIGINT SIGTERM
 trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID $DEMO_PROVIDERS_PID; pkill -f provider.js; exit" SIGINT SIGTERM
 wait

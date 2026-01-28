@@ -12,19 +12,15 @@ This demonstrates the complete trading flow:
 For production: Would use real router after liquidity is added
 """
 
-from dotenv import load_dotenv
-from pathlib import Path
-load_dotenv(Path(__file__).parent.parent / '.env')
 
-from pathlib import Path
-from web3 import Web3
-from eth_account import Account
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 import json
 import time
-
-load_dotenv(Path(__file__).parent / '.env')
+from web3 import Web3
+from eth_account import Account
+load_dotenv(Path(__file__).parent.parent / '.env')
 
 w3 = Web3(Web3.HTTPProvider(os.getenv('CRONOS_RPC_URL')))
 private_key = os.getenv('WALLET_PRIVATE_KEY')

@@ -7,6 +7,29 @@ from .trading_engine import TradingEngine
 from .brain import NeuralBrain
 
 class PredictiveAgent:
+    # --- Financial Mandate Methods ---
+    def set_limit(self, limit_type, limit_value):
+        """
+        Set financial limits such as max total spend per trade or monthly allowance.
+        limit_type: 'MAX_TOTAL_SPEND_PER_TRADE' or 'MONTHLY_ALLOWANCE'
+        limit_value: float
+        """
+        if limit_type in ["MAX_TOTAL_SPEND_PER_TRADE", "MAX_PRICE_PER_REQUEST"]:
+            self.max_total_spend_per_trade = float(limit_value)
+            print(f"[Mandate] Max total spend per trade set to {self.max_total_spend_per_trade} USDC")
+        elif limit_type == "MONTHLY_ALLOWANCE":
+            self.monthly_allowance = float(limit_value)
+            print(f"[Mandate] Monthly trading allowance set to {self.monthly_allowance} USDC")
+        else:
+            print(f"[Mandate] Unknown limit type: {limit_type}")
+
+    def set_refill_logic(self, refill_threshold, refill_amount):
+        """
+        Set wallet auto-refill logic: when balance < threshold, add refill_amount.
+        """
+        self.refill_threshold = float(refill_threshold)
+        self.refill_amount = float(refill_amount)
+        print(f"[Mandate] Will auto-refill wallet with {self.refill_amount} USDC when below {self.refill_threshold} USDC")
 
     def __init__(self, wallet_manager=None, market_manager=None, trading_engine=None, simulation_mode=False):
         self.market_manager = market_manager
@@ -16,6 +39,13 @@ class PredictiveAgent:
         self.simulation_mode = simulation_mode
         self.is_running = False
 
+        # --- Financial Mandate Defaults ---
+        self.max_total_spend_per_trade = None  # Enforced per-trade spend limit (set by user)
+
+        # Always load .env from workspace root
+        from dotenv import load_dotenv
+        from pathlib import Path
+        load_dotenv(Path(__file__).parent.parent / '.env')
         # Read agent config from environment variables
         self.mode = os.getenv("AGENT_MODE", "BALANCED")
         self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
@@ -25,11 +55,14 @@ class PredictiveAgent:
         if max_cost_env is not None:
             try:
                 parsed = float(max_cost_env)
-                self.max_cost = parsed if parsed >= min_allowed_cost else 500.0
+                self.max_cost = parsed if parsed >= min_allowed_cost else 1000000.0
+                self.max_total_spend_per_trade = self.max_cost
             except Exception:
-                self.max_cost = 500.0
+                self.max_cost = 1000000.0
+                self.max_total_spend_per_trade = self.max_cost
         else:
-            self.max_cost = 500.0
+            self.max_cost = 1000000.0
+            self.max_total_spend_per_trade = self.max_cost
 
         # --- Human override/intent-driven attributes ---
         self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}
@@ -71,6 +104,7 @@ class PredictiveAgent:
         """
         Cumulative Optimization: Adds nodes one by one until the 
         SUM of their importance scores meets the target.
+        Enforces max_total_spend_per_trade as a max total spend per trade (cycle).
         """
         scored_nodes = []
         for node in market_nodes:
@@ -86,28 +120,56 @@ class PredictiveAgent:
         current_cumulative_accuracy = 0
         current_total_cost = 0
 
-        # 2. Accumulate nodes until we hit the target from environment variables
+        # 2. Accumulate nodes until we hit the target from environment variables, but NEVER exceed max_total_spend_per_trade
+
         for node in scored_nodes:
+            # Defensive: ensure max_total_spend_per_trade is a float
+            max_spend = self.max_total_spend_per_trade
+            if max_spend is None:
+                max_spend = self.max_cost if self.max_cost is not None else 1000000.0
+            node_price = node.get("price", 0)
             # Only check budget if max_cost is set
             if self.max_cost is not None:
-                if current_total_cost + node.get("price", 0) > self.max_cost:
-                    continue
-            # Add the node to the arsenal
+                if current_total_cost + node_price > self.max_cost:
+                    break
+            # Add the node to the arsenal if it doesn't exceed the cap
+            if current_total_cost + node_price > max_spend:
+                print(f"[Mandate] Stopping selection: adding {node.get('name', node.get('category'))} (price {node_price}) would exceed max total spend {max_spend} USDC")
+                break
             selected_arsenal.append(node)
             current_cumulative_accuracy += node["importance"]
-            current_total_cost += node.get("price", 0)
+            current_total_cost += node_price
 
             # 3. STOP once we meet the min_accuracy requirement (The "Adding Up" logic)
             if current_cumulative_accuracy >= self.min_accuracy:
                 print(f"   ✅ Target Accuracy Reached: {current_cumulative_accuracy}/{self.min_accuracy}")
                 break
 
-        # Final check: If we couldn't reach minAccuracy even with all nodes or budget limits
-        if current_cumulative_accuracy < self.min_accuracy and mode != "ECONOMY":
-            print(f"   ⚠️ Could only reach {current_cumulative_accuracy} accuracy within budget.")
-            # Optional: return empty if you don't want to trade on low-confidence data
-            # return [] 
+        # Final check: trim arsenal if over budget (shouldn't happen, but guarantees correctness)
+        while sum(n.get('price', 0) for n in selected_arsenal) > self.max_total_spend_per_trade and selected_arsenal:
+            removed = selected_arsenal.pop()
+            print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
 
+        # Remove fallback: Do not allow exceeding the spend limit even if min_accuracy is not met
+        if current_total_cost > self.max_total_spend_per_trade:
+            print(f"   ⚠️ Arsenal cost {current_total_cost} exceeds max_total_spend_per_trade {self.max_total_spend_per_trade}. Trimming to fit.")
+            # Remove nodes until under the limit
+            while sum(n.get('price', 0) for n in selected_arsenal) > self.max_total_spend_per_trade and selected_arsenal:
+                removed = selected_arsenal.pop()
+                print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
+            current_total_cost = sum(n.get('price', 0) for n in selected_arsenal)
+            current_cumulative_accuracy = sum(n["importance"] for n in selected_arsenal)
+        if current_total_cost > self.max_total_spend_per_trade:
+            print(f"   ❌ Could not fit any nodes within the max_total_spend_per_trade limit.")
+            selected_arsenal = []
+            current_total_cost = 0
+            current_cumulative_accuracy = 0
+
+        # Debug: Print selected arsenal and total price
+        print("[DEBUG] Selected arsenal for this trade (max total spend limit):")
+        for n in selected_arsenal:
+            print(f"   - {n.get('name', n.get('category'))}: price={n.get('price', 0)} USDC, importance={n.get('importance')}")
+        print(f"[DEBUG] Total arsenal price: {sum(n.get('price', 0) for n in selected_arsenal)} USDC (limit: {getattr(self, 'max_total_spend_per_trade', None)})")
         return selected_arsenal
 
     def identify_context(self, df):

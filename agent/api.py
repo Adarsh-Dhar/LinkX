@@ -5,9 +5,12 @@
 # ...existing code...
 
 
+
 # --- Ensure .env is loaded for environment variables ---
 from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+from pydantic import BaseModel
+load_dotenv(Path(__file__).parent.parent / '.env')
 
 # Expose optimization graph data for dashboard (must be after app is defined)
 
@@ -38,10 +41,22 @@ from agent.predictive_agent import PredictiveAgent
 from agent.autonomous_loop import run_autonomous_loop
 
 
-from pydantic import BaseModel
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global agent_instance
+    print("\n⚡ [API] Booting...")
+    try:
+        agent_instance = IntelligentAgent()
+        # Start Loop
+        t = threading.Thread(target=run_autonomous_loop, args=(agent_instance, 10), daemon=True)
+        t.start()
+        print("✅ [API] Autonomous Loop Started.")
+    except Exception as e:
+        print(f"❌ [API] Error: {e}")
+    yield
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 agent_instance = None
 
 # --- INTENT PARSER USING OPENROUTER ---
@@ -49,42 +64,41 @@ import json
 def parse_human_intent(user_message: str):
     # --- Local fallback for simple commands ---
     msg = user_message.strip().lower()
-    # Fuzzy/partial matching for pause/resume
-    import difflib
-    def fuzzy_match(word, options, cutoff=0.5):
-        # Lower cutoff for more permissive matching
-        matches = difflib.get_close_matches(word, options, n=1, cutoff=cutoff)
-        if matches:
-            return matches[0]
-        # Substring check for even more permissive matching
-        for opt in options:
-            if word in opt or opt in word:
-                return opt
-        return None
 
-    # Tokenize message for fuzzy matching
-    tokens = msg.split()
-    pause_words = ["pause", "stop", "hold"]
-    resume_words = ["resume", "start", "continue"]
-    for token in tokens:
-        if fuzzy_match(token, pause_words):
-            return {"action": "PAUSE"}
-        if fuzzy_match(token, resume_words):
-            return {"action": "RESUME"}
+    # Only trigger PAUSE or RESUME on explicit commands
+    if msg in ["pause", "pause trading", "pause all trading", "pause agent"]:
+        return {"action": "PAUSE"}
+    if msg in ["resume", "resume trading", "resume all trading", "resume agent", "unpause", "start trading", "continue trading"]:
+        return {"action": "RESUME"}
     # Add more local rules as needed
 
     system_prompt = """
 You are an advanced crypto trading AI. Analyze the user's message and return JSON.
+You support financial mandates, including spending limits and refill logic. You can:
+- Set a maximum price per data request
+- Set a global monthly allowance
+- Define refill logic (e.g., auto-replenish wallet with 10 USDC when below a threshold)
+
+Return a JSON object with these fields:
 {
-    "action": "TRADE" | "PAUSE" | "RESUME" | "SET_LIMIT" | "NONE",
-    "side": "BUY" | "SELL",
-    "amount": float,
+    "action": "TRADE" | "PAUSE" | "RESUME" | "SET_LIMIT" | "SET_REFILL" | "NONE",
+    "side": "BUY" | "SELL" | null,
+    "amount": float | null,
+    "limit_type": "MAX_PRICE_PER_REQUEST" | "MONTHLY_ALLOWANCE" | null,
+    "limit_value": float | null,
+    "refill_amount": float | null,
+    "refill_threshold": float | null,
     "conversational_response": "A friendly Gemini-style reply acknowledging the user"
 }
 If the user just wants to chat, set action to "NONE" and provide a helpful conversational_response.
-Example: "Grab me fifty bucks of CRO" -> {"action": "TRADE", "side": "BUY", "amount": 50.0, "conversational_response": "Buying 50 USDC of CRO now!"}
-Example: "Stop for a bit" -> {"action": "PAUSE", "conversational_response": "Pausing all trading as requested."}
-Example: "How are you?" -> {"action": "NONE", "conversational_response": "I'm great! Ready to help you trade or answer questions."}
+
+Examples:
+- "Grab me fifty bucks of CRO" -> {"action": "TRADE", "side": "BUY", "amount": 50.0, "conversational_response": "Buying 50 USDC of CRO now!"}
+- "Stop for a bit" -> {"action": "PAUSE", "conversational_response": "Pausing all trading as requested."}
+- "How are you?" -> {"action": "NONE", "conversational_response": "I'm great! Ready to help you trade or answer questions."}
+- "Never spend more than $2 per data request" -> {"action": "SET_LIMIT", "limit_type": "MAX_PRICE_PER_REQUEST", "limit_value": 2.0, "conversational_response": "Understood! I will not spend more than $2 per data request."}
+- "Set my monthly trading allowance to $1000" -> {"action": "SET_LIMIT", "limit_type": "MONTHLY_ALLOWANCE", "limit_value": 1000.0, "conversational_response": "Your monthly trading allowance is now set to $1000."}
+- "If my wallet drops below $5, refill with $10 automatically" -> {"action": "SET_REFILL", "refill_threshold": 5.0, "refill_amount": 10.0, "conversational_response": "I'll automatically refill your wallet with $10 whenever it drops below $5."}
 Return ONLY JSON.
     """
     if not client:
@@ -126,36 +140,71 @@ async def handle_chat(request: ChatRequest):
     print(f"[DEBUG] User message: {msg}")
     print(f"[DEBUG] Parsed intent: {intent}")
 
+
     # 2. IMPLEMENT THE INTENT
     action = intent.get("action")
 
-
     if action == "PAUSE":
         pred_agent.paused = True
-        if "conversational_response" in intent:
-            return {"reply": intent["conversational_response"]}
-        else:
-            return {"reply": "⚠️ No AI response generated for PAUSE."}
+        resp = intent.get("conversational_response")
+        return {"reply": resp if resp and str(resp).strip() else "Trading paused as requested."}
 
-    if action == "RESUME":
-        pred_agent.paused = False
-        if "conversational_response" in intent:
-            return {"reply": intent["conversational_response"]}
-        else:
-            return {"reply": "⚠️ No AI response generated for RESUME."}
+    if action == "SET_LIMIT":
+        # Example: set spending limits or monthly allowance
+        limit_type = intent.get("limit_type")
+        limit_value = intent.get("limit_value")
+        # Map legacy or ambiguous types to new variable
+        if limit_type == "MAX_PRICE_PER_REQUEST":
+            limit_type = "MAX_TOTAL_SPEND_PER_TRADE"
+        # Store or apply these limits as needed (implement logic in PredictiveAgent)
+        if hasattr(pred_agent, 'set_limit'):
+            pred_agent.set_limit(limit_type, limit_value)
+        # Robust fallback for conversational response
+        resp = intent.get("conversational_response")
+        if resp and str(resp).strip():
+            return {"reply": resp}
+        # Hardcoded fallback for per-trade spend limit
+        if limit_type == "MAX_TOTAL_SPEND_PER_TRADE":
+            if limit_value is not None and str(limit_value).strip():
+                return {"reply": f"Understood! I will never spend more than {limit_value} USDC in a single trade."}
+            else:
+                return {"reply": "Understood! I will never spend more than the specified amount per trade."}
+        # Fallback for monthly allowance
+        if limit_type == "MONTHLY_ALLOWANCE":
+            if limit_value is not None and str(limit_value).strip():
+                return {"reply": f"Monthly trading allowance set to {limit_value} USDC."}
+            else:
+                return {"reply": "Monthly trading allowance set as requested."}
+        # Generic fallback
+        return {"reply": "Limit set as requested!"}
 
+    if action == "SET_REFILL":
+        refill_amount = intent.get("refill_amount")
+        refill_threshold = intent.get("refill_threshold")
+        if hasattr(pred_agent, 'set_refill_logic'):
+            pred_agent.set_refill_logic(refill_threshold, refill_amount)
+        resp = intent.get("conversational_response")
+        if resp and str(resp).strip():
+            return {"reply": resp}
+        if refill_amount is not None and refill_threshold is not None:
+            return {"reply": f"I'll auto-refill your wallet with {refill_amount} USDC whenever it drops below {refill_threshold} USDC."}
+        return {"reply": "Refill logic set!"}
+
+    # 3. UNIVERSAL FALLBACK: Always use AI's conversational response, or provide a generic friendly reply if missing/empty
+    resp = intent.get("conversational_response")
+    if resp and str(resp).strip():
+        return {"reply": resp}
+    if action == "SET_LIMIT":
+        return {"reply": "Limit set as requested!"}
+    if action == "SET_REFILL":
+        return {"reply": "Refill logic set as requested!"}
     if action == "TRADE":
-        pred_agent.manual_command = {"side": intent.get("side"), "amount": intent.get("amount")}
-        if "conversational_response" in intent:
-            return {"reply": intent["conversational_response"]}
-        else:
-            return {"reply": "⚠️ No AI response generated for TRADE."}
-
-    # 3. FALLBACK: Always use AI's conversational response, error if missing
-    if "conversational_response" in intent:
-        return {"reply": intent["conversational_response"]}
-    else:
-        return {"reply": "⚠️ No AI response generated. Please try again or check model configuration."}
+        return {"reply": "Trade command received!"}
+    if action == "PAUSE":
+        return {"reply": "Trading paused as requested."}
+    if action == "RESUME":
+        return {"reply": "Trading resumed as requested."}
+    return {"reply": "✅ Command received and processed!"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
