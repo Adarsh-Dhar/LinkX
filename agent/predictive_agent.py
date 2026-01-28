@@ -97,7 +97,7 @@ class PredictiveAgent:
         """
         Cumulative Optimization: Adds nodes one by one until the 
         SUM of their importance scores meets the target.
-        Enforces max_total_spend_per_trade as a max total spend per trade (cycle).
+        Enforces self.max_cost as a max total spend per trade (cycle).
         """
         scored_nodes = []
         for node in market_nodes:
@@ -113,15 +113,13 @@ class PredictiveAgent:
         current_cumulative_accuracy = 0
         current_total_cost = 0
 
-        max_spend = self.max_total_spend_per_trade
-        if max_spend is None:
-            max_spend = self.max_cost if self.max_cost is not None else 1000000.0
+        max_spend = self.max_cost if self.max_cost is not None else 1000000.0
 
         for node in scored_nodes:
             node_price = node.get("price", 0)
-            # Check if adding THIS node would EXCEED the per-trade budget BEFORE adding
+            # Check if adding THIS node will put us over the dynamic per-trade budget
             if current_total_cost + node_price > max_spend:
-                print(f"⚠️ Skipping node {node.get('name', node.get('category'))} - would exceed per-trade budget of {max_spend}")
+                print(f"⚠️ Skipping {node.get('name', node.get('category'))} - would exceed trade limit of {max_spend}")
                 continue
             selected_arsenal.append(node)
             current_cumulative_accuracy += node["importance"]
@@ -130,25 +128,6 @@ class PredictiveAgent:
             if current_cumulative_accuracy >= self.min_accuracy:
                 print(f"   ✅ Target Accuracy Reached: {current_cumulative_accuracy}/{self.min_accuracy}")
                 break
-
-        # Final check: trim arsenal if over budget (shouldn't happen, but guarantees correctness)
-        while sum(n.get('price', 0) for n in selected_arsenal) > max_spend and selected_arsenal:
-            removed = selected_arsenal.pop()
-            print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
-
-        # Remove fallback: Do not allow exceeding the spend limit even if min_accuracy is not met
-        if current_total_cost > max_spend:
-            print(f"   ⚠️ Arsenal cost {current_total_cost} exceeds max_total_spend_per_trade {max_spend}. Trimming to fit.")
-            while sum(n.get('price', 0) for n in selected_arsenal) > max_spend and selected_arsenal:
-                removed = selected_arsenal.pop()
-                print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
-            current_total_cost = sum(n.get('price', 0) for n in selected_arsenal)
-            current_cumulative_accuracy = sum(n["importance"] for n in selected_arsenal)
-        if current_total_cost > max_spend:
-            print(f"   ❌ Could not fit any nodes within the max_total_spend_per_trade limit.")
-            selected_arsenal = []
-            current_total_cost = 0
-            current_cumulative_accuracy = 0
 
         # Debug: Print selected arsenal and total price
         print("[DEBUG] Selected arsenal for this trade (max total spend limit):")

@@ -72,32 +72,16 @@ def parse_human_intent(user_message: str):
     # Add more local rules as needed
 
     system_prompt = """
-You are an advanced crypto trading AI. Analyze the user's message and return JSON.
-You support financial mandates, including spending limits and refill logic. You can:
-- Set a maximum price per data request
-- Set a global monthly allowance
-- Define refill logic (e.g., auto-replenish wallet with 10 USDC when below a threshold)
+You are a trading assistant. Convert user speech into a JSON command.
+Possible Actions: 
+- TRADE (side: \"BUY\"/\"SELL\", amount: float)
+- SET_LIMIT (limit: float)  <-- Extract numerical values for budget/cost/limit
+- PAUSE ()
+- RESUME ()
+- IGNORE ()
 
-Return a JSON object with these fields:
-{
-    "action": "TRADE" | "PAUSE" | "RESUME" | "SET_LIMIT" | "SET_REFILL" | "NONE",
-    "side": "BUY" | "SELL" | null,
-    "amount": float | null,
-    "limit_type": "MAX_PRICE_PER_REQUEST" | "MONTHLY_ALLOWANCE" | null,
-    "limit_value": float | null,
-    "refill_amount": float | null,
-    "refill_threshold": float | null,
-    "conversational_response": "A friendly Gemini-style reply acknowledging the user"
-}
-If the user just wants to chat, set action to "NONE" and provide a helpful conversational_response.
-
-Examples:
-- "Grab me fifty bucks of CRO" -> {"action": "TRADE", "side": "BUY", "amount": 50.0, "conversational_response": "Buying 50 USDC of CRO now!"}
-- "Stop for a bit" -> {"action": "PAUSE", "conversational_response": "Pausing all trading as requested."}
-- "How are you?" -> {"action": "NONE", "conversational_response": "I'm great! Ready to help you trade or answer questions."}
-- "Never spend more than $2 per data request" -> {"action": "SET_LIMIT", "limit_type": "MAX_PRICE_PER_REQUEST", "limit_value": 2.0, "conversational_response": "Understood! I will not spend more than $2 per data request."}
-- "Set my monthly trading allowance to $1000" -> {"action": "SET_LIMIT", "limit_type": "MONTHLY_ALLOWANCE", "limit_value": 1000.0, "conversational_response": "Your monthly trading allowance is now set to $1000."}
-- "If my wallet drops below $5, refill with $10 automatically" -> {"action": "SET_REFILL", "refill_threshold": 5.0, "refill_amount": 10.0, "conversational_response": "I'll automatically refill your wallet with $10 whenever it drops below $5."}
+Example: \"Change max cost to 0.4\" -> {\"action\": \"SET_LIMIT\", \"limit\": 0.4}
+Example: \"Don't spend more than 1.5 per trade\" -> {\"action\": \"SET_LIMIT\", \"limit\": 1.5}
 Return ONLY JSON.
     """
     if not client:
@@ -149,33 +133,30 @@ async def handle_chat(request: ChatRequest):
         return {"reply": resp if resp and str(resp).strip() else "Trading paused as requested."}
 
     if action == "SET_LIMIT":
-        # Example: set spending limits or monthly allowance
+        # Support both legacy and new direct limit extraction
+        new_limit = None
+        if "limit" in intent and intent["limit"] is not None:
+            try:
+                new_limit = float(intent["limit"])
+            except Exception:
+                new_limit = None
+        elif "limit_value" in intent and intent["limit_value"] is not None:
+            try:
+                new_limit = float(intent["limit_value"])
+            except Exception:
+                new_limit = None
+        if new_limit is not None and pred_agent:
+            pred_agent.max_cost = new_limit
+            pred_agent.max_total_spend_per_trade = new_limit
+            pred_agent.block_data_purchases = False
+            return {"reply": f"✅ Budget Updated: I will now limit each trade cycle to {new_limit} USDC."}
+        # fallback to legacy set_limit if present
         limit_type = intent.get("limit_type")
         limit_value = intent.get("limit_value")
-        # Map legacy or ambiguous types to new variable
-        if limit_type == "MAX_PRICE_PER_REQUEST":
-            limit_type = "MAX_TOTAL_SPEND_PER_TRADE"
-        # Store or apply these limits as needed (implement logic in PredictiveAgent)
-        if hasattr(pred_agent, 'set_limit'):
+        if hasattr(pred_agent, 'set_limit') and limit_type and limit_value is not None:
             pred_agent.set_limit(limit_type, limit_value)
-        # Robust fallback for conversational response
-        resp = intent.get("conversational_response")
-        if resp and str(resp).strip():
-            return {"reply": resp}
-        # Hardcoded fallback for per-trade spend limit
-        if limit_type == "MAX_TOTAL_SPEND_PER_TRADE":
-            if limit_value is not None and str(limit_value).strip():
-                return {"reply": f"Understood! I will never spend more than {limit_value} USDC in a single trade."}
-            else:
-                return {"reply": "Understood! I will never spend more than the specified amount per trade."}
-        # Fallback for monthly allowance
-        if limit_type == "MONTHLY_ALLOWANCE":
-            if limit_value is not None and str(limit_value).strip():
-                return {"reply": f"Monthly trading allowance set to {limit_value} USDC."}
-            else:
-                return {"reply": "Monthly trading allowance set as requested."}
-        # Generic fallback
-        return {"reply": "Limit set as requested!"}
+            return {"reply": f"Limit set: {limit_type} = {limit_value}"}
+        return {"reply": "❌ Could not update trade limit. Please try again."}
 
     if action == "SET_REFILL":
         refill_amount = intent.get("refill_amount")
