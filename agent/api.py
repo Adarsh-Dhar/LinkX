@@ -4,6 +4,11 @@
 
 # ...existing code...
 
+
+# --- Ensure .env is loaded for environment variables ---
+from dotenv import load_dotenv
+load_dotenv()
+
 # Expose optimization graph data for dashboard (must be after app is defined)
 
 
@@ -42,6 +47,32 @@ agent_instance = None
 # --- INTENT PARSER USING OPENROUTER ---
 import json
 def parse_human_intent(user_message: str):
+    # --- Local fallback for simple commands ---
+    msg = user_message.strip().lower()
+    # Fuzzy/partial matching for pause/resume
+    import difflib
+    def fuzzy_match(word, options, cutoff=0.5):
+        # Lower cutoff for more permissive matching
+        matches = difflib.get_close_matches(word, options, n=1, cutoff=cutoff)
+        if matches:
+            return matches[0]
+        # Substring check for even more permissive matching
+        for opt in options:
+            if word in opt or opt in word:
+                return opt
+        return None
+
+    # Tokenize message for fuzzy matching
+    tokens = msg.split()
+    pause_words = ["pause", "stop", "hold"]
+    resume_words = ["resume", "start", "continue"]
+    for token in tokens:
+        if fuzzy_match(token, pause_words):
+            return {"action": "PAUSE"}
+        if fuzzy_match(token, resume_words):
+            return {"action": "RESUME"}
+    # Add more local rules as needed
+
     if not client:
         return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
     system_prompt = """
