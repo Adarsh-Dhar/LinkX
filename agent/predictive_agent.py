@@ -51,18 +51,11 @@ class PredictiveAgent:
         self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
         # No default daily spend limit; unlimited unless set by user
         max_cost_env = os.getenv("AGENT_MAX_COST", None)
-        min_allowed_cost = 10.0
-        if max_cost_env is not None:
-            try:
-                parsed = float(max_cost_env)
-                self.max_cost = parsed if parsed >= min_allowed_cost else 1000000.0
-                self.max_total_spend_per_trade = self.max_cost
-            except Exception:
-                self.max_cost = 1000000.0
-                self.max_total_spend_per_trade = self.max_cost
-        else:
+        try:
+            self.max_cost = float(max_cost_env) if max_cost_env is not None else 1000000.0
+        except Exception:
             self.max_cost = 1000000.0
-            self.max_total_spend_per_trade = self.max_cost
+        self.max_total_spend_per_trade = self.max_cost
 
         # --- Human override/intent-driven attributes ---
         self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}
@@ -120,46 +113,38 @@ class PredictiveAgent:
         current_cumulative_accuracy = 0
         current_total_cost = 0
 
-        # 2. Accumulate nodes until we hit the target from environment variables, but NEVER exceed max_total_spend_per_trade
+        max_spend = self.max_total_spend_per_trade
+        if max_spend is None:
+            max_spend = self.max_cost if self.max_cost is not None else 1000000.0
 
         for node in scored_nodes:
-            # Defensive: ensure max_total_spend_per_trade is a float
-            max_spend = self.max_total_spend_per_trade
-            if max_spend is None:
-                max_spend = self.max_cost if self.max_cost is not None else 1000000.0
             node_price = node.get("price", 0)
-            # Only check budget if max_cost is set
-            if self.max_cost is not None:
-                if current_total_cost + node_price > self.max_cost:
-                    break
-            # Add the node to the arsenal if it doesn't exceed the cap
+            # Check if adding THIS node would EXCEED the per-trade budget BEFORE adding
             if current_total_cost + node_price > max_spend:
-                print(f"[Mandate] Stopping selection: adding {node.get('name', node.get('category'))} (price {node_price}) would exceed max total spend {max_spend} USDC")
-                break
+                print(f"⚠️ Skipping node {node.get('name', node.get('category'))} - would exceed per-trade budget of {max_spend}")
+                continue
             selected_arsenal.append(node)
             current_cumulative_accuracy += node["importance"]
             current_total_cost += node_price
-
-            # 3. STOP once we meet the min_accuracy requirement (The "Adding Up" logic)
+            # STOP once we meet the min_accuracy requirement (The "Adding Up" logic)
             if current_cumulative_accuracy >= self.min_accuracy:
                 print(f"   ✅ Target Accuracy Reached: {current_cumulative_accuracy}/{self.min_accuracy}")
                 break
 
         # Final check: trim arsenal if over budget (shouldn't happen, but guarantees correctness)
-        while sum(n.get('price', 0) for n in selected_arsenal) > self.max_total_spend_per_trade and selected_arsenal:
+        while sum(n.get('price', 0) for n in selected_arsenal) > max_spend and selected_arsenal:
             removed = selected_arsenal.pop()
             print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
 
         # Remove fallback: Do not allow exceeding the spend limit even if min_accuracy is not met
-        if current_total_cost > self.max_total_spend_per_trade:
-            print(f"   ⚠️ Arsenal cost {current_total_cost} exceeds max_total_spend_per_trade {self.max_total_spend_per_trade}. Trimming to fit.")
-            # Remove nodes until under the limit
-            while sum(n.get('price', 0) for n in selected_arsenal) > self.max_total_spend_per_trade and selected_arsenal:
+        if current_total_cost > max_spend:
+            print(f"   ⚠️ Arsenal cost {current_total_cost} exceeds max_total_spend_per_trade {max_spend}. Trimming to fit.")
+            while sum(n.get('price', 0) for n in selected_arsenal) > max_spend and selected_arsenal:
                 removed = selected_arsenal.pop()
                 print(f"   ⚠️ Removing node {removed.get('name', removed.get('category'))} to fit budget.")
             current_total_cost = sum(n.get('price', 0) for n in selected_arsenal)
             current_cumulative_accuracy = sum(n["importance"] for n in selected_arsenal)
-        if current_total_cost > self.max_total_spend_per_trade:
+        if current_total_cost > max_spend:
             print(f"   ❌ Could not fit any nodes within the max_total_spend_per_trade limit.")
             selected_arsenal = []
             current_total_cost = 0
@@ -169,7 +154,7 @@ class PredictiveAgent:
         print("[DEBUG] Selected arsenal for this trade (max total spend limit):")
         for n in selected_arsenal:
             print(f"   - {n.get('name', n.get('category'))}: price={n.get('price', 0)} USDC, importance={n.get('importance')}")
-        print(f"[DEBUG] Total arsenal price: {sum(n.get('price', 0) for n in selected_arsenal)} USDC (limit: {getattr(self, 'max_total_spend_per_trade', None)})")
+        print(f"[DEBUG] Total arsenal price: {sum(n.get('price', 0) for n in selected_arsenal)} USDC (limit: {max_spend})")
         return selected_arsenal
 
     def identify_context(self, df):
@@ -242,13 +227,7 @@ class PredictiveAgent:
             mode=self.mode
         )
 
-        # Optional: Add a check here for max_cost if your optimizer doesn't handle it yet
-        current_total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
-        if self.max_cost is not None and current_total_cost > self.max_cost:
-            print(f"⚠️ [Budget] Selected nodes cost {current_total_cost} USDC, exceeding limit of {self.max_cost}")
-            print("🛑 Budget exceeded. Blocking all further data purchases until explicitly unblocked.")
-            self.block_data_purchases = True
-            return
+        # No daily/cumulative spend check: only enforce per-trade (per-cycle) budget via optimizer
 
         print(f"🤖 AI Arsenal: Selected {len(optimized_arsenal)} nodes for this trade.")
         if len(optimized_arsenal) > 0:
@@ -256,18 +235,10 @@ class PredictiveAgent:
             for node in optimized_arsenal:
                 print(f"      - {node.get('name', node.get('category'))}: category={node.get('category')}, importance={node.get('importance')}")
 
-
-        # --- Enforce daily spend limit before any paid data purchase ---
-
-        total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
-        # Only enforce limit if set
-        if total_cost > 0 and self.max_cost is not None:
-            if not can_spend(total_cost, max_cost=self.max_cost):
-                print(f"🛑 Daily USDC spend limit reached ({get_daily_spend()} / {self.max_cost}). Blocking further data purchases today.")
-                self.block_data_purchases = True
-                return
+        # ...existing code...
 
         # 4. Fetch the chosen nodes (pass node objects)
+        total_cost = sum(n.get('price', 0) for n in optimized_arsenal)
         intel, failure_flag = await self.pipeline.fetch_dynamic_tools(optimized_arsenal)
         # If payment succeeded, record the spend
         if total_cost > 0 and not failure_flag:

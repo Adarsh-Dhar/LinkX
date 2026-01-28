@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 # Set these to control agent behavior from the shell
 export AGENT_MODE="BALANCED"     # Options: ACCURATE, ECONOMY, BALANCED
 export AGENT_MIN_ACCURACY=10   # Equivalent to minScore/threshold
-export AGENT_MAX_COST=1     # Max USDC to spend per cycle
+export AGENT_MAX_COST=0.4     # Max USDC to spend per cycle
 
 echo "🚀 STARTING ALPHA CONSUMER (EXPERT MODE)"
 echo "------------------------------------------------"

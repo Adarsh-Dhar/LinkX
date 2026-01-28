@@ -1,4 +1,3 @@
-
 # ...existing code...
 
 
@@ -203,7 +202,10 @@ async def handle_chat(request: ChatRequest):
     if action == "PAUSE":
         return {"reply": "Trading paused as requested."}
     if action == "RESUME":
-        return {"reply": "Trading resumed as requested."}
+        pred_agent.paused = False
+        pred_agent.block_data_purchases = False  # <-- Clear spend block on resume
+        resp = intent.get("conversational_response")
+        return {"reply": resp if resp and str(resp).strip() else "▶️ Resuming! I have cleared spend blocks and am ready to trade."}
     return {"reply": "✅ Command received and processed!"}
 
 @asynccontextmanager
