@@ -25,11 +25,11 @@ class PredictiveAgent:
         if max_cost_env is not None:
             try:
                 parsed = float(max_cost_env)
-                self.max_cost = parsed if parsed >= min_allowed_cost else 200.0
+                self.max_cost = parsed if parsed >= min_allowed_cost else 500.0
             except Exception:
-                self.max_cost = 200.0
+                self.max_cost = 500.0
         else:
-            self.max_cost = 200.0
+            self.max_cost = 500.0
 
         # --- Human override/intent-driven attributes ---
         self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}

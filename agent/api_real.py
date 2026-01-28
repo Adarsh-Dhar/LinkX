@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,6 +14,10 @@ from pathlib import Path
 from agent.brain import RLAgent
 from agent.data_pipeline import DataPipeline
 from agent.main import MarketManager
+
+# --- Load environment variables from .env ---
+from dotenv import load_dotenv
+load_dotenv()
 
 # Global agent instance for chat endpoint
 agent_instance = None
@@ -376,82 +381,85 @@ async def handle_chat(request: ChatRequest):
     global agent_instance
     msg = request.message.lower()
 
+
     # 1. Handle Direct Trade Commands
     if "buy" in msg or "sell" in msg:
-        # Simple extraction: "buy 50 usdc of wcro"
-        amount = 50.0 # default
-        import re
-        if "usdc" in msg:
-            match = re.search(r'(\d+)\s*usdc', msg)
-            if match:
-                amount = float(match.group(1))
-        side = "BUY" if "buy" in msg else "SELL"
-        # Set manual command for agent to pick up
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.manual_command = {
-                'type': 'trade',
-                'side': side,
-                'amount': amount
-            }
-            return {"reply": f"🚀 Manual Override: Executing {side} for {amount} USDC."}
+        # 4. Handle all other commands (pause, resume, etc.) via LLM intent parser
+        # All commands (trade, unblock, risk, profit, pause, resume, etc.) are now handled by the LLM intent parser below for a unified natural language interface.
+        pass
+
+    # 5. Default: Forward to LLM/Agent Brain (Gemini-style fallback)
+    # Use OpenRouter only, not OpenAI
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return {"action": "IGNORE", "error": "OpenRouter SDK (openai) not installed"}
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_api_key:
+        return {"action": "IGNORE", "error": "OPENROUTER_API_KEY environment variable not set"}
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_api_key,
+    )
+    def parse_human_intent(user_message: str):
+        system_prompt = """
+You are an advanced crypto trading AI. Analyze the user's message and return JSON.
+{
+  "action": "TRADE" | "PAUSE" | "RESUME" | "SET_LIMIT" | "NONE",
+  "side": "BUY" | "SELL",
+  "amount": float,
+  "conversational_response": "A friendly Gemini-style reply acknowledging the user"
+}
+If the user just wants to chat, set action to "NONE" and provide a helpful conversational_response.
+Example: "Grab me fifty bucks of CRO" -> {"action": "TRADE", "side": "BUY", "amount": 50.0, "conversational_response": "Buying 50 USDC of CRO now!"}
+Example: "Stop for a bit" -> {"action": "PAUSE", "conversational_response": "Pausing all trading as requested."}
+Example: "How are you?" -> {"action": "NONE", "conversational_response": "I'm great! Ready to help you trade or answer questions."}
+Return ONLY JSON.
+        """
+        import json
+        if not client:
+            return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
+        try:
+            response = client.chat.completions.create(
+                model="google/gemini-2.0-flash-exp:free",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                response_format={ "type": "json_object" }
+            )
+            content = response.choices[0].message.content
+            return json.loads(content)
+        except Exception as e:
+            return {"action": "IGNORE", "error": str(e)}
+
+    # Use LLM to parse intent
+    intent = parse_human_intent(msg)
+    action = intent.get("action")
+    pred_agent = getattr(agent_instance, 'current_predictive_instance', None)
+    if action == "PAUSE" and pred_agent:
+        pred_agent.paused = True
+        if "conversational_response" in intent:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready for manual trade."}
-
-
-    # 2. Handle explicit unblock/resume commands
-    if "unblock" in msg or "resume data" in msg or "resume purchases" in msg:
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent = agent_instance.current_predictive_instance
-            if getattr(agent, 'block_data_purchases', False):
-                agent.block_data_purchases = False
-                return {"reply": "✅ Data purchases unblocked. Agent will resume normal operation."}
-            else:
-                return {"reply": "ℹ️ Data purchases are not currently blocked."}
+            return {"reply": "⚠️ No AI response generated for PAUSE."}
+    if action == "RESUME" and pred_agent:
+        pred_agent.paused = False
+        if "conversational_response" in intent and intent["conversational_response"]:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready to unblock data purchases."}
-
-    # 3. Handle Risk/Profit Insights (budget/risk commands only update limit, do not unblock)
-    import re
-    risk_limit_patterns = [
-        r"(?:risk|limit|don't spend|set daily limit|max(?:imum)?(?: daily)?(?: spend| risk)?|budget)[^\d\.]*([\d]+(?:\.[\d]+)?)\s*(usdc)?",
-        r"([\d]+(?:\.[\d]+)?)\s*usdc.*(risk|limit|budget)"
-    ]
-    for pat in risk_limit_patterns:
-        match = re.search(pat, msg)
-        if match:
-            try:
-                new_limit = float(match.group(1))
-            except Exception:
-                continue
-            if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-                agent = agent_instance.current_predictive_instance
-                agent.max_cost = new_limit
-                # If blocked, inform user that limit is updated but still blocked
-                if getattr(agent, 'block_data_purchases', False):
-                    return {"reply": f"✅ Risk profile updated to {new_limit} USDC, but data purchases remain blocked. Send 'unblock' or 'resume data' to resume."}
-                else:
-                    return {"reply": f"✅ Risk profile updated. I will not spend more than {new_limit} USDC on data/trades."}
-            else:
-                return {"reply": "❌ Predictive agent not ready to update risk profile."}
-
-    # 3. Handle Profit Goals
-    if "profit" in msg:
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.human_instruction = 'profit_goal'
-            return {"reply": "💰 Profit target noted. I will adjust my exit strategy to prioritize your goal."}
+            return {"reply": "⚠️ No AI response generated for RESUME."}
+    if action == "TRADE" and pred_agent:
+        pred_agent.manual_command = {"side": intent.get("side"), "amount": intent.get("amount")}
+        if "conversational_response" in intent:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready to update profit goal."}
-
-    # 4. Handle Pause/Stop
-    if "pause" in msg or "stop" in msg:
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.paused = True
-            return {"reply": "⏸️ Agent paused. No new trades will be made until resumed."}
-        else:
-            return {"reply": "❌ Predictive agent not ready to pause."}
-
-    # 5. Default: Forward to LLM/Agent Brain (not implemented)
-    return {"reply": "🤖 Message received. (No intent detected or LLM fallback not implemented.)"}
+            return {"reply": "⚠️ No AI response generated for TRADE."}
+    # Fallback: Always use AI's conversational response, error if missing
+    if "conversational_response" in intent:
+        return {"reply": intent["conversational_response"]}
+    else:
+        return {"reply": "⚠️ No AI response generated. Please try again or check model configuration."}
 
 @app.websocket("/ws/trading")
 async def websocket_trading(ws: WebSocket):

@@ -73,24 +73,25 @@ def parse_human_intent(user_message: str):
             return {"action": "RESUME"}
     # Add more local rules as needed
 
+    system_prompt = """
+You are an advanced crypto trading AI. Analyze the user's message and return JSON.
+{
+    "action": "TRADE" | "PAUSE" | "RESUME" | "SET_LIMIT" | "NONE",
+    "side": "BUY" | "SELL",
+    "amount": float,
+    "conversational_response": "A friendly Gemini-style reply acknowledging the user"
+}
+If the user just wants to chat, set action to "NONE" and provide a helpful conversational_response.
+Example: "Grab me fifty bucks of CRO" -> {"action": "TRADE", "side": "BUY", "amount": 50.0, "conversational_response": "Buying 50 USDC of CRO now!"}
+Example: "Stop for a bit" -> {"action": "PAUSE", "conversational_response": "Pausing all trading as requested."}
+Example: "How are you?" -> {"action": "NONE", "conversational_response": "I'm great! Ready to help you trade or answer questions."}
+Return ONLY JSON.
+    """
     if not client:
         return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
-    system_prompt = """
-    You are a trading assistant. Convert user speech into a JSON command.
-    Possible Actions: 
-    - TRADE (side: \"BUY\"/\"SELL\", amount: float)
-    - SET_LIMIT (limit: float)
-    - PAUSE ()
-    - RESUME ()
-    - IGNORE ()
-    
-    Example: \"Grab me fifty bucks of CRO\" -> {\"action\": \"TRADE\", \"side\": \"BUY\", \"amount\": 50.0}
-    Example: \"Stop for a bit\" -> {\"action\": \"PAUSE\"}
-    Return ONLY JSON.
-    """
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",
+            model="google/gemini-2.0-flash-exp:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
@@ -108,63 +109,53 @@ class ChatRequest(BaseModel):
 
 
 # --- INTENT-DRIVEN CHAT ENDPOINT (OpenRouter) ---
+
+# --- GEMINI-LIKE INTENT-DRIVEN CHAT ENDPOINT ---
 @app.post("/chat")
 async def handle_chat(request: ChatRequest):
     global agent_instance
-    msg = request.message
+    msg = request.message.lower()
+
+    # Get the actual running instance from the loop
+    pred_agent = getattr(agent_instance, 'current_predictive_instance', None)
+    if not pred_agent:
+        return {"reply": "🤖 Brain is still warming up. Try again in 5 seconds."}
+
+    # 1. Use the LLM to get the Intent JSON
     intent = parse_human_intent(msg)
     print(f"[DEBUG] User message: {msg}")
     print(f"[DEBUG] Parsed intent: {intent}")
 
-    # Handle errors from intent parser
-    if intent.get("action") == "IGNORE" and "error" in intent:
-        return {"reply": f"❌ Intent parsing failed: {intent['error']}"}
+    # 2. IMPLEMENT THE INTENT
+    action = intent.get("action")
 
-    # Route intent to agent actions
-    if intent.get("action") == "TRADE":
-        side = intent.get("side")
-        amount = intent.get("amount")
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.manual_command = {
-                'type': 'trade',
-                'side': side,
-                'amount': amount
-            }
-            return {"reply": f"🚀 Manual Override: Executing {side} for {amount} USDC."}
+
+    if action == "PAUSE":
+        pred_agent.paused = True
+        if "conversational_response" in intent:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready for manual trade."}
+            return {"reply": "⚠️ No AI response generated for PAUSE."}
 
-    if intent.get("action") == "SET_LIMIT":
-        limit = intent.get("limit")
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            min_allowed_cost = 10.0
-            if limit is not None and limit >= min_allowed_cost:
-                agent_instance.current_predictive_instance.max_cost = limit
-            else:
-                agent_instance.current_predictive_instance.max_cost = 100.0
-            agent_instance.current_predictive_instance.block_data_purchases = False  # Reset block if limit is raised
-            return {"reply": f"✅ Risk profile updated. I will not spend more than {agent_instance.current_predictive_instance.max_cost} USDC on data/trades. Block reset."}
+    if action == "RESUME":
+        pred_agent.paused = False
+        if "conversational_response" in intent:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready to update risk profile."}
+            return {"reply": "⚠️ No AI response generated for RESUME."}
 
-    if intent.get("action") == "PAUSE":
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.paused = True
-            return {"reply": "⏸️ Agent paused. No new trades will be made until resumed."}
+    if action == "TRADE":
+        pred_agent.manual_command = {"side": intent.get("side"), "amount": intent.get("amount")}
+        if "conversational_response" in intent:
+            return {"reply": intent["conversational_response"]}
         else:
-            return {"reply": "❌ Predictive agent not ready to pause."}
+            return {"reply": "⚠️ No AI response generated for TRADE."}
 
-    if intent.get("action") == "RESUME":
-        if hasattr(agent_instance, 'current_predictive_instance') and agent_instance.current_predictive_instance:
-            agent_instance.current_predictive_instance.paused = False
-            return {"reply": "▶️ Agent resumed. Trading operations are active."}
-        else:
-            return {"reply": "❌ Predictive agent not ready to resume."}
-
-    if intent.get("action") == "IGNORE":
-        return {"reply": "🤖 Message received. (No actionable intent detected.)"}
-
-    return {"reply": f"🤖 Message received. (Unknown intent: {intent})"}
+    # 3. FALLBACK: Always use AI's conversational response, error if missing
+    if "conversational_response" in intent:
+        return {"reply": intent["conversational_response"]}
+    else:
+        return {"reply": "⚠️ No AI response generated. Please try again or check model configuration."}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

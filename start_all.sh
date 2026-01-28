@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 # Set these to control agent behavior from the shell
 export AGENT_MODE="BALANCED"     # Options: ACCURATE, ECONOMY, BALANCED
 export AGENT_MIN_ACCURACY=10   # Equivalent to minScore/threshold
-export AGENT_MAX_COST=1       # Max USDC to spend per cycle
+export AGENT_MAX_COST=500     # Max USDC to spend per cycle
 
 echo "🚀 STARTING ALPHA CONSUMER (EXPERT MODE)"
 echo "------------------------------------------------"
@@ -59,7 +59,27 @@ export DATABASE_URL="file:$DB_PATH"
 npx prisma db push --accept-data-loss
 npx prisma db seed
 
-# 6. Start Frontend
+
+# 6. Start Backend API (agent/api.py)
+echo "🔌 Starting Backend API (agent/api.py) if not already running..."
+if ! lsof -i:8000 | grep LISTEN; then
+        # Ensure venv exists and activate from agent dir
+        if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
+        source "$SCRIPT_DIR/agent/venv/bin/activate"
+        pip install -r "$SCRIPT_DIR/agent/requirements.txt"
+        export DATABASE_URL="file:$DB_PATH"
+        export RPC_URL="https://evm-t3.cronos.org"
+        export PYTHONUNBUFFERED=1
+        cd "$SCRIPT_DIR"
+        uvicorn agent.api_real:app --host 0.0.0.0 --port 8000 --reload &
+        AGENT_PID=$!
+        echo "   ✅ Backend API started (PID: $AGENT_PID)"
+        sleep 5
+else
+        echo "   ⚠️  Backend API already running on port 8000. Skipping start."
+fi
+
+# 7. Start Frontend
 echo "🖥️  Starting Frontend..."
 export DATABASE_URL="file:$DB_PATH"
 pnpm run dev &

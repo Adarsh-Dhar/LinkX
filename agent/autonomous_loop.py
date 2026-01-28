@@ -17,8 +17,9 @@ import asyncio
 from agent.predictive_agent import PredictiveAgent
 
 def run_autonomous_loop(agent, interval_sec=10):
+
     """
-    Background thread that runs the predictive cycle.
+    Background thread that runs the predictive cycle with persistent PredictiveAgent instance.
     """
     print(f"[AlphaLoop] Starting background loop (Interval: {interval_sec}s)")
     # Wait for startup
@@ -32,6 +33,12 @@ def run_autonomous_loop(agent, interval_sec=10):
             simulation_mode=False
         )
 
+    predictive_instance = agent.current_predictive_instance
+
+    # Create a single asyncio event loop for the thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     while True:
         try:
             # Check if trader is initialized
@@ -40,14 +47,8 @@ def run_autonomous_loop(agent, interval_sec=10):
                 time.sleep(5)
                 continue
 
-            print(f"[AlphaLoop] Starting unified cycle...")
-
-            # Run the async cycle
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(agent.current_predictive_instance.run_cycle())
-            loop.close()
-
+            print(f"[AlphaLoop] Checking state: Paused={predictive_instance.paused}")
+            loop.run_until_complete(predictive_instance.run_cycle())
             print(f"[AlphaLoop] Cycle complete. Sleeping...")
 
         except Exception as e:

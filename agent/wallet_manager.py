@@ -22,7 +22,7 @@ def get_daily_spend(*args, **kwargs):
 def can_spend(amount, *args, **kwargs):
     """Return True if spending 'amount' will not exceed today's limit."""
     import os
-    max_limit = kwargs.get('max_cost', None)
+    max_limit = kwargs.get('max_cost', 500.0)
     # If no limit is set, always allow
     if max_limit is None:
         return True
