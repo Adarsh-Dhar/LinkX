@@ -18,31 +18,32 @@ contract DeployScript is Script {
 
     function run() external {
 
-        // Load addresses from .env, or deploy if not set
-        string memory wxtzEnv = vm.envOr("WXTZ_ADDRESS", "");
-        string memory usdcEnv = vm.envOr("USDC_CONTRACT", "");
+        // Load addresses from .env, or deploy if not set (try/catch for compatibility)
 
         vm.startBroadcast();
         address deployer = msg.sender;
+        // Log deployer balance before any actions
+        uint256 balance = deployer.balance;
+        console.log("Deployer ETH/XTZ balance:", balance);
 
-        // Deploy WXTZ if not set
-        if (bytes(wxtzEnv).length == 0) {
+        // Try to get WXTZ address from env
+        try vm.envAddress("WXTZ_ADDRESS") returns (address wxtzEnv) {
+            WXTZ_ADDR = wxtzEnv;
+            console.log("WXTZ (wrapped XTZ) at:", WXTZ_ADDR);
+        } catch {
             WXTZ wxtzDeployed = new WXTZ();
             WXTZ_ADDR = address(wxtzDeployed);
             console.log("WXTZ deployed at:", WXTZ_ADDR);
-        } else {
-            WXTZ_ADDR = vm.envAddress("WXTZ_ADDRESS");
-            console.log("WXTZ (wrapped XTZ) at:", WXTZ_ADDR);
         }
 
-        // Deploy USDC if not set
-        if (bytes(usdcEnv).length == 0) {
+        // Try to get USDC address from env
+        try vm.envAddress("USDC_CONTRACT") returns (address usdcEnv) {
+            USDC_ADDR = usdcEnv;
+            console.log("USDC (bridged) at:", USDC_ADDR);
+        } catch {
             CronosCRC20 usdcDeployed = new CronosCRC20("USD Coin", "USDC", 6);
             USDC_ADDR = address(usdcDeployed);
             console.log("USDC deployed at:", USDC_ADDR);
-        } else {
-            USDC_ADDR = vm.envAddress("USDC_CONTRACT");
-            console.log("USDC (bridged) at:", USDC_ADDR);
         }
 
         // 1. Deploy Factory
@@ -53,6 +54,13 @@ contract DeployScript is Script {
 
         // 2. Use WXTZ and USDC
         WXTZ wxtz = WXTZ(payable(WXTZ_ADDR));
+        CronosCRC20 usdc = CronosCRC20(USDC_ADDR);
+
+        // Ensure deployer has WXTZ and USDC for liquidity
+        // 1. Deposit 10 ETH/XTZ into WXTZ
+        wxtz.deposit{value: 5 ether}();
+        // 2. Mint 10,000 USDC to deployer
+        usdc.mint(deployer, 10000 * 10**6);
 
         // 3. Deploy Router
         EtherlinkVVSRouter router = new EtherlinkVVSRouter(address(factory), WXTZ_ADDR);
@@ -62,20 +70,21 @@ contract DeployScript is Script {
         // 4. ADD LIQUIDITY
         // ====================================================
 
-        // Approve Router for liquidity amounts (assumes deployer has WXTZ and USDC)
-        wxtz.approve(address(router), 9 * 10**18);
-        IERC20(USDC_ADDR).approve(address(router), 9000 * 10**6);
+        // Approve Router for liquidity amounts (fit deployer's balance)
+        wxtz.approve(address(router), 4 * 10**18);
+        IERC20(USDC_ADDR).approve(address(router), 4000 * 10**6);
 
-        // Add Liquidity (using 9 WXTZ and 9000 USDC)
+        // Add Liquidity (using 4 WXTZ and 4000 USDC)
+        uint deadline = block.timestamp + 3600;
         router.addLiquidity(
             WXTZ_ADDR,
             USDC_ADDR,
-            9 * 10**18,
-            9000 * 10**6,
+            4 * 10**18,
+            4000 * 10**6,
             0,
             0,
             deployer, // Recipient of LP tokens
-            block.timestamp + 300
+            deadline
         );
 
         console.log("Liquidity Added! Pair Created.");
