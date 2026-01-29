@@ -69,7 +69,7 @@ if ! lsof -i:8000 | grep LISTEN; then
         source "$SCRIPT_DIR/agent/venv/bin/activate"
         pip install -r "$SCRIPT_DIR/agent/requirements.txt"
         export DATABASE_URL="file:$DB_PATH"
-        export RPC_URL="https://evm-t3.cronos.org"
+        export RPC_URL="https://node.ghostnet.etherlink.com"
         export PYTHONUNBUFFERED=1
         cd "$SCRIPT_DIR"
         uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &
@@ -101,7 +101,7 @@ if ! lsof -i:8000 | grep LISTEN; then
         source "$SCRIPT_DIR/agent/venv/bin/activate"
         pip install -r "$SCRIPT_DIR/agent/requirements.txt"
         export DATABASE_URL="file:$DB_PATH"
-        export RPC_URL="https://evm-t3.cronos.org"
+        export RPC_URL="https://node.ghostnet.etherlink.com"
         export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
         cd "$SCRIPT_DIR"
         uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &

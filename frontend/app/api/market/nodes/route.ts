@@ -35,11 +35,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     // 1. STRICT KEY CHECK
-    const privateKey = process.env.AGENT_PRIVATE_KEY;
+    const privateKey = process.env.WALLET_PRIVATE_KEY;
     if (!privateKey || !privateKey.startsWith("0x")) {
       return NextResponse.json({ 
         error: "Configuration Error", 
-        details: "AGENT_PRIVATE_KEY is missing or invalid in .env file." 
+        details: "WALLET_PRIVATE_KEY is missing or invalid in .env file." 
       }, { status: 500 });
     }
 

@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 // Interfaces for the contracts (since they're in older Solidity versions)
-interface IWCRO {
+interface IWXTZ {
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
     function decimals() external view returns (uint8);
@@ -40,25 +40,25 @@ interface IVVSFactory {
     function allPairsLength() external view returns (uint256);
 }
 
-interface IVVSRouter {
+interface IEtherlinkVVSRouter {
     function factory() external view returns (address);
-    function WETH() external view returns (address);
-    function addLiquidityETH(
+    function WXTZ() external view returns (address);
+    function addLiquidityXTZ(
         address token,
         uint amountTokenDesired,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountXTZMin,
         address to,
         uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    ) external payable returns (uint amountToken, uint amountXTZ, uint liquidity);
     function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
 }
 
 contract ContractTest is Test {
-    IWCRO public wcro;
+    IWXTZ public wxtz;
     IUSDC public usdc;
     IVVSFactory public factory;
-    IVVSRouter public router;
+    IEtherlinkVVSRouter public router;
     
     address public deployer;
     address public addr1;
@@ -77,14 +77,14 @@ contract ContractTest is Test {
         vm.deal(addr1, 100 ether);
         vm.deal(addr2, 100 ether);
 
-        // Deploy WCRO
-        bytes memory wcroCode = vm.getCode("WCRO.sol:WCRO");
-        address wcroAddr;
+        // Deploy WXTZ
+        bytes memory wxtzCode = vm.getCode("WXTZ.sol:WXTZ");
+        address wxtzAddr;
         assembly {
-            wcroAddr := create(0, add(wcroCode, 0x20), mload(wcroCode))
+            wxtzAddr := create(0, add(wxtzCode, 0x20), mload(wxtzCode))
         }
-        wcro = IWCRO(wcroAddr);
-        console.log("WCRO deployed:", wcroAddr);
+        wxtz = IWXTZ(wxtzAddr);
+        console.log("WXTZ deployed:", wxtzAddr);
 
         // Deploy USDC
         bytes memory usdcCode = vm.getCode("USDC.sol:CronosCRC20");
@@ -108,96 +108,96 @@ contract ContractTest is Test {
         factory = IVVSFactory(factoryAddr);
         console.log("VVS Factory deployed:", factoryAddr);
 
-        // Deploy VVS Router
-        bytes memory routerCode = vm.getCode("VVSRouter.sol:VVSRouter");
-        bytes memory routerArgs = abi.encode(factoryAddr, wcroAddr);
+        // Deploy Etherlink VVS Router
+        bytes memory routerCode = vm.getCode("VVSRouter.sol:EtherlinkVVSRouter");
+        bytes memory routerArgs = abi.encode(factoryAddr, wxtzAddr);
         bytes memory routerBytecode = abi.encodePacked(routerCode, routerArgs);
         address routerAddr;
         assembly {
             routerAddr := create(0, add(routerBytecode, 0x20), mload(routerBytecode))
         }
-        router = IVVSRouter(routerAddr);
-        console.log("VVS Router deployed:", routerAddr);
+        router = IEtherlinkVVSRouter(routerAddr);
+        console.log("Etherlink VVS Router deployed:", routerAddr);
         console.log("");
     }
 
     // ========================
-    // WCRO Tests
+    // WXTZ Tests
     // ========================
     
-    function test_WCRO_InitialProperties() public view {
-        console.log("Testing WCRO initial properties...");
-        assertEq(wcro.name(), "Wrapped CRO");
-        assertEq(wcro.symbol(), "WCRO");
-        assertEq(wcro.decimals(), 18);
-        assertEq(wcro.totalSupply(), 0);
+    function test_WXTZ_InitialProperties() public view {
+        console.log("Testing WXTZ initial properties...");
+        assertEq(wxtz.name(), "Wrapped XTZ");
+        assertEq(wxtz.symbol(), "WXTZ");
+        assertEq(wxtz.decimals(), 18);
+        assertEq(wxtz.totalSupply(), 0);
         console.log("  PASS: Initial properties correct");
     }
 
-    function test_WCRO_Deposit() public {
-        console.log("Testing WCRO deposit...");
+    function test_WXTZ_Deposit() public {
+        console.log("Testing WXTZ deposit...");
         uint256 depositAmount = 10 ether;
         
         vm.prank(addr1);
-        wcro.deposit{value: depositAmount}();
+        wxtz.deposit{value: depositAmount}();
         
-        assertEq(wcro.balanceOf(addr1), depositAmount);
-        assertEq(wcro.totalSupply(), depositAmount);
+        assertEq(wxtz.balanceOf(addr1), depositAmount);
+        assertEq(wxtz.totalSupply(), depositAmount);
         console.log("  PASS: Deposit successful");
     }
 
-    function test_WCRO_Withdraw() public {
-        console.log("Testing WCRO withdraw...");
+    function test_WXTZ_Withdraw() public {
+        console.log("Testing WXTZ withdraw...");
         uint256 depositAmount = 10 ether;
         uint256 withdrawAmount = 5 ether;
         
         vm.prank(addr1);
-        wcro.deposit{value: depositAmount}();
+        wxtz.deposit{value: depositAmount}();
         
         uint256 balanceBefore = addr1.balance;
         
         vm.prank(addr1);
-        wcro.withdraw(withdrawAmount);
+        wxtz.withdraw(withdrawAmount);
         
-        assertEq(wcro.balanceOf(addr1), 5 ether);
+        assertEq(wxtz.balanceOf(addr1), 5 ether);
         assertEq(addr1.balance, balanceBefore + withdrawAmount);
         console.log("  PASS: Withdrawal successful");
     }
 
-    function test_WCRO_Transfer() public {
-        console.log("Testing WCRO transfer...");
+    function test_WXTZ_Transfer() public {
+        console.log("Testing WXTZ transfer...");
         uint256 depositAmount = 10 ether;
         uint256 transferAmount = 2 ether;
         
         vm.prank(addr1);
-        wcro.deposit{value: depositAmount}();
+        wxtz.deposit{value: depositAmount}();
         
         vm.prank(addr1);
-        wcro.transfer(addr2, transferAmount);
+        wxtz.transfer(addr2, transferAmount);
         
-        assertEq(wcro.balanceOf(addr1), 8 ether);
-        assertEq(wcro.balanceOf(addr2), transferAmount);
+        assertEq(wxtz.balanceOf(addr1), 8 ether);
+        assertEq(wxtz.balanceOf(addr2), transferAmount);
         console.log("  PASS: Transfer successful");
     }
 
-    function test_WCRO_ApproveAndTransferFrom() public {
-        console.log("Testing WCRO approve and transferFrom...");
+    function test_WXTZ_ApproveAndTransferFrom() public {
+        console.log("Testing WXTZ approve and transferFrom...");
         uint256 depositAmount = 10 ether;
         uint256 approveAmount = 3 ether;
         
         vm.prank(addr1);
-        wcro.deposit{value: depositAmount}();
+        wxtz.deposit{value: depositAmount}();
         
         vm.prank(addr1);
-        wcro.approve(addr2, approveAmount);
+        wxtz.approve(addr2, approveAmount);
         
-        assertEq(wcro.allowance(addr1, addr2), approveAmount);
+        assertEq(wxtz.allowance(addr1, addr2), approveAmount);
         
         vm.prank(addr2);
-        wcro.transferFrom(addr1, addr2, approveAmount);
+        wxtz.transferFrom(addr1, addr2, approveAmount);
         
-        assertEq(wcro.balanceOf(addr1), 7 ether);
-        assertEq(wcro.balanceOf(addr2), approveAmount);
+        assertEq(wxtz.balanceOf(addr1), 7 ether);
+        assertEq(wxtz.balanceOf(addr2), approveAmount);
         console.log("  PASS: Approve and transferFrom successful");
     }
 
@@ -296,16 +296,16 @@ contract ContractTest is Test {
     // ========================
     
     function test_VVSRouter_Configuration() public view {
-        console.log("Testing VVS Router configuration...");
+        console.log("Testing Etherlink VVS Router configuration...");
         assertEq(router.factory(), address(factory));
-        assertEq(router.WETH(), address(wcro));
+        assertEq(router.WXTZ(), address(wxtz));
         console.log("  PASS: Router configuration correct");
     }
 
-    function test_VVSRouter_AddLiquidityETH() public {
-        console.log("Testing VVS Router add liquidity ETH...");
+    function test_VVSRouter_AddLiquidityXTZ() public {
+        console.log("Testing Etherlink VVS Router add liquidity XTZ...");
         uint256 usdcAmount = 1000 * 10**6;
-        uint256 ethAmount = 1 ether;
+        uint256 xtzAmount = 1 ether;
         
         // Mint USDC
         usdc.mint(address(this), usdcAmount);
@@ -314,11 +314,11 @@ contract ContractTest is Test {
         usdc.approve(address(router), usdcAmount);
         
         // Create pair
-        factory.createPair(address(usdc), address(wcro));
+        factory.createPair(address(usdc), address(wxtz));
         
         // Add liquidity
         uint256 deadline = block.timestamp + 3600;
-        router.addLiquidityETH{value: ethAmount}(
+        router.addLiquidityXTZ{value: xtzAmount}(
             address(usdc),
             usdcAmount,
             0,
@@ -327,7 +327,7 @@ contract ContractTest is Test {
             deadline
         );
         
-        address pair = factory.getPair(address(usdc), address(wcro));
+        address pair = factory.getPair(address(usdc), address(wxtz));
         assertTrue(pair != address(0));
         console.log("  PASS: Liquidity added successfully");
     }
@@ -341,17 +341,17 @@ contract ContractTest is Test {
         
         // Verify all contracts connected
         assertEq(router.factory(), address(factory));
-        assertEq(router.WETH(), address(wcro));
+        assertEq(router.WXTZ(), address(wxtz));
         
-        // Deposit WCRO
+        // Deposit WXTZ
         vm.prank(addr1);
-        wcro.deposit{value: 5 ether}();
+        wxtz.deposit{value: 5 ether}();
         
         // Approve router
         vm.prank(addr1);
-        wcro.approve(address(router), 5 ether);
+        wxtz.approve(address(router), 5 ether);
         
-        assertEq(wcro.allowance(addr1, address(router)), 5 ether);
+        assertEq(wxtz.allowance(addr1, address(router)), 5 ether);
         console.log("  PASS: Integration workflow successful");
     }
 
@@ -359,13 +359,13 @@ contract ContractTest is Test {
         console.log("\n============================================================");
         console.log("DEPLOYMENT ADDRESSES");
         console.log("============================================================");
-        console.log("WCRO:        ", address(wcro));
+        console.log("WXTZ:        ", address(wxtz));
         console.log("USDC:        ", address(usdc));
         console.log("VVS Factory: ", address(factory));
         console.log("VVS Router:  ", address(router));
         console.log("============================================================\n");
     }
 
-    // Fallback to receive ETH
+    // Fallback to receive XTZ
     receive() external payable {}
 }

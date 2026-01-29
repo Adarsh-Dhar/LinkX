@@ -60,7 +60,7 @@ class DataPipeline:
         unlock_abi_path = os.path.join(os.path.dirname(__file__), "../abi/vvsrouter.json")
         with open(unlock_abi_path, "r") as f:
             unlock_abi = json.load(f)
-        cronos_rpc = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+        cronos_rpc = os.getenv("RPC_URL", "https://node.ghostnet.etherlink.com")
         usdc_contract_addr = os.getenv("USDC_CONTRACT", "0xE373E44E5e64496BD092A5ad097881C0fa31D326")
         unlock_contract_addr = "0x1234567890abcdef1234567890abcdef12345678"  # Placeholder address
         unlock_contract_addr = Web3.to_checksum_address(unlock_contract_addr)

@@ -5,8 +5,8 @@ import { ethers } from 'ethers';
 
 // 1. Configuration
 // Ideally, put these in your .env file
-const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY; // Default: Hardhat Account #0 (CHANGE THIS FOR REAL NETWORKS)
-const RPC_URL = "https://evm-t3.cronos.org"; // Cronos Testnet
+const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY; // Default: Hardhat Account #0 (CHANGE THIS FOR REAL NETWORKS)
+const RPC_URL = "https://node.ghostnet.etherlink.com"; // Cronos Testnet
 
 // Initialize Facilitator
 const facilitator = new Facilitator({
@@ -60,13 +60,13 @@ export async function POST(req: Request) {
 
     console.log(`🤖 Initiating x402 Payment for: ${node.name}...`);
 
-    if (!AGENT_PRIVATE_KEY) {
-      throw new Error("AGENT_PRIVATE_KEY is not set in environment variables.");
+    if (!WALLET_PRIVATE_KEY) {
+      throw new Error("WALLET_PRIVATE_KEY is not set in environment variables.");
     }
 
     // 3. Initialize Agent's Wallet (The Buyer)
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const signer = new ethers.Wallet(AGENT_PRIVATE_KEY, provider);
+    const signer = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
 
     // 4. x402 Step A: Generate Payment Header (Buyer signs the promise to pay)
     // This creates an EIP-3009 authorization signature

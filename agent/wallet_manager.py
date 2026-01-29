@@ -53,7 +53,7 @@ import os
 class WalletManager:
     def __init__(self, private_key=None, rpc_url=None):
         self.private_key = private_key or os.getenv("WALLET_PRIVATE_KEY")
-        self.rpc_url = rpc_url or os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+        self.rpc_url = rpc_url or os.getenv("RPC_URL", "https://node.ghostnet.etherlink.com")
         self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
         self.account = self.w3.eth.account.from_key(self.private_key)
         self.address = self.account.address

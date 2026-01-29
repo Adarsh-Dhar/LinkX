@@ -45,15 +45,16 @@ def estimate_swap_output(token_in: str, token_out: str, amount_in: float):
 
 load_dotenv()
 
+
 # ==========================================
 # ⚡️ YOUR DEPLOYED CONTRACTS ⚡️
 # ==========================================
-VVS_ROUTER_ADDR = "0x87AE95401447ef92c32f047a79F51Ed4879D516f"
-WCRO_ADDRESS    = "0x8F65e9482DB43F403400C6Cb7B20E7dc132d21D2"
-USDC_CONTRACT   = "0xE373E44E5e64496BD092A5ad097881C0fa31D326"
+VVS_ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
+WXTZ_ADDRESS    = os.getenv("WXTZ_ADDRESS")
+USDC_CONTRACT   = os.getenv("USDC_CONTRACT")
 # ==========================================
 
-CRONOS_RPC_URL = os.getenv("CRONOS_RPC_URL", "https://evm-t3.cronos.org")
+RPC_URL = os.getenv("RPC_URL", "https://node.ghostnet.etherlink.com")
 
 
 # --- UNIVERSAL DECORATOR ---
@@ -112,11 +113,9 @@ ROUTER_ABI = [{"inputs":[{"internalType":"uint256","name":"amountOutMin","type":
 def resolve_address(token):
     token_lower = token.lower()
     if token_lower == "usdc": return Web3.to_checksum_address(USDC_CONTRACT)
-    if token_lower == "wcro": return Web3.to_checksum_address(WCRO_ADDRESS)
-    
-    # CRITICAL: Treat 'cro', 'tcro' as NATIVE
-    if token_lower in ["cro", "tcro", "native"]: return "cro"
-    
+    if token_lower == "wxtz": return Web3.to_checksum_address(WXTZ_ADDRESS)
+    # CRITICAL: Treat 'xtz', 'tez', 'native' as NATIVE
+    if token_lower in ["xtz", "tez", "native"]: return "xtz"
     if token_lower.startswith("0x"): return Web3.to_checksum_address(token)
     return None
 
@@ -124,7 +123,7 @@ def resolve_address(token):
 def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0):
     print(f"\n🔄 EXECUTE SWAP: {amount_in} {token_in} -> {token_out}")
     try:
-        w3 = Web3(Web3.HTTPProvider(CRONOS_RPC_URL))
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
         private_key = os.getenv("WALLET_PRIVATE_KEY")
         if not private_key: return {"error": "Missing Private Key"}
         

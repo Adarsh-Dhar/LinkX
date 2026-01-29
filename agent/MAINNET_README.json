@@ -10,7 +10,7 @@
   },
   "testnet_current": {
     "chain_id": 338,
-    "rpc_url": "https://evm-t3.cronos.org",
+    "rpc_url": "https://node.ghostnet.etherlink.com",
     "silverswap_router": "0x08cA22a04df619e0990495181B434a9674528121",
     "silverswap_factory": "0xD1DfeC22D2577aE722b8ed3b5B05472e3479FA26",
     "wtcro_address": "0xDd7FBd7e655DE4B8eccb2B3254F6B69B569F0A9a",
@@ -32,7 +32,7 @@
   "to_go_production": {
     "step_1": "Get mainnet funds: CRO + USDC",
     "step_2": "Update .env CHAIN_ID=25",
-    "step_3": "Update .env CRONOS_RPC_URL=https://rpc.cronos.org",
+    "step_3": "Update .env RPC_URL=https://rpc.cronos.org",
     "step_4": "Update .env VVS_ROUTER=0x145677FC4d9b8F19B4172A2b88f7fb1f02fdf220",
     "step_5": "Update .env VVS_CONTRACT=0x2D03bECE6747ADC00E1a131BBA1469C15fD11e03",
     "step_6": "Update .env USDC_CONTRACT=0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",

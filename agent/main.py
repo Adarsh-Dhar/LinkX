@@ -35,7 +35,7 @@ class IntelligentAgent:
         # 1. Wallet
         print("DEBUG WALLET_PRIVATE_KEY:", os.getenv("WALLET_PRIVATE_KEY"))
         private_key = os.getenv("WALLET_PRIVATE_KEY")
-        rpc_url = os.getenv("CRONOS_RPC_URL", os.getenv("RPC_URL", "https://evm-t3.cronos.org"))
+        rpc_url = os.getenv("RPC_URL", os.getenv("RPC_URL", "https://node.ghostnet.etherlink.com"))
         self.wallet = WalletManager(private_key, rpc_url)
         print(f"   ✅ Wallet: {self.wallet.address}")
         # 2. Market

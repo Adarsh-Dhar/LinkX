@@ -22,7 +22,7 @@ from web3 import Web3
 from eth_account import Account
 load_dotenv(Path(__file__).parent.parent / '.env')
 
-w3 = Web3(Web3.HTTPProvider(os.getenv('CRONOS_RPC_URL')))
+w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL')))
 private_key = os.getenv('WALLET_PRIVATE_KEY')
 account = Account.from_key(private_key)
 

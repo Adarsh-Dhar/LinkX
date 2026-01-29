@@ -12,16 +12,20 @@ import { TransferHelper } from "./libraries/TransferHelper.sol";
 
 contract EtherlinkVVSRouter is IVVSRouter02 {
     address immutable _factory;
-    address immutable WXTZ;
+    address immutable _WXTZ;
+
+    function WXTZ() public view returns (address) {
+        return _WXTZ;
+    }
 
     modifier ensure(uint deadline) {
         require(deadline >= block.timestamp, 'VVSRouter: EXPIRED');
         _;
     }
 
-    constructor(address factory__, address _WXTZ) {
+    constructor(address factory__, address WXTZ__) {
         _factory = factory__;
-        WXTZ = _WXTZ;
+        _WXTZ = WXTZ__;
     }
 
     function factory() external view returns (address) {
@@ -40,7 +44,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
     }
 
     receive() external payable {
-        assert(msg.sender == WXTZ);
+        assert(msg.sender == _WXTZ);
     }
 
     // **** ADD LIQUIDITY ****
@@ -99,16 +103,16 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
     ) external virtual payable ensure(deadline) returns (uint amountToken, uint amountXTZ, uint liquidity) {
         (amountToken, amountXTZ) = _addLiquidity(
             token,
-            WXTZ,
+            _WXTZ,
             amountTokenDesired,
             msg.value,
             amountTokenMin,
             amountXTZMin
         );
-        address pair = VVSLibrary.pairFor(_factory, token, WXTZ);
+        address pair = VVSLibrary.pairFor(_factory, token, _WXTZ);
         TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
-        IWXTZ(WXTZ).deposit{value: amountXTZ}();
-        assert(IWXTZ(WXTZ).transfer(pair, amountXTZ));
+        IWXTZ(_WXTZ).deposit{value: amountXTZ}();
+        assert(IWXTZ(_WXTZ).transfer(pair, amountXTZ));
         liquidity = IVVSPair(pair).mint(to);
         if (msg.value > amountXTZ) TransferHelper.safeTransferETH(msg.sender, msg.value - amountXTZ);
     }
@@ -142,7 +146,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
     ) public virtual ensure(deadline) returns (uint amountToken, uint amountXTZ) {
         (amountToken, amountXTZ) = removeLiquidity(
             token,
-            WXTZ,
+            _WXTZ,
             liquidity,
             amountTokenMin,
             amountXTZMin,
@@ -150,7 +154,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
             deadline
         );
         TransferHelper.safeTransfer(token, to, amountToken);
-        IWXTZ(WXTZ).withdraw(amountXTZ);
+        IWXTZ(_WXTZ).withdraw(amountXTZ);
         TransferHelper.safeTransferETH(to, amountXTZ);
     }
 
@@ -179,7 +183,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
     ) external virtual returns (uint amountToken, uint amountXTZ) {
-        address pair = VVSLibrary.pairFor(_factory, token, WXTZ);
+        address pair = VVSLibrary.pairFor(_factory, token, _WXTZ);
         uint value = approveMax ? type(uint).max : liquidity;
         IVVSPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
         (amountToken, amountXTZ) = removeLiquidityXTZ(token, liquidity, amountTokenMin, amountXTZMin, to, deadline);
@@ -195,7 +199,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
     ) public virtual ensure(deadline) returns (uint amountXTZ) {
         (, amountXTZ) = removeLiquidity(
             token,
-            WXTZ,
+            _WXTZ,
             liquidity,
             amountTokenMin,
             amountXTZMin,
@@ -203,7 +207,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
             deadline
         );
         TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
-        IWXTZ(WXTZ).withdraw(amountXTZ);
+        IWXTZ(_WXTZ).withdraw(amountXTZ);
         TransferHelper.safeTransferETH(to, amountXTZ);
     }
 
@@ -216,7 +220,7 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
     ) external virtual returns (uint amountXTZ) {
-        address pair = VVSLibrary.pairFor(_factory, token, WXTZ);
+        address pair = VVSLibrary.pairFor(_factory, token, _WXTZ);
         uint value = approveMax ? type(uint).max : liquidity;
         IVVSPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
         amountXTZ = removeLiquidityXTZSupportingFeeOnTransferTokens(
@@ -276,11 +280,11 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         ensure(deadline)
         returns (uint[] memory amounts)
     {
-        require(path[0] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[0] == _WXTZ, 'VVSRouter: INVALID_PATH');
         amounts = VVSLibrary.getAmountsOut(_factory, msg.value, path);
         require(amounts[amounts.length - 1] >= amountOutMin, 'VVSRouter: INSUFFICIENT_OUTPUT_AMOUNT');
-        IWXTZ(WXTZ).deposit{value: amounts[0]}();
-        assert(IWXTZ(WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]));
+        IWXTZ(_WXTZ).deposit{value: amounts[0]}();
+        assert(IWXTZ(_WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]));
         _swap(amounts, path, to);
     }
 
@@ -291,14 +295,14 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         ensure(deadline)
         returns (uint[] memory amounts)
     {
-        require(path[path.length - 1] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[path.length - 1] == _WXTZ, 'VVSRouter: INVALID_PATH');
         amounts = VVSLibrary.getAmountsIn(_factory, amountOut, path);
         require(amounts[0] <= amountInMax, 'VVSRouter: EXCESSIVE_INPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]
         );
         _swap(amounts, path, address(this));
-        IWXTZ(WXTZ).withdraw(amounts[amounts.length - 1]);
+        IWXTZ(_WXTZ).withdraw(amounts[amounts.length - 1]);
         TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
     }
 
@@ -309,14 +313,14 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         ensure(deadline)
         returns (uint[] memory amounts)
     {
-        require(path[path.length - 1] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[path.length - 1] == _WXTZ, 'VVSRouter: INVALID_PATH');
         amounts = VVSLibrary.getAmountsOut(_factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, 'VVSRouter: INSUFFICIENT_OUTPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]
         );
         _swap(amounts, path, address(this));
-        IWXTZ(WXTZ).withdraw(amounts[amounts.length - 1]);
+        IWXTZ(_WXTZ).withdraw(amounts[amounts.length - 1]);
         TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
     }
 
@@ -328,11 +332,11 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         ensure(deadline)
         returns (uint[] memory amounts)
     {
-        require(path[0] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[0] == _WXTZ, 'VVSRouter: INVALID_PATH');
         amounts = VVSLibrary.getAmountsIn(_factory, amountOut, path);
         require(amounts[0] <= msg.value, 'VVSRouter: EXCESSIVE_INPUT_AMOUNT');
-        IWXTZ(WXTZ).deposit{value: amounts[0]}();
-        assert(IWXTZ(WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]));
+        IWXTZ(_WXTZ).deposit{value: amounts[0]}();
+        assert(IWXTZ(_WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amounts[0]));
         _swap(amounts, path, to);
         if (msg.value > amounts[0]) TransferHelper.safeTransferETH(msg.sender, msg.value - amounts[0]);
     }
@@ -386,10 +390,10 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
         payable
         ensure(deadline)
     {
-        require(path[0] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[0] == _WXTZ, 'VVSRouter: INVALID_PATH');
         uint amountIn = msg.value;
-        IWXTZ(WXTZ).deposit{value: amountIn}();
-        assert(IWXTZ(WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amountIn));
+        IWXTZ(_WXTZ).deposit{value: amountIn}();
+        assert(IWXTZ(_WXTZ).transfer(VVSLibrary.pairFor(_factory, path[0], path[1]), amountIn));
         uint balanceBefore = IERC20(path[path.length - 1]).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(path, to);
         require(
@@ -410,14 +414,14 @@ contract EtherlinkVVSRouter is IVVSRouter02 {
 
         ensure(deadline)
     {
-        require(path[path.length - 1] == WXTZ, 'VVSRouter: INVALID_PATH');
+        require(path[path.length - 1] == _WXTZ, 'VVSRouter: INVALID_PATH');
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, VVSLibrary.pairFor(_factory, path[0], path[1]), amountIn
         );
         _swapSupportingFeeOnTransferTokens(path, address(this));
-        uint amountOut = IERC20(WXTZ).balanceOf(address(this));
+        uint amountOut = IERC20(_WXTZ).balanceOf(address(this));
         require(amountOut >= amountOutMin, 'VVSRouter: INSUFFICIENT_OUTPUT_AMOUNT');
-        IWXTZ(WXTZ).withdraw(amountOut);
+        IWXTZ(_WXTZ).withdraw(amountOut);
         TransferHelper.safeTransferETH(to, amountOut);
     }
 
