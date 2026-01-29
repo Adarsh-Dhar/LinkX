@@ -13,7 +13,7 @@ services:
       
       # --- NETWORK CONFIGURATION ---
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - RPC_URL=https://node.ghostnet.etherlink.com
+      - RPC_URL=https://node.shadownet.etherlink.com
       
       # --- CONNECTION TO YOUR SERVER ---
       # If running locally, use 'host.docker.internal' to reach your laptop

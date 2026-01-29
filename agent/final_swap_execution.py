@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FINAL SOLUTION: Execute a real swap on Cronos testnet
+FINAL SOLUTION: Execute a real swap on Etherlink testnet
 Using mock pricing since pair creation fails on testnet
 
 This demonstrates the complete trading flow:
@@ -30,7 +30,7 @@ print("="*70)
 print("FINAL SOLUTION: COMPLETE SWAP EXECUTION")
 print("="*70)
 print(f"\nWallet: {account.address}")
-print(f"Network: Cronos Testnet (Chain {w3.eth.chain_id})")
+print(f"Network: Etherlink Testnet (Chain {w3.eth.chain_id})")
 
 # Contracts
 USDC = w3.to_checksum_address(os.getenv('USDC_CONTRACT'))
@@ -206,7 +206,7 @@ try:
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
         
         print(f"\n  TX: {tx_hash.hex()}")
-        print(f"  Explorer: https://explorer.cronos.org/testnet/tx/{tx_hash.hex()}")
+        print(f"  Explorer: https://explorer.etherlink.com/testnet/tx/{tx_hash.hex()}")
         print(f"  Waiting for confirmation...")
         
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
@@ -271,7 +271,7 @@ Next Steps:
   
   OPTION A: Continue Development (Recommended)
   - Use mock pricing for agent testing
-  - Deploy to Cronos Mainnet when ready
+  - Deploy to Etherlink Mainnet when ready
   - Get mainnet CRO + USDC from exchange
   - Update .env with mainnet RPC
   - Agent will work with real liquidity on mainnet VVS

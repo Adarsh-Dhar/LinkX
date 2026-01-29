@@ -7,17 +7,43 @@ import "forge-std/console.sol";
 import "../src/VVSFactory.sol";
 import "../src/VVSRouter.sol";
 import "../src/WXTZ.sol";
+import "../src/USDC.sol";
 // USDC is bridged, use interface only
 
 contract DeployScript is Script {
-    address constant WXTZ_ADDR = 0xB1e000000000000000000000000000000051D8B1;
-    address constant USDC_ADDR = 0x4C2000000000000000000000000000000048494C;
+
+    // Read from environment variables or deploy if not set
+    address WXTZ_ADDR;
+    address USDC_ADDR;
 
     function run() external {
-        // Start recording transactions to be sent
-        vm.startBroadcast();
 
+        // Load addresses from .env, or deploy if not set
+        string memory wxtzEnv = vm.envOr("WXTZ_ADDRESS", "");
+        string memory usdcEnv = vm.envOr("USDC_CONTRACT", "");
+
+        vm.startBroadcast();
         address deployer = msg.sender;
+
+        // Deploy WXTZ if not set
+        if (bytes(wxtzEnv).length == 0) {
+            WXTZ wxtzDeployed = new WXTZ();
+            WXTZ_ADDR = address(wxtzDeployed);
+            console.log("WXTZ deployed at:", WXTZ_ADDR);
+        } else {
+            WXTZ_ADDR = vm.envAddress("WXTZ_ADDRESS");
+            console.log("WXTZ (wrapped XTZ) at:", WXTZ_ADDR);
+        }
+
+        // Deploy USDC if not set
+        if (bytes(usdcEnv).length == 0) {
+            CronosCRC20 usdcDeployed = new CronosCRC20("USD Coin", "USDC", 6);
+            USDC_ADDR = address(usdcDeployed);
+            console.log("USDC deployed at:", USDC_ADDR);
+        } else {
+            USDC_ADDR = vm.envAddress("USDC_CONTRACT");
+            console.log("USDC (bridged) at:", USDC_ADDR);
+        }
 
         // 1. Deploy Factory
         VVSFactory factory = new VVSFactory(deployer);
@@ -25,14 +51,11 @@ contract DeployScript is Script {
         // Print INIT_CODE_PAIR_HASH for VVSLibrary
         console.logBytes32(factory.INIT_CODE_PAIR_HASH());
 
-        // 2. Deploy Tokens
-        // Use deployed WXTZ and bridged USDC addresses on Etherlink Ghostnet
+        // 2. Use WXTZ and USDC
         WXTZ wxtz = WXTZ(payable(WXTZ_ADDR));
-        console.log("WXTZ (wrapped XTZ) at:", address(wxtz));
-        console.log("USDC (bridged) at:", USDC_ADDR);
 
         // 3. Deploy Router
-            EtherlinkVVSRouter router = new EtherlinkVVSRouter(address(factory), WXTZ_ADDR);
+        EtherlinkVVSRouter router = new EtherlinkVVSRouter(address(factory), WXTZ_ADDR);
         console.log("VVSRouter deployed at:", address(router));
 
         // ====================================================

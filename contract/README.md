@@ -45,11 +45,27 @@ $ forge snapshot
 $ anvil
 ```
 
-### Deploy
+
+### Deploy (using .env)
+
+1. Create a `.env` file in the contract directory with:
+
+	RPC_URL=<your_rpc_url>
+	WALLET_PRIVATE_KEY=<your_private_key>
+
+2. Deploy using Foundry's automatic .env loading:
 
 ```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+$ forge script script/Deploy.s.sol:DeployScript --rpc-url $RPC_URL --private-key $WALLET_PRIVATE_KEY
 ```
+
+Or, simply:
+
+```shell
+$ forge script script/Deploy.s.sol:DeployScript --env-file .env
+```
+
+The deployed contract addresses will be printed in the output.
 
 ### Cast
 

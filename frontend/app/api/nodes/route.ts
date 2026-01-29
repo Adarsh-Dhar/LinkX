@@ -6,7 +6,7 @@ import { ethers } from 'ethers';
 // 1. Configuration
 // Ideally, put these in your .env file
 const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY; // Default: Hardhat Account #0 (CHANGE THIS FOR REAL NETWORKS)
-const RPC_URL = "https://node.ghostnet.etherlink.com"; // Cronos Testnet
+const RPC_URL = "https://node.shadownet.etherlink.com"; // Cronos Testnet
 
 // Initialize Facilitator
 const facilitator = new Facilitator({

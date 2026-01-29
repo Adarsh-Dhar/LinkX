@@ -10,7 +10,7 @@
   },
   "testnet_current": {
     "chain_id": 338,
-    "rpc_url": "https://node.ghostnet.etherlink.com",
+    "rpc_url": "https://node.shadownet.etherlink.com",
     "silverswap_router": "0x08cA22a04df619e0990495181B434a9674528121",
     "silverswap_factory": "0xD1DfeC22D2577aE722b8ed3b5B05472e3479FA26",
     "wtcro_address": "0xDd7FBd7e655DE4B8eccb2B3254F6B69B569F0A9a",

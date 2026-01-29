@@ -6,7 +6,7 @@ libs = ["lib"]
 remappings = ["forge-std/=lib/forge-std/src/"]
 
 [rpc_endpoints]
-etherlink = "https://node.ghostnet.etherlink.com"
+etherlink = "https://node.shadownet.etherlink.com"
 
 [etherscan]
 etherlink = { key = "any", url = "https://testnet.explorer.etherlink.com/api" }

@@ -31,7 +31,8 @@ class PredictiveAgent:
         self.refill_amount = float(refill_amount)
         print(f"[Mandate] Will auto-refill wallet with {self.refill_amount} USDC when below {self.refill_threshold} USDC")
 
-    def __init__(self, wallet_manager=None, market_manager=None, trading_engine=None, simulation_mode=False):
+    def __init__(self, wallet_manager=None, market_manager=None, trading_engine=None, simulation_mode=False,
+                 agent_mode="BALANCED", agent_min_accuracy=7, agent_max_cost=1000000.0):
         self.market_manager = market_manager
         self.engine = trading_engine if trading_engine is not None else TradingEngine(wallet_manager)
         self.pipeline = DataPipeline(self.engine)
@@ -46,13 +47,11 @@ class PredictiveAgent:
         from dotenv import load_dotenv
         from pathlib import Path
         load_dotenv(Path(__file__).parent.parent / '.env')
-        # Read agent config from environment variables
-        self.mode = os.getenv("AGENT_MODE", "BALANCED")
-        self.min_accuracy = int(os.getenv("AGENT_MIN_ACCURACY", "7"))
-        # No default daily spend limit; unlimited unless set by user
-        max_cost_env = os.getenv("AGENT_MAX_COST", None)
+        # Read agent config from frontend (constructor arguments)
+        self.mode = agent_mode
+        self.min_accuracy = int(agent_min_accuracy)
         try:
-            self.max_cost = float(max_cost_env) if max_cost_env is not None else 1000000.0
+            self.max_cost = float(agent_max_cost)
         except Exception:
             self.max_cost = 1000000.0
         self.max_total_spend_per_trade = self.max_cost

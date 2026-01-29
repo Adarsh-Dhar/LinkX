@@ -54,7 +54,7 @@ WXTZ_ADDRESS    = os.getenv("WXTZ_ADDRESS")
 USDC_CONTRACT   = os.getenv("USDC_CONTRACT")
 # ==========================================
 
-RPC_URL = os.getenv("RPC_URL", "https://node.ghostnet.etherlink.com")
+RPC_URL = os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
 
 
 # --- UNIVERSAL DECORATOR ---
