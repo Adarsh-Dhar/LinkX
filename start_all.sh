@@ -91,23 +91,7 @@ echo "   ✅ Frontend PID: $FRONTEND_PID"
 echo "   ⏳ Waiting 15s for Frontend to boot..."
 sleep 15
 
-# 7. Start Agent (WITH UNBUFFERED LOGS)
-echo "🤖 Starting Agent..."
 
-# Only start the agent if not already running on port 8000
-if ! lsof -i:8000 | grep LISTEN; then
-        if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
-        source "$SCRIPT_DIR/agent/venv/bin/activate"
-        pip install -r "$SCRIPT_DIR/agent/requirements.txt"
-        export DATABASE_URL="file:$DB_PATH"
-        export PYTHONUNBUFFERED=1  # <--- CRITICAL FOR LOGS
-        cd "$SCRIPT_DIR"
-        uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &
-        AGENT_PID=$!
-        echo "   ✅ Agent started (PID: $AGENT_PID)"
-else
-        echo "   ⚠️  Agent already running on port 8000. Skipping start."
-fi
 
 echo "✅ System Online. Watch terminal for '🤖 EXPERT AGENT ANALYSIS'..."
 trap "kill $SERVER_PID $FRONTEND_PID $AGENT_PID $REGISTRY_PID $DEMO_PROVIDERS_PID; pkill -f provider.js; exit" SIGINT SIGTERM

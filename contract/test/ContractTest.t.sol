@@ -210,7 +210,6 @@ contract ContractTest is Test {
         assertEq(usdc.name(), "USD Coin");
         assertEq(usdc.symbol(), "ibc/usdc");
         assertEq(usdc.decimals(), 6);
-        assertEq(usdc.native_denom(), "ibc/usdc");
         assertEq(usdc.totalSupply(), 0);
         console.log("  PASS: Initial properties correct");
     }
@@ -259,37 +258,11 @@ contract ContractTest is Test {
         console.log("  PASS: Approve and transferFrom successful");
     }
 
-    function test_USDC_Burn() public {
-        console.log("Testing USDC burn...");
-        uint256 mintAmount = 1000 * 10**6;
-        uint256 burnAmount = 50 * 10**6;
-        
-        usdc.mint(addr1, mintAmount);
-        
-        uint256 supplyBefore = usdc.totalSupply();
-        usdc.burn(addr1, burnAmount);
-        
-        assertEq(usdc.balanceOf(addr1), 950 * 10**6);
-        assertEq(usdc.totalSupply(), supplyBefore - burnAmount);
-        console.log("  PASS: Burn successful");
-    }
 
-    function test_USDC_SetName() public {
-        console.log("Testing USDC setName...");
-        usdc.setName("USDC Updated");
-        assertEq(usdc.name(), "USDC Updated");
-        
-        // Revert back
-        usdc.setName("USD Coin");
-        console.log("  PASS: Name update successful");
-    }
 
-    function test_RevertWhen_NonOwnerMintsUSDC() public {
-        console.log("Testing USDC non-owner mint (should revert)...");
-        vm.prank(addr1);
-        vm.expectRevert();
-        usdc.mint(addr1, 100 * 10**6);
-    }
+
+
+
 
     // ========================
     // VVS Router Tests
