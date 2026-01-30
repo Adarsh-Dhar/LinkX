@@ -5,12 +5,13 @@ import "forge-std/Script.sol";
 import "forge-std/console.sol";
 import "../src/WXTZ.sol";
 
+
 contract DeployWXTZ is Script {
     function run() external {
-        vm.startBroadcast();
-        address deployer = msg.sender;
-        WXTZ wxtz = new WXTZ(deployer);
-        console.log("WXTZ deployed at:", address(wxtz));
+        uint256 deployerPrivateKey = vm.envUint("WALLET_PRIVATE_KEY");
+        address bridge = vm.envAddress("BRIDGE_ADDRESS");
+        vm.startBroadcast(deployerPrivateKey);
+        new WXTZ(bridge);
         vm.stopBroadcast();
     }
 }
