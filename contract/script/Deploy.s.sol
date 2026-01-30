@@ -31,7 +31,7 @@ contract DeployScript is Script {
             WXTZ_ADDR = wxtzEnv;
             console.log("WXTZ (wrapped XTZ) at:", WXTZ_ADDR);
         } catch {
-            WXTZ wxtzDeployed = new WXTZ();
+            WXTZ wxtzDeployed = new WXTZ(deployer);
             WXTZ_ADDR = address(wxtzDeployed);
             console.log("WXTZ deployed at:", WXTZ_ADDR);
         }
@@ -41,7 +41,7 @@ contract DeployScript is Script {
             USDC_ADDR = usdcEnv;
             console.log("USDC (bridged) at:", USDC_ADDR);
         } catch {
-            CronosCRC20 usdcDeployed = new CronosCRC20("USD Coin", "USDC", 6);
+            USDC usdcDeployed = new USDC(deployer);
             USDC_ADDR = address(usdcDeployed);
             console.log("USDC deployed at:", USDC_ADDR);
         }
@@ -54,11 +54,11 @@ contract DeployScript is Script {
 
         // 2. Use WXTZ and USDC
         WXTZ wxtz = WXTZ(payable(WXTZ_ADDR));
-        CronosCRC20 usdc = CronosCRC20(USDC_ADDR);
+        USDC usdc = USDC(USDC_ADDR);
 
         // Ensure deployer has WXTZ and USDC for liquidity
-        // 1. Deposit 10 ETH/XTZ into WXTZ
-        wxtz.deposit{value: 5 ether}();
+        // 1. Mint 5 WXTZ to deployer
+        wxtz.mint(deployer, 5 * 10**18);
         // 2. Mint 10,000 USDC to deployer
         usdc.mint(deployer, 10000 * 10**6);
 

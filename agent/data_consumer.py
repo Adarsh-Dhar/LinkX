@@ -26,9 +26,12 @@ def fetch_node_data(*args, **kwargs) -> Any:
         res = requests.get(node_url, headers=headers, timeout=5)
         if res.status_code == 402:
             target_wallet = res.headers.get("X-Payment-Wallet")
+            print(f"   💸 [Target Wallet] {target_wallet}")
             actual_price = float(res.headers.get("X-Payment-Price", price or 0))
+            print(f"   💲 [Wallet details] {wallet.address}")
             print(f"   💰 [Etherlink x402] Paying {actual_price} USDC to {target_wallet}")
             tx_hash = wallet.transfer_usdc(target_wallet, actual_price)
+            print(f"   ✅ [x402 Payment Tx Hash] {tx_hash}")
             if tx_hash:
                 # Etherlink x402: proof in PAYMENT-SIGNATURE header
                 headers["PAYMENT-SIGNATURE"] = tx_hash

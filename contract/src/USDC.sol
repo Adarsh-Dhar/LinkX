@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
-import "./ModuleCRC20.sol";
+import {WrappedERC20} from "./WrappedERC20.sol";
 
-// Fully ERC20-compliant USDC contract for Etherlink
-contract USDC is ModuleCRC20 {
-    constructor() CronosCRC20("USD Coin", "USDC", 6) {}
+contract USDC is WrappedERC20 {
+	constructor(address _bridge) WrappedERC20(_bridge, "USD Coin", "USDC", 6) {}
 }

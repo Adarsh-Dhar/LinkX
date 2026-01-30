@@ -19,7 +19,7 @@ account = w3.eth.account.from_key(PRIVATE_KEY)
 address = account.address
 
 # Test transfer
-recipient = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"  # Example recipient
+recipient = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9"  # Example recipient
 usdc = w3.eth.contract(address=USDC_CONTRACT, abi=ERC20_ABI)
 decimals = usdc.functions.decimals().call()
 amount = int(0.45 * (10 ** decimals))

@@ -8,6 +8,7 @@
     "prisma": "^6.19.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "thirdweb": "^5.118.0",
     "tsx": "^4.21.0"
   },
   "packageManager": "pnpm@9.10.0+sha1.216899f511c8dfde183c7cb50b69009c779534a8",

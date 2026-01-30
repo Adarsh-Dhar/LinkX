@@ -14,11 +14,11 @@ contract DeployContractsScript is Script {
         vm.startBroadcast();
         address deployer = msg.sender;
         // Deploy WXTZ
-        WXTZ wxtz = new WXTZ();
+        WXTZ wxtz = new WXTZ(deployer);
         address wxtzAddr = address(wxtz);
         console.log("WXTZ deployed at:", wxtzAddr);
         // Deploy USDC
-        CronosCRC20 usdc = new CronosCRC20("USD Coin", "USDC", 6);
+        USDC usdc = new USDC(deployer);
         address usdcAddr = address(usdc);
         console.log("USDC deployed at:", usdcAddr);
         // Deploy Factory
