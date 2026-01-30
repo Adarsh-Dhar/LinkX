@@ -74,8 +74,8 @@ class WalletManager:
         return None
 
     def transfer_usdc(self, destination, amount):
-        # Send USDC ERC20 transfer
-        usdc_address = os.getenv("USDC_CONTRACT", "0xE373E44E5e64496BD092A5ad097881C0fa31D326")
+        # Etherlink Shadownet USDC address and chainId
+        usdc_address = os.getenv("USDC_CONTRACT", "0xff16f6b57736e4f358603681677c38666579998b")
         erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
         decimals = erc20.functions.decimals().call()
         amt_wei = int(float(amount) * (10 ** decimals))
@@ -84,12 +84,13 @@ class WalletManager:
             'from': self.address,
             'nonce': nonce,
             'gas': 100000,
-            'gasPrice': int(self.w3.eth.gas_price * 1.2)
+            'gasPrice': int(self.w3.eth.gas_price * 1.2),
+            'chainId': 128123
         })
         signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
         print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
-        self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
         return tx_hash.hex()
 
     def execute_swap(self, token_in, token_out, amount):

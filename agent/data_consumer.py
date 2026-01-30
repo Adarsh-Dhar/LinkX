@@ -27,13 +27,14 @@ def fetch_node_data(*args, **kwargs) -> Any:
         if res.status_code == 402:
             target_wallet = res.headers.get("X-Payment-Wallet")
             actual_price = float(res.headers.get("X-Payment-Price", price or 0))
-            print(f"   💸 [x402] Paying {actual_price} USDC to unlock {category or node_url}...")
+            print(f"   💰 [Etherlink x402] Paying {actual_price} USDC to {target_wallet}")
             tx_hash = wallet.transfer_usdc(target_wallet, actual_price)
             if tx_hash:
-                res = requests.get(node_url, headers={"X-Payment-Proof": tx_hash}, timeout=5)
+                # Etherlink x402: proof in PAYMENT-SIGNATURE header
+                headers["PAYMENT-SIGNATURE"] = tx_hash
+                res = requests.get(node_url, headers=headers, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            # Return a real Signal object with the value
             from collections import namedtuple
             Signal = namedtuple('Signal', ['value'])
             return Signal(value=data.get('value', 0.5))
