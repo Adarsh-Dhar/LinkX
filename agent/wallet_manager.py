@@ -74,24 +74,71 @@ class WalletManager:
         return None
 
     def transfer_usdc(self, destination, amount):
-        # Etherlink USDC address and dynamic chainId
-        usdc_address = os.getenv("USDC_CONTRACT", "0xff16f6b57736e4f358603681677c38666579998b")
-        erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
-        decimals = erc20.functions.decimals().call()
-        amt_wei = int(float(amount) * (10 ** decimals))
-        nonce = self.w3.eth.get_transaction_count(self.address)
-        tx = erc20.functions.transfer(destination, amt_wei).build_transaction({
-            'from': self.address,
-            'nonce': nonce,
-            'gas': 100000,
-            'gasPrice': int(self.w3.eth.gas_price * 1.2),
-            'chainId': self.w3.eth.chain_id
-        })
-        signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
-        print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
-        self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
-        return tx_hash.hex()
+        # Always use the latest deployed USDC address from contract/.env
+        import traceback
+        usdc_address = None
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("USDC_ADDRESS="):
+                        usdc_address = line.strip().split("=", 1)[1]
+                        break
+        except Exception as e:
+            print(f"[WalletManager] Error reading .env for USDC_ADDRESS: {e}")
+            usdc_address = None
+        if not usdc_address:
+            usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"  # fallback to latest deployed
+        try:
+            erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
+            decimals = erc20.functions.decimals().call()
+            amt_wei = int(float(amount) * (10 ** decimals))
+            nonce = self.w3.eth.get_transaction_count(self.address)
+            # Build a transaction with a high gas limit, but estimate first for safety
+            tx_base = erc20.functions.transfer(destination, amt_wei).build_transaction({
+                'from': self.address,
+                'nonce': nonce,
+                'chainId': self.w3.eth.chain_id,
+                'gasPrice': int(self.w3.eth.gas_price * 1.2)
+            })
+            try:
+                estimated_gas = erc20.functions.transfer(destination, amt_wei).estimate_gas({'from': self.address})
+                gas_limit = int(estimated_gas * 1.2)
+            except Exception as eg:
+                print(f"[WalletManager] Gas estimation failed, using default 1000000. Error: {eg}")
+                gas_limit = 1000000
+            tx_base['gas'] = gas_limit
+            signed = self.w3.eth.account.sign_transaction(tx_base, self.private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
+            self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
+            return tx_hash.hex()
+        except Exception as e:
+            import traceback
+            print("❌ [WalletManager] USDC transfer failed!")
+            print(f"   USDC_ADDRESS: {usdc_address}")
+            print(f"   Destination: {destination}")
+            print(f"   Amount: {amount}")
+            print(f"   Wallet: {self.address}")
+            print(f"   RPC: {self.rpc_url}")
+            print(f"   Error: {e}")
+            # Try to decode revert reason if it's a contract revert
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], (tuple, list)):
+                revert_data = e.args[0][0] if len(e.args[0]) > 0 else None
+                if revert_data and isinstance(revert_data, str) and revert_data.startswith('0x'):
+                    try:
+                        # Try to decode as string (standard Error(string) selector: 0x08c379a0)
+                        import binascii
+                        if revert_data.startswith('0x08c379a0'):
+                            reason_bytes = bytes.fromhex(revert_data[10:])
+                            reason = reason_bytes.decode(errors='ignore').strip('\x00')
+                            print(f"   Revert reason: {reason}")
+                        else:
+                            print(f"   Raw revert data: {revert_data}")
+                    except Exception as decode_err:
+                        print(f"   Could not decode revert reason: {decode_err}")
+            print(traceback.format_exc())
+            return None
 
     def execute_swap(self, token_in, token_out, amount):
         # Implement router swap logic here (simplified, replace with your router contract logic)
