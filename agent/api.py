@@ -9,7 +9,7 @@
 from dotenv import load_dotenv
 from pathlib import Path
 from pydantic import BaseModel
-load_dotenv(Path(__file__).parent.parent / '.env')
+load_dotenv(Path(__file__).parent.parent / '.env.etherlink')
 
 # Expose optimization graph data for dashboard (must be after app is defined)
 
@@ -20,19 +20,11 @@ import threading
 import os
 import sys
 
-# --- OpenRouter Client Setup ---
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-    # You must install openai: pip install openai
 
-client = None
-if OpenAI:
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
+# --- OpenRouter Client Setup ---
+import os
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# If you need to use OpenRouter, use the API key and endpoint as needed in your code.
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent

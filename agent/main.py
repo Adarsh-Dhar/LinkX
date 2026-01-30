@@ -26,9 +26,9 @@ class MarketManager:
 
 class IntelligentAgent:
     def __init__(self):
-        # Always load .env from workspace root
+        # Always load .env.etherlink from workspace root
         from pathlib import Path
-        env_path = Path(__file__).parent.parent / '.env'
+        env_path = Path(__file__).parent.parent / '.env.etherlink'
         from dotenv import load_dotenv
         load_dotenv(env_path)
         print("🤖 [Main] Initializing Intelligent Agent...")

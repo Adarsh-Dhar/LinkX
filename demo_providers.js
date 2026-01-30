@@ -12,18 +12,55 @@ const x402Middleware = (price) => (req, res, next) => {
     const paymentProof = req.headers['x-payment-proof'];
 
     if (!paymentProof) {
+        // Example x402 challenge data (should be dynamic in production)
+        const challenge = {
+            protocol: "x402",
+            price: price,
+            currency: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC mainnet (example)
+            chainId: 1, // Ethereum mainnet (example)
+            recipient: TREASURY_WALLET,
+            description: `Access to ${ASSET_TICKER} insight`,
+            requirements: {
+                type: "EIP-3009",
+                minAmount: price,
+                token: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                recipient: TREASURY_WALLET,
+                chainId: 1
+            },
+            eip712: {
+                domain: {
+                    name: "USDC",
+                    version: "2",
+                    chainId: 1,
+                    verifyingContract: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+                },
+                types: {
+                    TransferWithAuthorization: [
+                        { name: "from", type: "address" },
+                        { name: "to", type: "address" },
+                        { name: "value", type: "uint256" },
+                        { name: "validAfter", type: "uint256" },
+                        { name: "validBefore", type: "uint256" },
+                        { name: "nonce", type: "bytes32" }
+                    ]
+                },
+                message: {
+                    from: "<user_wallet>", // to be filled by client
+                    to: TREASURY_WALLET,
+                    value: Math.floor(price * 1e6), // USDC has 6 decimals
+                    validAfter: Math.floor(Date.now() / 1000),
+                    validBefore: Math.floor(Date.now() / 1000) + 600, // 10 min window
+                    nonce: "0x" + Math.random().toString(16).slice(2, 34).padEnd(64, '0')
+                }
+            }
+        };
         console.log(`[x402] Request blocked: Payment Required (${price} USDC)`);
         return res.status(402)
             .header('X-Payment-Price', price)
             .header('X-Payment-Wallet', TREASURY_WALLET)
-            .json({
-                error: "Payment Required",
-                protocol: "x402",
-                price: price,
-                destination: TREASURY_WALLET
-            });
+            .json(challenge);
     }
-    
+
     console.log(`[x402] Access Granted: Proof ${paymentProof.substring(0,10)}...`);
     next();
 };
@@ -79,6 +116,60 @@ node3.get('/api/macro', x402Middleware(0.65), (req, res) => {
             quality_score: 92
         }
     });
+});
+
+
+// --- x402 /settle endpoint (for demo, on node1 only) ---
+const { ethers } = require("ethers");
+node1.use(express.json());
+node1.post('/api/settle', async (req, res) => {
+    try {
+        const { typedData, signature } = req.body;
+        if (!typedData || !signature) {
+            return res.status(400).json({ error: "Missing typedData or signature" });
+        }
+        const { domain, types, message } = typedData;
+        // Remove EIP712Domain from types if present (ethers v6 expects it separate)
+        const { EIP712Domain, ...restTypes } = types;
+        // Recover signer
+        let recovered;
+        try {
+            recovered = ethers.verifyTypedData(domain, restTypes, message, signature);
+        } catch (e) {
+            return res.status(403).json({ error: "Invalid signature", details: e.message });
+        }
+        // On-chain settlement check (EIP-3009 transferWithAuthorization)
+        if (recovered && recovered.toLowerCase() === message.from.toLowerCase()) {
+            // Connect to Ethereum (mainnet or testnet as per chainId)
+            const provider = ethers.getDefaultProvider(domain.chainId);
+            // USDC ABI fragment for TransferWithAuthorization event
+            const usdcAbi = [
+                "event TransferWithAuthorization(address indexed from, address indexed to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 indexed nonce)"
+            ];
+            const usdc = new ethers.Contract(domain.verifyingContract, usdcAbi, provider);
+            // Search for TransferWithAuthorization event from 'from' to 'to' with value, nonce
+            const filter = usdc.filters.TransferWithAuthorization(
+                message.from,
+                message.to,
+                null, // value (not indexed)
+                null, // validAfter (not indexed)
+                null, // validBefore (not indexed)
+                message.nonce
+            );
+            const events = await usdc.queryFilter(filter, -10000); // last ~10k blocks
+            // Find event with correct value
+            const found = events.find(e => e.args && e.args.value.eq(message.value));
+            if (found) {
+                return res.status(200).json({ success: true, address: recovered, txHash: found.transactionHash });
+            } else {
+                return res.status(402).json({ error: "No on-chain settlement found for this authorization (EIP-3009)" });
+            }
+        } else {
+            return res.status(403).json({ error: "Signature does not match sender" });
+        }
+    } catch (err) {
+        return res.status(500).json({ error: "Internal error", details: err.message });
+    }
 });
 
 // Start all three servers

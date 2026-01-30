@@ -43,10 +43,10 @@ class PredictiveAgent:
         # --- Financial Mandate Defaults ---
         self.max_total_spend_per_trade = None  # Enforced per-trade spend limit (set by user)
 
-        # Always load .env from workspace root
+        # Always load .env.etherlink from workspace root
         from dotenv import load_dotenv
         from pathlib import Path
-        load_dotenv(Path(__file__).parent.parent / '.env')
+        load_dotenv(Path(__file__).parent.parent / '.env.etherlink')
         # Read agent config from frontend (constructor arguments)
         self.mode = agent_mode
         self.min_accuracy = int(agent_min_accuracy)

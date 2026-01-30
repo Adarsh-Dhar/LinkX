@@ -34,9 +34,11 @@ export default function X402Modal({ product, onClose, onSuccess }: X402ModalProp
         throw new Error("Please install MetaMask to make payments!")
       }
 
-      // 2. Request invoice from server (HTTP 402)
+
+      // 2. Request x402 challenge from server (HTTP 402)
       const ticker = product.ticker || product.id
-      const invoiceResponse = await fetch(`http://localhost:3050/alpha/insight/${ticker}`, {
+      // For demo, use node1 (microstructure) endpoint
+      const invoiceResponse = await fetch(`http://localhost:4001/api/microstructure`, {
         method: "GET",
       })
 
@@ -44,37 +46,33 @@ export default function X402Modal({ product, onClose, onSuccess }: X402ModalProp
         throw new Error("Expected HTTP 402 response from server")
       }
 
-      const invoiceData = await invoiceResponse.json()
-      const { instruction } = invoiceData
-
-      if (!instruction) {
-        throw new Error("Invalid payment instruction received")
+      const challenge = await invoiceResponse.json()
+      if (!challenge || !challenge.eip712) {
+        throw new Error("Invalid x402 challenge received")
       }
+
 
       // 3. Connect wallet and prepare signing
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
       const signerAddress = await signer.getAddress()
 
-      // 4. Prepare EIP-712 typed data from instruction
-      const domain = instruction.eip712Domain
-      const types = instruction.eip712Types
-      
+      // 4. Prepare EIP-712 typed data from challenge
+      const domain = challenge.eip712.domain
+      const types = challenge.eip712.types
+      // Copy message and fill in 'from' with user address
       const message = {
-        from: signerAddress,
-        to: instruction.recipient,
-        value: instruction.amount,
-        validAfter: instruction.validAfter || 0,
-        validBefore: instruction.validBefore,
-        nonce: ethers.hexlify(ethers.randomBytes(32)),
+        ...challenge.eip712.message,
+        from: signerAddress
       }
 
       // 5. Sign the typed data with MetaMask
       const signature = await signer.signTypedData(domain, types, message)
 
-      // 6. Submit payment proof to server
+
+      // 6. Submit payment proof to /api/settle endpoint
       const paymentResponse = await fetch(
-        `http://localhost:3050/alpha/insight/${ticker}/payment`,
+        `http://localhost:4001/api/settle`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,14 +94,12 @@ export default function X402Modal({ product, onClose, onSuccess }: X402ModalProp
 
       const result = await paymentResponse.json()
 
-      // 7. Success! Show the unlocked alpha data
+      // 7. Success! Show the unlocked alpha data (for demo, just show address)
       setPaymentSuccess(true)
-      setAlphaData(result.data)
-      
+      setAlphaData(result)
       if (onSuccess) {
-        onSuccess(result.data)
+        onSuccess(result)
       }
-
       // Auto-close after 3 seconds
       setTimeout(() => {
         onClose()
