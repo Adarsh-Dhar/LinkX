@@ -12,8 +12,8 @@ interface WalletState {
   chainId: number | null
 }
 
-const USDC_ADDRESS = "0x908059CF02cbb643Bc96C55e14Fb3699e632479f" // Cronos Testnet
-const CRONOS_TESTNET_CHAIN_ID = 338
+const USDC_ADDRESS = "0xff16f6b57736e4f358603681677c38666579998b" // Etherlink Shadownet USDC
+const ETHERLINK_SHADOWNET_CHAIN_ID = 128123
 const USDC_ABI = [
   "function balanceOf(address account) view returns (uint256)",
   "function decimals() view returns (uint8)",
@@ -77,9 +77,9 @@ export function useWallet() {
       })
 
       // Check if on correct network
-      if (chainId !== CRONOS_TESTNET_CHAIN_ID) {
+      if (chainId !== ETHERLINK_SHADOWNET_CHAIN_ID) {
         console.warn(
-          `Connected to chain ${chainId}. Please switch to Cronos Testnet (${CRONOS_TESTNET_CHAIN_ID})`
+          `Connected to chain ${chainId}. Please switch to Etherlink Shadownet (${ETHERLINK_SHADOWNET_CHAIN_ID})`
         )
       }
     } catch (error) {

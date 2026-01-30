@@ -74,7 +74,7 @@ class WalletManager:
         return None
 
     def transfer_usdc(self, destination, amount):
-        # Etherlink Shadownet USDC address and chainId
+        # Etherlink USDC address and dynamic chainId
         usdc_address = os.getenv("USDC_CONTRACT", "0xff16f6b57736e4f358603681677c38666579998b")
         erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
         decimals = erc20.functions.decimals().call()
@@ -85,7 +85,7 @@ class WalletManager:
             'nonce': nonce,
             'gas': 100000,
             'gasPrice': int(self.w3.eth.gas_price * 1.2),
-            'chainId': 128123
+            'chainId': self.w3.eth.chain_id
         })
         signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
         tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)

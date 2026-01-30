@@ -39,7 +39,7 @@ class TradingEngine:
                 'nonce': nonce,
                 'gas': 300000,
                 'gasPrice': int(w3.eth.gas_price * 1.2),
-                'chainId': 338
+                'chainId': w3.eth.chain_id
             })
             tx = swap_tx
             signed_tx = self.wallet.w3.eth.account.sign_transaction(tx, private_key=self.wallet.private_key)
