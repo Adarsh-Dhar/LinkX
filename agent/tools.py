@@ -10,47 +10,70 @@ class AlphaStrategist:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY")
         )
-        # Use a high-reasoning model for institutional-grade decision logic
-        self.model = "anthropic/claude-3.5-sonnet"
+        # EXACT ID from OpenRouter Documentation
+        self.model = "tngtech/deepseek-r1t2-chimera:free"
 
     def rethink_strategy(self, market_snapshot, working_memory):
         """
-        Cognitive reasoning step to determine if data acquisition is economically viable.
+        Cognitive reasoning step using DeepSeek R1T2 Chimera.
         """
         prompt = f"""
         ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-        You are an autonomous AI trading desk operator. Your core objective is to maximize 
-        Risk-Adjusted Returns while minimizing 'Information Arbitrage' costs (x402 payments).
+        You are an autonomous trading desk operator.
+        
+        ## MARKET CONTEXT:
+        {json.dumps(market_snapshot)}
+        
+        ## MEMORY:
+        {json.dumps(working_memory)}
 
-        ## OPERATIONAL CONTEXT:
-        Current Market Snapshot: {json.dumps(market_snapshot)}
-        Purchased Intel Memory: {json.dumps(working_memory)}
+        ## MANDATE:
+        - Only 'PURCHASE_DATA' if current memory is stale (>5m) or market regime changed.
+        - Respond ONLY in JSON.
 
-        ## DECISION PRINCIPLES:
-        1. DATA DECAY: Technical signals lose 50% utility every 5 minutes. 
-        2. REGIME SENSITIVITY: Only 'PURCHASE_DATA' if the current trend has shifted 
-           (e.g., NORMAL -> VOLATILE) or if Memory contains NO relevant category data.
-        3. COST PENALTY: Every 402 payment is a drag on our Sharpe Ratio. 
-           If the market is 'STABLE', prioritize 'USE_MEMORY' or 'ABORT'.
-
-        ## RESPONSE FORMAT (JSON):
+        ## RESPONSE SCHEMA:
         {{
-          "thought": "Deep reasoning regarding market regime vs existing intel age.",
+          "thought": "Analysis of data utility vs cost.",
           "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
           "target_node_id": "UUID string (if PURCHASE_DATA)",
           "execution_bias": "LONG | SHORT | NEUTRAL",
           "risk_confidence": 0.0-1.0
         }}
         """
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a professional trader. Respond only in JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"}
-        )
-        return json.loads(response.choices[0].message.content)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a professional trader. Respond only in valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={ "type": "json_object" },
+                max_tokens=1000, 
+                extra_headers={
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "AlphaConsumer Agent"
+                }
+            )
+            import re
+            content = response.choices[0].message.content
+            # Remove Markdown code block markers and whitespace
+            content = re.sub(r"^```json\\s*|```$", "", content.strip(), flags=re.MULTILINE).strip()
+            try:
+                return json.loads(content)
+            except Exception as json_err:
+                print(f"❌ [Strategist API Error] JSON decode failed: {json_err}\nRaw content: {content}")
+                return {
+                    "thought": "Malformed or non-JSON response from API. Defaulting to HOLD.",
+                    "verdict": "ABORT",
+                    "risk_confidence": 0
+                }
+        except Exception as e:
+            print(f"❌ [Strategist API Error] {e}")
+            return {
+                "thought": "API communication failure. Defaulting to HOLD.",
+                "verdict": "ABORT",
+                "risk_confidence": 0
+            }
 
     async def route_model(self, phase, prompt, system_prompt=None):
         if phase == "assessment":

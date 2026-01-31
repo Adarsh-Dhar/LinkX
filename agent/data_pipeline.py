@@ -9,6 +9,15 @@ from datetime import datetime, timedelta
 from .data_consumer import fetch_node_data
 
 class DataPipeline:
+    async def purchase_single_node(self, node_id):
+        """
+        Simulates a single-node purchase for development/testing.
+        Replace this logic with actual payment and data retrieval in production.
+        """
+        print(f"[DataPipeline] Simulating purchase of node: {node_id}")
+        # Simulate a signal (replace with real data in production)
+        return {"node_id": node_id, "signal": "simulated_signal", "timestamp": datetime.utcnow().isoformat()}
+
     async def get_latest_tape(self):
         """
         Fetches market price history from the dashboard/chart endpoint.
