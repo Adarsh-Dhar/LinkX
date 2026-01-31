@@ -1,4 +1,6 @@
+
 import time
+from datetime import datetime
 from .tools import AlphaStrategist
 
 
@@ -8,6 +10,9 @@ class PredictiveAgent:
         self.pipeline = pipeline
         self.strategist = AlphaStrategist()
         self.short_term_memory = {} # Persistent between cycles
+        self.paused = False
+        self.block_data_purchases = False
+        self.manual_command = None
 
     async def run_cycle(self):
         print(f"\n══════════════════════════════════════════════════════════════")
@@ -37,53 +42,6 @@ class PredictiveAgent:
         # Only trade if the Strategist and Neural Brain both align with high confidence
         if decision.get('risk_confidence', 0) > 0.85:
             await self.execute_move(decision, self.short_term_memory)
-import os
-import asyncio
-import pandas as pd
-from datetime import datetime
-from .data_pipeline import DataPipeline
-from .trading_engine import TradingEngine
-from .brain import NeuralBrain
-
-
-    def __init__(self, pipeline=None):
-        self.strategist = AlphaStrategist()
-        self.pipeline = pipeline
-        self.memory = {}  # Persistent across cycles: {node_id: {data, timestamp, at_price}}
-
-
-    async def run_cycle(self):
-        print(f"\n══════════════════════════════════════════════════════════════")
-        print(f"♟️  PREDICTIVE AGENT CYCLE - {time.strftime('%H:%M:%S')}")
-
-        # 1. Perception Layer
-        chart_data = await self.pipeline.get_latest_tape() if hasattr(self.pipeline, 'get_latest_tape') else await self.pipeline.get_market_snapshot()
-
-        # 2. Reasoning Layer (The 'Think' Phase)
-        # Pass the current memory so the LLM knows what we already paid for
-        decision = self.strategist.rethink_strategy(chart_data, self.memory)
-        print(f"🧠 [Trader Thought]: {decision['reasoning']}")
-
-        # 3. Action Layer
-        intel = {}
-        now = time.time()
-        if decision['verdict'] == "PURCHASE_DATA":
-            # Only pay the x402 cost if the Strategist explicitly justifies it
-            node_id = decision['target_node_id']
-            raw_signal = await self.pipeline.purchase_single_node(node_id)
-            self.memory[node_id] = {
-                "value": raw_signal,
-                "timestamp": now,
-                "market_state_at_purchase": chart_data.get('trend') if isinstance(chart_data, dict) and 'trend' in chart_data else None
-            }
-            intel = raw_signal
-        elif decision['verdict'] == "USE_MEMORY":
-            # Use existing valid data (within 5-min TTL)
-            intel = {k: v['value'] for k, v in self.memory.items() if now - v['timestamp'] < 300}
-
-        # 4. Final Execution
-        if decision.get('confidence', 0) > 0.85:
-            await self.execute_trade(decision.get('trade_bias', 'NEUTRAL'), intel)
 
     async def execute_trade(self, trade_bias, intel):
         # Placeholder for trade execution logic

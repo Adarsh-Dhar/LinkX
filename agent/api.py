@@ -21,9 +21,17 @@ import os
 import sys
 
 
+
 # --- OpenRouter Client Setup ---
 import os
+from openai import OpenAI
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+client = None
+if OPENROUTER_API_KEY:
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY
+    )
 # If you need to use OpenRouter, use the API key and endpoint as needed in your code.
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -80,7 +88,7 @@ Return ONLY JSON.
         return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
     try:
         response = client.chat.completions.create(
-            model="google/gemini-2.0-flash-exp:free",
+            model="tngtech/deepseek-r1t2-chimera:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}

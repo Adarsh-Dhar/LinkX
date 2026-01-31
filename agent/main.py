@@ -43,6 +43,9 @@ class IntelligentAgent:
         # 3. Trader (CRITICAL STEP)
         self.trader = TradingEngine(self.wallet)
         print(f"   ✅ TradingEngine: Ready")
+        # 4. Pipeline (for PredictiveAgent)
+        from agent.data_pipeline import DataPipeline
+        self.pipeline = DataPipeline(self.market)
 
     def start(self):
         print("🚀 [Main] Agent Manual Start")

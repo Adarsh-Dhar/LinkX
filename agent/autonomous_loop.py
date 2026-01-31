@@ -27,11 +27,13 @@ def run_autonomous_loop(agent, interval_sec=10):
 
     # --- Persistent PredictiveAgent instance ---
     if not hasattr(agent, 'current_predictive_instance') or agent.current_predictive_instance is None:
-        agent.current_predictive_instance = PredictiveAgent(
-            market_manager=agent.market,
-            trading_engine=agent.trader,
-            simulation_mode=False
-        )
+        # Ensure agent.pipeline exists, else create it
+        pipeline = getattr(agent, 'pipeline', None)
+        if pipeline is None:
+            from agent.data_pipeline import DataPipeline
+            pipeline = DataPipeline(agent.market)
+            agent.pipeline = pipeline
+        agent.current_predictive_instance = PredictiveAgent(pipeline)
 
     predictive_instance = agent.current_predictive_instance
 

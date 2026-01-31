@@ -44,15 +44,11 @@ class AlphaStrategist:
         """
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "system", "content": "You are a professional trader. Respond only in JSON."},
-                      {"role": "user", "content": prompt}],
-            response_format={ "type": "json_object" }
-        )
-        return json.loads(response.choices[0].message.content)
-                response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": prompt}],
-            response_format={ "type": "json_object" }
+            messages=[
+                {"role": "system", "content": "You are a professional trader. Respond only in JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"}
         )
         return json.loads(response.choices[0].message.content)
 

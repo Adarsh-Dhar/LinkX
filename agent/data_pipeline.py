@@ -1,12 +1,6 @@
-    async def execute_targeted_buy(self, node_id):
-        """
-        Executes a targeted x402 acquisition for one specific intelligence node (single-node purchase).
-        """
-        # Prefer DB/consumer pattern if available, else fallback to purchase_single_node
-        if hasattr(self, 'purchase_single_node'):
-            return await self.purchase_single_node(node_id)
-        # Fallback: not implemented
-        raise NotImplementedError("No targeted buy method available.")
+
+
+
 
 import requests
 import pandas as pd
@@ -14,6 +8,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from .data_consumer import fetch_node_data
 
+class DataPipeline:
     def __init__(self, market_manager):
         self.market = market_manager
         self.chart_api_url = "http://localhost:3600/api/dashboard/chart"
@@ -21,76 +16,21 @@ from .data_consumer import fetch_node_data
         # TOOL_CATEGORIES will be dynamically populated
         self.TOOL_CATEGORIES = {}
 
-    async def purchase_single_node(self, node_id):
-        """
-        Executes a targeted x402 acquisition for one specific intelligence node.
-        """
-        try:
-            # Example: Use self.db and self.consumer if available, else fallback
-            if hasattr(self, 'db') and hasattr(self, 'consumer'):
-                node = await self.db.find_unique({"id": node_id})
-                if not node:
-                    print(f"   ❌ Node {node_id} not found in db.")
-                    return None
-                return await self.consumer.fetch_node_data(
-                    node['endpointUrl'],
-                    node['price'],
-                    node['category']
-                )
-            else:
-                # Fallback: legacy HTTP fetch
-                import requests
-                res = requests.get(self.nodes_api_url, timeout=2)
-                if res.status_code == 200:
-                    all_nodes = res.json()
-                    node = next((n for n in all_nodes if n.get('id') == node_id), None)
-                    if not node:
-                        print(f"   ❌ Node {node_id} not found.")
-                        return None
-                    from agent.wallet_manager import WalletManager
-                    wallet_manager = WalletManager()
-                    from .data_consumer import fetch_node_data
-                    data = await fetch_node_data(
-                        node['endpointUrl'],
-                        node['price'],
-                        node['category']
-                    )
-                    return data
-        except Exception as e:
-            print(f"   ❌ purchase_single_node error: {e}")
-        return None
-    async def refresh_market_knowledge(self):
-        """Fetches all nodes to map names to categories dynamically."""
-        try:
-            res = requests.get(self.nodes_api_url, timeout=2)
-            if res.status_code == 200:
-                all_nodes = res.json()
-                # Dynamically build the map from the DB
-                self.TOOL_CATEGORIES = {n['name']: n['category'] for n in all_nodes}
-                return all_nodes
-        except Exception as e:
-            print(f"   ⚠️ Market Sync Error: {e}")
-        return []
-
-
     def fetch_candles(self):
-        try:
-            response = requests.get(self.chart_api_url, timeout=2)
-            if response.status_code == 200:
-                data = response.json()
-                if not data or len(data) < 20:
-                    print(f"      ⚠️ API returned only {len(data) if data else 0} records.")
-                    return None
-                df = pd.DataFrame(data)
-                cols = ['open', 'high', 'low', 'close', 'volume']
-                for c in cols: df[c] = pd.to_numeric(df[c])
-                df = df.sort_values('timestamp').reset_index(drop=True)
-                df = df.tail(20)
-                print(f"      ✅ Tape Synced: Using {len(df)} most recent data points.")
-                return df
-        except Exception as e:
-            print(f"   ⚠️ Fetch Error: {e}")
+        """
+        Placeholder method for fetching market candles. Should return a pandas DataFrame or None.
+        """
+        # TODO: Implement actual candle fetching logic
         return None
+
+    async def execute_targeted_buy(self, node_id):
+        """
+        Executes a targeted x402 acquisition for one specific intelligence node (single-node purchase).
+        """
+        if hasattr(self, 'purchase_single_node'):
+            return await self.purchase_single_node(node_id)
+        # If purchase_single_node is not defined, you may want to raise an error or handle accordingly
+        raise NotImplementedError("purchase_single_node method not implemented.")
 
     async def pay_x402_batch(self, node_objs):
         """
@@ -98,7 +38,8 @@ from .data_consumer import fetch_node_data
         Returns True if payment succeeded, False otherwise.
         """
         from web3 import Web3
-        import os, json
+        import os
+        import json
         # Load USDC ABI
         abi_path = os.path.join(os.path.dirname(__file__), "usdc_abi.json")
         with open(abi_path, "r") as f:
@@ -188,7 +129,11 @@ from .data_consumer import fetch_node_data
         wallet_manager = WalletManager()
         for node in node_objs:
             try:
-                data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
+                data = fetch_node_data(
+                    node_url=node.get("endpointUrl"),
+                    api_key=node.get("apiKey"),
+                    wallet_manager=wallet_manager
+                )
                 results[node.get("name")] = data
             except Exception as e:
                 print(f"   ❌ Failed to fetch {node.get('name')}: {e}")
