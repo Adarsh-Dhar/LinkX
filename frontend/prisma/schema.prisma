@@ -57,35 +57,32 @@ model Trade {
 // --------------------------------------------------------
 
 model AlphaNode {
-    trades          Trade[]     @relation("TradeAlphaNodes")
-  id                 String   @id @default(uuid())
-  name               String
-  category           String
-  description        String?
-  price              Float    @default(0.0)
-  reputation         Int      @default(0)
-  status             String   @default("active") // "active", "inactive"
-  isPurchased        Boolean  @default(false)
-  whitelisted        Boolean  @default(false)
-  
-  // --- NEW: Technical Connectivity ---
-  endpointUrl        String?
-  apiKey             String?
-  icon               String   @default("activity")
-  
-  // --- NEW: Professional Data Metadata ---
-  qualityScore       Int      @default(0)      // 0-100 metric
-  latencyMs          Int      @default(0)      // For HFT strategy matching
-  assetCoverage      String?                   // Comma-separated tickers (e.g., "WETH, USDC")
-  granularity        String?                   // e.g., "Tick", "1m", "Daily"
-  lastUpdated        DateTime @default(now())  // Freshness check
-  
-  // --- NEW: Strategy Integrity ---
-  hasPitFlag         Boolean  @default(false)  // Point-in-Time Flag
-  
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  trades          Trade[]     @relation("TradeAlphaNodes")
+  id              String   @id @default(uuid())
+  name            String
+  nodeType        String?   // e.g. "microstructure", "sentiment", "macro"
+  description     String?
+  category        String
+  endpointUrl     String   // e.g. "http://localhost:4001/api/microstructure"
+  port            Int?      // e.g. 4001, 4002, 4003
+  price           Float    @default(0.0)
+  qualityScore    Int      @default(0)
+  latencyMs       Int      @default(0)
+  assetCoverage   String?  // e.g. "WETH/USDC"
+  icon            String   @default("activity")
+  status          String   @default("active") // "active", "inactive"
+  isPurchased     Boolean  @default(false)
+  whitelisted     Boolean  @default(false)
+  lastUpdated     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  // Add more fields as needed for future node types
 }
+
+/// Example seed data for the three demo nodes:
+/// 1. Microstructure Node: name = "Market Microstructure & Execution", nodeType = "microstructure", endpointUrl = "http://localhost:4001/api/microstructure", port = 4001
+/// 2. Sentiment Node: name = "Alternative Intelligence & Sentiment", nodeType = "sentiment", endpointUrl = "http://localhost:4002/api/sentiment", port = 4002
+/// 3. Macro Node: name = "Supply Chain & Global Macro", nodeType = "macro", endpointUrl = "http://localhost:4003/api/macro", port = 4003
 
 // --------------------------------------------------------
 // 3. EQUITY HISTORY (Populates: "Cumulative Returns" Chart)
