@@ -1,3 +1,36 @@
+// --- Expose price history for charting ---
+app.get('/api/prices', (req, res) => {
+    res.json(prices);
+});
+// --- Price History State ---
+let prices = [];
+
+/**
+ * Institutional Seeding:
+ * Generates 30 minutes of historical data so agents can sync immediately.
+ */
+function seedHistoricalData() {
+    console.log("📈 [MarketAnalyst] Seeding 30 minutes of historical price action...");
+    const now = Date.now();
+    const interval = 60000; // 1 minute per point
+    let lastPrice = 2942.50; // Starting baseline
+
+    for (let i = 30; i > 0; i--) {
+        // Create realistic price movement
+        const volatility = (Math.random() - 0.5) * 5; 
+        lastPrice += volatility;
+        
+        prices.push({
+            price: parseFloat(lastPrice.toFixed(2)),
+            timestamp: new Date(now - (i * interval)).toISOString(),
+            volume: Math.floor(Math.random() * 100) + 50
+        });
+    }
+    console.log(`✅ [MarketAnalyst] History synced. ${prices.length} points available.`);
+}
+
+// CRITICAL: Call this before the server starts listening
+seedHistoricalData();
 
 const express = require('express');
 const cors = require('cors');
