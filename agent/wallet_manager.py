@@ -89,7 +89,9 @@ class WalletManager:
             usdc_address = None
         if not usdc_address:
             usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"  # fallback to latest deployed
-        try:
+            # Always use the fixed provider address for all nodes
+            if not destination:
+                destination = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9"
             erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
             decimals = erc20.functions.decimals().call()
             amt_wei = int(float(amount) * (10 ** decimals))
@@ -113,32 +115,6 @@ class WalletManager:
             print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
             self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
             return tx_hash.hex()
-        except Exception as e:
-            import traceback
-            print("❌ [WalletManager] USDC transfer failed!")
-            print(f"   USDC_ADDRESS: {usdc_address}")
-            print(f"   Destination: {destination}")
-            print(f"   Amount: {amount}")
-            print(f"   Wallet: {self.address}")
-            print(f"   RPC: {self.rpc_url}")
-            print(f"   Error: {e}")
-            # Try to decode revert reason if it's a contract revert
-            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], (tuple, list)):
-                revert_data = e.args[0][0] if len(e.args[0]) > 0 else None
-                if revert_data and isinstance(revert_data, str) and revert_data.startswith('0x'):
-                    try:
-                        # Try to decode as string (standard Error(string) selector: 0x08c379a0)
-                        import binascii
-                        if revert_data.startswith('0x08c379a0'):
-                            reason_bytes = bytes.fromhex(revert_data[10:])
-                            reason = reason_bytes.decode(errors='ignore').strip('\x00')
-                            print(f"   Revert reason: {reason}")
-                        else:
-                            print(f"   Raw revert data: {revert_data}")
-                    except Exception as decode_err:
-                        print(f"   Could not decode revert reason: {decode_err}")
-            print(traceback.format_exc())
-            return None
 
     def execute_swap(self, token_in, token_out, amount):
         # Implement router swap logic here (simplified, replace with your router contract logic)

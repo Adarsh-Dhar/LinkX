@@ -22,7 +22,9 @@ pkill -f "next-server"
 lsof -ti:8000 | xargs kill -9 2>/dev/null
 lsof -ti:3050 | xargs kill -9 2>/dev/null
 lsof -ti:3999 | xargs kill -9 2>/dev/null
-lsof -ti:4000-4047 | xargs kill -9 2>/dev/null
+# DO NOT kill ports 4000-4047, these are managed by Docker Compose
+docker compose -f "$SCRIPT_DIR/docker-compose.nodes.yml" down
+docker compose -f "$SCRIPT_DIR/docker-compose.nodes.yml" up -d
 sleep 2
 
 

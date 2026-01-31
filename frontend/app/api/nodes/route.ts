@@ -57,7 +57,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { nodeId } = await req.json();
+    const { nodeId, typedData, signature } = await req.json();
 
     // 1. Find the Node (The Product)
     const node = await prisma.alphaNode.findUnique({
@@ -72,19 +72,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Already purchased" });
     }
 
-    // 2. Setup Wallets (Agent vs Provider)
-    // In a real app, 'providerAddress' would come from the node's database record.
-    // Here we simulate a provider address.
-    const providerAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Mock Provider Address
-    const priceAmount = "10000"; // 0.01 USDC (6 decimals) - Mock Price
+    // 2. Setup payment details
+    const providerAddress = node.provider || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+    const priceAmount = node.price?.toString() || "10000";
 
-    console.log(`🤖 Initiating x402 Payment for: ${node.name}...`);
+    // 3. Verify x402 payment using thirdweb
+    const paymentResult = await settlePayment({
+      facilitator: thirdwebX402Facilitator,
+      resourceUrl: `http://localhost:4001/api/${node.id}`,
+      method: "GET",
+      paymentData: { typedData, signature },
+      network: etherlinkShadownet,
+      price: priceAmount,
+    });
 
+    if (paymentResult.status !== 200) {
+      return NextResponse.json({ error: "Payment verification failed" }, { status: 402 });
+    }
 
-    // Payment logic removed: variables and logic referenced undefined imports and are not used in this handler.
-    // If you want to implement payment in POST, use the thirdweb x402 flow as in GET, or clarify requirements.
-
-    // 7. Unlock the Node in DB (simulate purchase for demo)
+    // 4. Unlock the Node in DB
     const updatedNode = await prisma.alphaNode.update({
       where: { id: nodeId },
       data: { 
