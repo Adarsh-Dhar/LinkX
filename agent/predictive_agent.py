@@ -1,6 +1,5 @@
 import time
-from .tools import OpenRouterClient
-from .agent_state_db import AgentStateDB
+from .tools import AlphaStrategist
 
 class PredictiveAgentReAct:
     """
@@ -97,60 +96,62 @@ from .data_pipeline import DataPipeline
 from .trading_engine import TradingEngine
 from .brain import NeuralBrain
 
-class PredictiveAgent:
-    # --- Financial Mandate Methods ---
-    def set_limit(self, limit_type, limit_value):
-        """
-        Set financial limits such as max total spend per trade or monthly allowance.
-        limit_type: 'MAX_TOTAL_SPEND_PER_TRADE' or 'MONTHLY_ALLOWANCE'
-        limit_value: float
-        """
-        if limit_type in ["MAX_TOTAL_SPEND_PER_TRADE", "MAX_PRICE_PER_REQUEST"]:
-            self.max_total_spend_per_trade = float(limit_value)
-            print(f"[Mandate] Max total spend per trade set to {self.max_total_spend_per_trade} USDC")
-        elif limit_type == "MONTHLY_ALLOWANCE":
-            self.monthly_allowance = float(limit_value)
-            print(f"[Mandate] Monthly trading allowance set to {self.monthly_allowance} USDC")
+
+    def __init__(self, pipeline=None):
+        self.strategist = AlphaStrategist()
+        self.pipeline = pipeline
+        self.memory = {}  # Persistent across cycles: {node_id: {data, timestamp, at_price}}
+
+    async def run_cycle(self):
+        print(f"\n══════════════════════════════════════════════════════════════")
+        print(f"♟️  PREDICTIVE AGENT CYCLE - {time.strftime('%H:%M:%S')}")
+
+        # 1. Get raw market data (the 'Perception' layer)
+        df = await self.pipeline.get_market_snapshot()
+        market_state = self.format_for_llm(df)
+
+        # 2. THINK: Should I spend money on data?
+        decision = self.strategist.rethink_strategy(market_state, self.memory)
+        print(f"🧠 [Strategist Reasoning]: {decision['reasoning']}")
+
+        intel = {}
+        now = time.time()
+        if decision['verdict'] == "PURCHASE_DATA":
+            # 3. ACT: Execute x402 payment only when LLM deems it high-utility
+            node_id = decision['target_node_id']
+            raw_intel = await self.pipeline.purchase_single_node(node_id)
+            # Update memory with TTL (Time-to-Live)
+            self.memory[node_id] = {
+                "data": raw_intel,
+                "timestamp": now,
+                "at_price": market_state.get('current_price')
+            }
+            intel = raw_intel
         else:
-            print(f"[Mandate] Unknown limit type: {limit_type}")
+            # Clean memory of expired data
+            intel = self.get_valid_memory()
 
-    def set_refill_logic(self, refill_threshold, refill_amount):
-        """
-        Set wallet auto-refill logic: when balance < threshold, add refill_amount.
-        """
-        self.refill_threshold = float(refill_threshold)
-        self.refill_amount = float(refill_amount)
-        print(f"[Mandate] Will auto-refill wallet with {self.refill_amount} USDC when below {self.refill_threshold} USDC")
+        # 4. FINAL TRADE DECISION
+        if decision['confidence'] > 0.8:
+            await self.execute_move(decision, intel)
 
-    def __init__(self, wallet_manager=None, market_manager=None, trading_engine=None, simulation_mode=False,
-                 agent_mode="BALANCED", agent_min_accuracy=7, agent_max_cost=1000000.0):
-        self.market_manager = market_manager
-        self.engine = trading_engine if trading_engine is not None else TradingEngine(wallet_manager)
-        self.pipeline = DataPipeline(self.engine)
-        self.brain = NeuralBrain()
-        self.simulation_mode = simulation_mode
-        self.is_running = False
+    def format_for_llm(self, df):
+        # Convert DataFrame to dict or summary for LLM
+        if hasattr(df, 'to_dict'):
+            return df.to_dict(orient='records')[-1] if len(df) > 0 else {}
+        return df
 
-        # --- Financial Mandate Defaults ---
-        self.max_total_spend_per_trade = None  # Enforced per-trade spend limit (set by user)
+    def get_valid_memory(self):
+        # Return only memory entries that are < 5m old
+        now = time.time()
+        return {
+            k: v['data'] for k, v in self.memory.items()
+            if now - v['timestamp'] < 300
+        }
 
-        # Always load .env.etherlink from workspace root
-        from dotenv import load_dotenv
-        from pathlib import Path
-        load_dotenv(Path(__file__).parent.parent / '.env.etherlink')
-        # Read agent config from frontend (constructor arguments)
-        self.mode = agent_mode
-        self.min_accuracy = int(agent_min_accuracy)
-        try:
-            self.max_cost = float(agent_max_cost)
-        except Exception:
-            self.max_cost = 1000000.0
-        self.max_total_spend_per_trade = self.max_cost
-
-        # --- Human override/intent-driven attributes ---
-        self.manual_command = None  # e.g. {'type': 'trade', 'side': 'BUY', 'amount': 50.0}
-        self.paused = False
-        self.block_data_purchases = False  # If True, block all data purchases for the rest of the day
+    async def execute_move(self, decision, intel):
+        # Placeholder for trade execution logic
+        print(f"[TRADE EXECUTION] Decision: {decision}, Intel: {intel}")
 
     def calculate_ai_importance(self, node_category, market_state):
         """

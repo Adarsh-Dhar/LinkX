@@ -1,42 +1,48 @@
-import aiohttp
-import asyncio
 
-# --- OpenRouterClient for LLM Reasoning/Action ---
-class OpenRouterClient:
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+# --- AlphaStrategist for Cognitive Reasoning/Action ---
+import os
+import json
+from openai import OpenAI
 
-    async def get_structured_response(self, prompt, model="google/gemini-flash-1.5", max_retries=3, system_prompt=None):
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "You are a helpful trading agent. Respond in JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            "response_format": {"type": "json_object"},
-            "max_tokens": 512
-        }
-        for attempt in range(max_retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(self.base_url, headers=headers, json=payload, timeout=20) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            # Parse JSON from LLM response
-                            content = data["choices"][0]["message"]["content"]
-                            import json as _json
-                            return _json.loads(content)
-                        else:
-                            print(f"[OpenRouter] Non-200 status: {resp.status}")
-            except Exception as e:
-                print(f"[OpenRouter] Error: {e} (attempt {attempt+1})")
-                await asyncio.sleep(1 + attempt)
-        raise RuntimeError("OpenRouterClient failed after retries.")
+class AlphaStrategist:
+    def __init__(self):
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY")
+        )
+        self.model = "anthropic/claude-3.5-sonnet" # Production standard for reasoning
+
+    def rethink_strategy(self, market_state, memory):
+        prompt = f"""
+        ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
+        You are an autonomous trading agent on the Etherlink network. 
+        Your mandate: Maximize ROI while minimizing 'Data Acquisition Overhead' (x402 costs).
+
+        ## CURRENT MARKET STATE (Shared Context):
+        {json.dumps(market_state, indent=2)}
+
+        ## WORKING MEMORY (Purchased Intel):
+        {json.dumps(memory, indent=2)}
+
+        ## OPERATIONAL CONSTRAINTS:
+        1. Every x402 purchase costs USDC. Do not buy if cached data is < 5m old UNLESS price volatility > 2%.
+        2. If the market is 'Stable/Normal', prioritize using Memory. 
+        3. Only request a 'PURCHASE' if you are preparing for an execution.
+
+        ## REQUIRED RESPONSE FORMAT (JSON ONLY):
+        {{
+          "reasoning": "Chain-of-thought analysis of why we should or shouldn't buy data.",
+          "verdict": "USE_MEMORY | PURCHASE_DATA | ABORT",
+          "target_node_id": "UUID of the node if PURCHASE_DATA, else null",
+          "confidence": 0.0-1.0
+        }}
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": prompt}],
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(response.choices[0].message.content)
 
     async def route_model(self, phase, prompt, system_prompt=None):
         if phase == "assessment":

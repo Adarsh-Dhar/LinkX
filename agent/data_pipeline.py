@@ -5,7 +5,6 @@ import numpy as np
 from datetime import datetime, timedelta
 from .data_consumer import fetch_node_data
 
-class DataPipeline:
     def __init__(self, market_manager):
         self.market = market_manager
         self.chart_api_url = "http://localhost:3600/api/dashboard/chart"
@@ -13,11 +12,10 @@ class DataPipeline:
         # TOOL_CATEGORIES will be dynamically populated
         self.TOOL_CATEGORIES = {}
 
-    async def purchase_single_tool(self, node_id):
+    async def purchase_single_node(self, node_id):
         """
-        Purchase and fetch data for a single node by id. Returns the data or None.
+        Purchase and fetch data for a single node by id. Triggers 402 payment and fetch logic.
         """
-        # Find node info
         try:
             import requests
             res = requests.get(self.nodes_api_url, timeout=2)
@@ -27,15 +25,18 @@ class DataPipeline:
                 if not node:
                     print(f"   ❌ Node {node_id} not found.")
                     return None
-                # Simulate payment if needed (could call pay_x402_batch with [node])
-                # For now, just fetch data
+                # This triggers the 402 -> Wallet.transfer -> Proof logic
                 from agent.wallet_manager import WalletManager
                 wallet_manager = WalletManager()
                 from .data_consumer import fetch_node_data
-                data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
+                data = await fetch_node_data(
+                    node['endpointUrl'],
+                    node['price'],
+                    node['category']
+                )
                 return data
         except Exception as e:
-            print(f"   ❌ purchase_single_tool error: {e}")
+            print(f"   ❌ purchase_single_node error: {e}")
         return None
     async def refresh_market_knowledge(self):
         """Fetches all nodes to map names to categories dynamically."""
