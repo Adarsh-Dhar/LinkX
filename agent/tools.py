@@ -10,34 +10,45 @@ class AlphaStrategist:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY")
         )
-        self.model = "anthropic/claude-3.5-sonnet" # Production standard for reasoning
+        # Use a high-reasoning model for institutional-grade decision logic
+        self.model = "anthropic/claude-3.5-sonnet"
 
-        def rethink_strategy(self, market_state, memory):
-                prompt = f"""
-                ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-                You are an autonomous AI trader on Etherlink. 
-                Your mandate: Maximize alpha while minimizing 'Information Overhead' (x402 costs).
+    def rethink_strategy(self, market_snapshot, working_memory):
+        """
+        Cognitive reasoning step to determine if data acquisition is economically viable.
+        """
+        prompt = f"""
+        ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
+        You are an autonomous AI trading desk operator. Your core objective is to maximize 
+        Risk-Adjusted Returns while minimizing 'Information Arbitrage' costs (x402 payments).
 
-                ## MARKET CONTEXT:
-                {json.dumps(market_state)}
+        ## OPERATIONAL CONTEXT:
+        Current Market Snapshot: {json.dumps(market_snapshot)}
+        Purchased Intel Memory: {json.dumps(working_memory)}
 
-                ## COGNITIVE MEMORY:
-                {json.dumps(memory)}
+        ## DECISION PRINCIPLES:
+        1. DATA DECAY: Technical signals lose 50% utility every 5 minutes. 
+        2. REGIME SENSITIVITY: Only 'PURCHASE_DATA' if the current trend has shifted 
+           (e.g., NORMAL -> VOLATILE) or if Memory contains NO relevant category data.
+        3. COST PENALTY: Every 402 payment is a drag on our Sharpe Ratio. 
+           If the market is 'STABLE', prioritize 'USE_MEMORY' or 'ABORT'.
 
-                ## TRADING PHILOSOPHY:
-                1. Information has a 'Half-Life'. If current price trend matches the memory trend, do not re-buy.
-                2. Data acquisition is a high-cost operation. Only 'PURCHASE_DATA' if the current signal is stale or market volatility > 1.5%.
-                3. If the risk/reward is unclear, 'ABORT' the cycle to preserve capital.
-
-                ## RESPONSE SCHEMA:
-                {{
-                    "reasoning": "Institutional-grade analysis of why action is or is not needed.",
-                    "verdict": "USE_MEMORY | PURCHASE_DATA | ABORT",
-                    "target_node_id": "UUID string or null",
-                    "trade_bias": "LONG | SHORT | NEUTRAL",
-                    "confidence": 0.0-1.0
-                }}
-                """
+        ## RESPONSE FORMAT (JSON):
+        {{
+          "thought": "Deep reasoning regarding market regime vs existing intel age.",
+          "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
+          "target_node_id": "UUID string (if PURCHASE_DATA)",
+          "execution_bias": "LONG | SHORT | NEUTRAL",
+          "risk_confidence": 0.0-1.0
+        }}
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": "You are a professional trader. Respond only in JSON."},
+                      {"role": "user", "content": prompt}],
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(response.choices[0].message.content)
                 response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": prompt}],

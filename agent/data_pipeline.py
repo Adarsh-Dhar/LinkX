@@ -1,3 +1,12 @@
+    async def execute_targeted_buy(self, node_id):
+        """
+        Executes a targeted x402 acquisition for one specific intelligence node (single-node purchase).
+        """
+        # Prefer DB/consumer pattern if available, else fallback to purchase_single_node
+        if hasattr(self, 'purchase_single_node'):
+            return await self.purchase_single_node(node_id)
+        # Fallback: not implemented
+        raise NotImplementedError("No targeted buy method available.")
 
 import requests
 import pandas as pd
