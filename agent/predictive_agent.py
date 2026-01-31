@@ -1,3 +1,94 @@
+import time
+from .tools import OpenRouterClient
+from .agent_state_db import AgentStateDB
+
+class PredictiveAgentReAct:
+    """
+    ReAct-based PredictiveAgent using OpenRouter for reasoning, memory, and model routing.
+    Persists memory and last intel timestamp using AgentStateDB.
+    """
+    SYSTEM_PROMPT = """
+    ## ROLE: Institutional Alpha Strategist
+    You are an experienced algorithmic trader specializing in the Etherlink/Tezos ecosystem. Your goal is to maximize ROI while strictly minimizing operational overhead (data acquisition costs).
+
+    ## TRADING PROTOCOL:
+    1. ANALYZE shared market state (Price/Trend).
+    2. CONSULT internal memory of purchased intel.
+    3. REASON:
+       - Is current data stale? (Age > 5 mins)
+       - Is the market in a Regime Shift? (e.g., NORMAL -> CRASH)
+       - Is a trade imminent? (If HOLD, do not buy data).
+    4. DECIDE: Either USE_CACHE, PURCHASE_INTEL, or ABORT.
+
+    ## ECONOMIC CONSTRAINT:
+    Every 402 payment reduces our net profit. You are forbidden from buying data for 'Technical Analysis' if the market trend has not changed since the last purchase.
+
+    ## RESPONSE FORMAT (JSON):
+    {
+      "thought": "Deep reasoning about current market vs memory",
+      "regime": "VOLATILE | TRENDING | STABLE",
+      "action": "CACHE | PURCHASE | EXECUTE",
+      "target_node": "NodeID or null",
+      "confidence": 0.0-1.0
+    }
+    """
+
+
+    def __init__(self, pipeline=None, state_path="agent_state.db"):
+        self.client = OpenRouterClient()
+        self.state = AgentStateDB(state_path)
+        self.memory = self.state.memory  # {node_id: {"data": ..., "ts": ...}}
+        self.last_regime = None
+        self.pipeline = pipeline
+
+    async def run_cycle(self, chart_data, market_nodes):
+        # STEP 1: Pre-Assessment (The 'Think' Phase)
+        assessment_prompt = self._build_assessment_prompt(chart_data)
+        decision = await self.client.route_model(
+            phase="assessment",
+            prompt=assessment_prompt,
+            system_prompt=self.SYSTEM_PROMPT
+        )
+        print(f"🧠 [Agent Reasoning] {decision['thought']}")
+
+        # STEP 2: Intelligent Data Selection
+
+        intel = {}
+        now = time.time()
+        if decision['action'] == "PURCHASE":
+            node_id = decision['target_node']
+            node = next((n for n in market_nodes if n.get('id') == node_id), None)
+            if node:
+                intel[node_id] = await self.pipeline.purchase_single_tool(node_id)
+                self.memory[node_id] = {"data": intel[node_id], "ts": now}
+                self.state.memory = self.memory
+                self.state.set_last_intel_ts(node_id, now)
+        else:
+            # Use data from memory if valid
+            intel = {k: v['data'] for k, v in self.memory.items() if now - v['ts'] < 300}
+
+        # STEP 3: Neural Brain Execution
+        if decision['confidence'] > 0.7:
+            await self.execute_trade(decision['regime'], intel)
+
+    def _build_assessment_prompt(self, chart_data):
+        # Compose a summary of the current market state and memory
+        import json
+        prompt = {
+            "market_state": chart_data,
+            "memory": {k: {"ts": v["ts"]} for k, v in self.memory.items()}
+        }
+        return json.dumps(prompt)
+
+    async def execute_trade(self, regime, intel):
+        # Route to a more powerful model for trade execution
+        prompt = f"Regime: {regime}\nIntel: {intel}"
+        decision = await self.client.route_model(
+            phase="execution",
+            prompt=prompt,
+            system_prompt="You are a trading agent. Decide and return JSON."
+        )
+        print(f"[TRADE EXECUTION] {decision}")
 import os
 import asyncio
 import pandas as pd

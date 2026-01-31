@@ -69,6 +69,7 @@ model AlphaNode {
   qualityScore    Int      @default(0)
   latencyMs       Int      @default(0)
   assetCoverage   String?  // e.g. "WETH/USDC"
+  granularity     String?  // e.g. "5m", "1h" - data freshness
   icon            String   @default("activity")
   status          String   @default("active") // "active", "inactive"
   isPurchased     Boolean  @default(false)

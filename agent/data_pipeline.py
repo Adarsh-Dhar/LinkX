@@ -12,6 +12,31 @@ class DataPipeline:
         self.nodes_api_url = "http://localhost:3600/api/market/nodes"
         # TOOL_CATEGORIES will be dynamically populated
         self.TOOL_CATEGORIES = {}
+
+    async def purchase_single_tool(self, node_id):
+        """
+        Purchase and fetch data for a single node by id. Returns the data or None.
+        """
+        # Find node info
+        try:
+            import requests
+            res = requests.get(self.nodes_api_url, timeout=2)
+            if res.status_code == 200:
+                all_nodes = res.json()
+                node = next((n for n in all_nodes if n.get('id') == node_id), None)
+                if not node:
+                    print(f"   ❌ Node {node_id} not found.")
+                    return None
+                # Simulate payment if needed (could call pay_x402_batch with [node])
+                # For now, just fetch data
+                from agent.wallet_manager import WalletManager
+                wallet_manager = WalletManager()
+                from .data_consumer import fetch_node_data
+                data = fetch_node_data(node_url=node.get("endpointUrl"), api_key=node.get("apiKey"), wallet_manager=wallet_manager)
+                return data
+        except Exception as e:
+            print(f"   ❌ purchase_single_tool error: {e}")
+        return None
     async def refresh_market_knowledge(self):
         """Fetches all nodes to map names to categories dynamically."""
         try:

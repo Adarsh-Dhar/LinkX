@@ -1,3 +1,51 @@
+import aiohttp
+import asyncio
+
+# --- OpenRouterClient for LLM Reasoning/Action ---
+class OpenRouterClient:
+    def __init__(self, api_key=None):
+        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+
+    async def get_structured_response(self, prompt, model="google/gemini-flash-1.5", max_retries=3, system_prompt=None):
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt or "You are a helpful trading agent. Respond in JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"},
+            "max_tokens": 512
+        }
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.base_url, headers=headers, json=payload, timeout=20) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            # Parse JSON from LLM response
+                            content = data["choices"][0]["message"]["content"]
+                            import json as _json
+                            return _json.loads(content)
+                        else:
+                            print(f"[OpenRouter] Non-200 status: {resp.status}")
+            except Exception as e:
+                print(f"[OpenRouter] Error: {e} (attempt {attempt+1})")
+                await asyncio.sleep(1 + attempt)
+        raise RuntimeError("OpenRouterClient failed after retries.")
+
+    async def route_model(self, phase, prompt, system_prompt=None):
+        if phase == "assessment":
+            model = "google/gemini-flash-1.5"
+        elif phase == "execution":
+            model = "anthropic/claude-3.5-sonnet"
+        else:
+            model = "google/gemini-flash-1.5"
+        return await self.get_structured_response(prompt, model=model, system_prompt=system_prompt)
 
 # --- UNIVERSAL DECORATOR ---
 class UniversalTool:
