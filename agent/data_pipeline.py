@@ -9,6 +9,33 @@ from datetime import datetime, timedelta
 from .data_consumer import fetch_node_data
 
 class DataPipeline:
+    async def get_latest_tape(self):
+        """
+        Fetches market price history from the dashboard/chart endpoint.
+        Matches the naming convention expected by PredictiveAgent.
+        """
+        try:
+            res = requests.get("http://localhost:3600/api/dashboard/chart", timeout=5)
+            if res.status_code != 200:
+                print(f"⚠️ [Pipeline] API returned status {res.status_code}")
+                return None
+            raw_data = res.json()
+            # Extract data array if wrapped in an object
+            if isinstance(raw_data, dict) and "data" in raw_data:
+                price_list = raw_data["data"]
+            else:
+                price_list = raw_data
+            df = pd.DataFrame(price_list)
+            if not df.empty:
+                # Ensure columns are lowercase for the Neural Brain (price, timestamp)
+                df.columns = [c.lower() for c in df.columns]
+                # Log success for debugging
+                print(f"✅ [Pipeline] Synced {len(df)} price points.")
+            return df
+        except Exception as e:
+            print(f"❌ [Pipeline Error] {e}")
+            return None
+
     def __init__(self, market_manager):
         self.market = market_manager
         self.chart_api_url = "http://localhost:3600/api/dashboard/chart"

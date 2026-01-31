@@ -1,7 +1,3 @@
-// --- Expose price history for charting ---
-app.get('/api/prices', (req, res) => {
-    res.json(prices);
-});
 // --- Price History State ---
 let prices = [];
 
@@ -19,7 +15,6 @@ function seedHistoricalData() {
         // Create realistic price movement
         const volatility = (Math.random() - 0.5) * 5; 
         lastPrice += volatility;
-        
         prices.push({
             price: parseFloat(lastPrice.toFixed(2)),
             timestamp: new Date(now - (i * interval)).toISOString(),
@@ -39,6 +34,14 @@ const port = 3050;
 
 app.use(cors());
 app.use(express.json());
+
+// --- Expose price history for charting ---
+app.get('/api/prices', (req, res) => {
+    res.json(prices);
+});
+
+// ...existing code...
+// ...existing code...
 
 // Mock Data Generators
 const generateSentiment = () => Math.random().toFixed(4);
