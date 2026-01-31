@@ -102,38 +102,43 @@ from .brain import NeuralBrain
         self.pipeline = pipeline
         self.memory = {}  # Persistent across cycles: {node_id: {data, timestamp, at_price}}
 
+
     async def run_cycle(self):
         print(f"\n══════════════════════════════════════════════════════════════")
         print(f"♟️  PREDICTIVE AGENT CYCLE - {time.strftime('%H:%M:%S')}")
 
-        # 1. Get raw market data (the 'Perception' layer)
-        df = await self.pipeline.get_market_snapshot()
-        market_state = self.format_for_llm(df)
+        # 1. Perception Layer
+        chart_data = await self.pipeline.get_latest_tape() if hasattr(self.pipeline, 'get_latest_tape') else await self.pipeline.get_market_snapshot()
 
-        # 2. THINK: Should I spend money on data?
-        decision = self.strategist.rethink_strategy(market_state, self.memory)
-        print(f"🧠 [Strategist Reasoning]: {decision['reasoning']}")
+        # 2. Reasoning Layer (The 'Think' Phase)
+        # Pass the current memory so the LLM knows what we already paid for
+        decision = self.strategist.rethink_strategy(chart_data, self.memory)
+        print(f"🧠 [Trader Thought]: {decision['reasoning']}")
 
+        # 3. Action Layer
         intel = {}
         now = time.time()
         if decision['verdict'] == "PURCHASE_DATA":
-            # 3. ACT: Execute x402 payment only when LLM deems it high-utility
+            # Only pay the x402 cost if the Strategist explicitly justifies it
             node_id = decision['target_node_id']
-            raw_intel = await self.pipeline.purchase_single_node(node_id)
-            # Update memory with TTL (Time-to-Live)
+            raw_signal = await self.pipeline.purchase_single_node(node_id)
             self.memory[node_id] = {
-                "data": raw_intel,
+                "value": raw_signal,
                 "timestamp": now,
-                "at_price": market_state.get('current_price')
+                "market_state_at_purchase": chart_data.get('trend') if isinstance(chart_data, dict) and 'trend' in chart_data else None
             }
-            intel = raw_intel
-        else:
-            # Clean memory of expired data
-            intel = self.get_valid_memory()
+            intel = raw_signal
+        elif decision['verdict'] == "USE_MEMORY":
+            # Use existing valid data (within 5-min TTL)
+            intel = {k: v['value'] for k, v in self.memory.items() if now - v['timestamp'] < 300}
 
-        # 4. FINAL TRADE DECISION
-        if decision['confidence'] > 0.8:
-            await self.execute_move(decision, intel)
+        # 4. Final Execution
+        if decision.get('confidence', 0) > 0.85:
+            await self.execute_trade(decision.get('trade_bias', 'NEUTRAL'), intel)
+
+    async def execute_trade(self, trade_bias, intel):
+        # Placeholder for trade execution logic
+        print(f"[TRADE EXECUTION] Bias: {trade_bias}, Intel: {intel}")
 
     def format_for_llm(self, df):
         # Convert DataFrame to dict or summary for LLM

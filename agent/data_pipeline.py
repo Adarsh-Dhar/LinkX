@@ -14,27 +14,39 @@ from .data_consumer import fetch_node_data
 
     async def purchase_single_node(self, node_id):
         """
-        Purchase and fetch data for a single node by id. Triggers 402 payment and fetch logic.
+        Executes a targeted x402 acquisition for one specific intelligence node.
         """
         try:
-            import requests
-            res = requests.get(self.nodes_api_url, timeout=2)
-            if res.status_code == 200:
-                all_nodes = res.json()
-                node = next((n for n in all_nodes if n.get('id') == node_id), None)
+            # Example: Use self.db and self.consumer if available, else fallback
+            if hasattr(self, 'db') and hasattr(self, 'consumer'):
+                node = await self.db.find_unique({"id": node_id})
                 if not node:
-                    print(f"   ❌ Node {node_id} not found.")
+                    print(f"   ❌ Node {node_id} not found in db.")
                     return None
-                # This triggers the 402 -> Wallet.transfer -> Proof logic
-                from agent.wallet_manager import WalletManager
-                wallet_manager = WalletManager()
-                from .data_consumer import fetch_node_data
-                data = await fetch_node_data(
+                return await self.consumer.fetch_node_data(
                     node['endpointUrl'],
                     node['price'],
                     node['category']
                 )
-                return data
+            else:
+                # Fallback: legacy HTTP fetch
+                import requests
+                res = requests.get(self.nodes_api_url, timeout=2)
+                if res.status_code == 200:
+                    all_nodes = res.json()
+                    node = next((n for n in all_nodes if n.get('id') == node_id), None)
+                    if not node:
+                        print(f"   ❌ Node {node_id} not found.")
+                        return None
+                    from agent.wallet_manager import WalletManager
+                    wallet_manager = WalletManager()
+                    from .data_consumer import fetch_node_data
+                    data = await fetch_node_data(
+                        node['endpointUrl'],
+                        node['price'],
+                        node['category']
+                    )
+                    return data
         except Exception as e:
             print(f"   ❌ purchase_single_node error: {e}")
         return None

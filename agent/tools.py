@@ -12,32 +12,33 @@ class AlphaStrategist:
         )
         self.model = "anthropic/claude-3.5-sonnet" # Production standard for reasoning
 
-    def rethink_strategy(self, market_state, memory):
-        prompt = f"""
-        ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-        You are an autonomous trading agent on the Etherlink network. 
-        Your mandate: Maximize ROI while minimizing 'Data Acquisition Overhead' (x402 costs).
+        def rethink_strategy(self, market_state, memory):
+                prompt = f"""
+                ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
+                You are an autonomous AI trader on Etherlink. 
+                Your mandate: Maximize alpha while minimizing 'Information Overhead' (x402 costs).
 
-        ## CURRENT MARKET STATE (Shared Context):
-        {json.dumps(market_state, indent=2)}
+                ## MARKET CONTEXT:
+                {json.dumps(market_state)}
 
-        ## WORKING MEMORY (Purchased Intel):
-        {json.dumps(memory, indent=2)}
+                ## COGNITIVE MEMORY:
+                {json.dumps(memory)}
 
-        ## OPERATIONAL CONSTRAINTS:
-        1. Every x402 purchase costs USDC. Do not buy if cached data is < 5m old UNLESS price volatility > 2%.
-        2. If the market is 'Stable/Normal', prioritize using Memory. 
-        3. Only request a 'PURCHASE' if you are preparing for an execution.
+                ## TRADING PHILOSOPHY:
+                1. Information has a 'Half-Life'. If current price trend matches the memory trend, do not re-buy.
+                2. Data acquisition is a high-cost operation. Only 'PURCHASE_DATA' if the current signal is stale or market volatility > 1.5%.
+                3. If the risk/reward is unclear, 'ABORT' the cycle to preserve capital.
 
-        ## REQUIRED RESPONSE FORMAT (JSON ONLY):
-        {{
-          "reasoning": "Chain-of-thought analysis of why we should or shouldn't buy data.",
-          "verdict": "USE_MEMORY | PURCHASE_DATA | ABORT",
-          "target_node_id": "UUID of the node if PURCHASE_DATA, else null",
-          "confidence": 0.0-1.0
-        }}
-        """
-        response = self.client.chat.completions.create(
+                ## RESPONSE SCHEMA:
+                {{
+                    "reasoning": "Institutional-grade analysis of why action is or is not needed.",
+                    "verdict": "USE_MEMORY | PURCHASE_DATA | ABORT",
+                    "target_node_id": "UUID string or null",
+                    "trade_bias": "LONG | SHORT | NEUTRAL",
+                    "confidence": 0.0-1.0
+                }}
+                """
+                response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": prompt}],
             response_format={ "type": "json_object" }
