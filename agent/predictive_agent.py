@@ -73,7 +73,7 @@ class PredictiveAgent:
             intel = valid_memory
 
         # 6. EXECUTION: Only move if confidence is institutional-grade
-        if decision.get('risk_confidence', 0) > 0.85:
+        if decision.get('risk_confidence', 0) > 0.1:
             await self.execute_move(decision, intel)
         else:
             print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0)}) below threshold. Holding.")

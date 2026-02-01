@@ -13,7 +13,7 @@ class AlphaStrategist:
         # EXACT ID from OpenRouter Documentation
         self.model = "tngtech/deepseek-r1t2-chimera:free"
 
-    def rethink_strategy(self, market_snapshot, working_memory):
+    def rethink_strategy(self, market_snapshot, working_memory, max_retries=2):
         """
         Cognitive reasoning step using DeepSeek R1T2 Chimera.
         """
@@ -40,40 +40,47 @@ class AlphaStrategist:
           "risk_confidence": 0.0-1.0
         }}
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a professional trader. Respond only in valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format={ "type": "json_object" },
-                max_tokens=1000, 
-                extra_headers={
-                    "HTTP-Referer": "http://localhost:3000",
-                    "X-Title": "AlphaConsumer Agent"
-                }
-            )
-            import re
-            content = response.choices[0].message.content
-            # Remove Markdown code block markers and whitespace
-            content = re.sub(r"^```json\\s*|```$", "", content.strip(), flags=re.MULTILINE).strip()
+        import re
+        import time
+        for attempt in range(max_retries + 1):
             try:
-                return json.loads(content)
-            except Exception as json_err:
-                print(f"❌ [Strategist API Error] JSON decode failed: {json_err}\nRaw content: {content}")
-                return {
-                    "thought": "Malformed or non-JSON response from API. Defaulting to HOLD.",
-                    "verdict": "ABORT",
-                    "risk_confidence": 0
-                }
-        except Exception as e:
-            print(f"❌ [Strategist API Error] {e}")
-            return {
-                "thought": "API communication failure. Defaulting to HOLD.",
-                "verdict": "ABORT",
-                "risk_confidence": 0
-            }
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional trader. Respond only in valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={ "type": "json_object" },
+                    max_tokens=1000, 
+                    extra_headers={
+                        "HTTP-Referer": "http://localhost:3000",
+                        "X-Title": "AlphaConsumer Agent"
+                    }
+                )
+                content = response.choices[0].message.content
+                # Remove any Markdown code block markers (``` or ```json) and whitespace
+                content = re.sub(r'^```[a-zA-Z]*\s*', '', content.strip(), flags=re.MULTILINE)
+                content = re.sub(r'```$', '', content, flags=re.MULTILINE).strip()
+
+                # Check for likely complete JSON
+                if content.startswith('{') and content.endswith('}'):
+                    try:
+                        return json.loads(content)
+                    except Exception as json_err:
+                        print(f"❌ [Strategist API Error] JSON decode failed: {json_err}\nRaw content: {content}")
+                else:
+                    print(f"❌ [Strategist API Error] Incomplete or malformed JSON. Raw content: {content}")
+            except Exception as e:
+                print(f"❌ [Strategist API Error] {e}")
+            if attempt < max_retries:
+                print(f"🔁 [Strategist] Retrying LLM call (attempt {attempt+2})...")
+                time.sleep(1)
+        # If all retries fail
+        return {
+            "thought": "Malformed or incomplete response from API after retries. Defaulting to HOLD.",
+            "verdict": "ABORT",
+            "risk_confidence": 0
+        }
 
     async def route_model(self, phase, prompt, system_prompt=None):
         if phase == "assessment":
