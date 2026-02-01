@@ -12,7 +12,7 @@ services:
       - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
       
       # --- NETWORK CONFIGURATION ---
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
       - RPC_URL=https://node.shadownet.etherlink.com
       
       # --- CONNECTION TO YOUR SERVER ---

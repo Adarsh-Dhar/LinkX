@@ -7,11 +7,8 @@ numpy
 pandas
 scikit-learn
 aiohttp
-langchain-community
-# Pin versions to satisfy crypto_com_agent_client and langchain stack
-langchain-core==0.3.81
-langchain-openai==0.3.23
-openai==1.74.0
+# GitHub Models uses OpenAI-compatible SDK
+openai>=1.0.0
 requests==2.32.4
 web3
 eth-account

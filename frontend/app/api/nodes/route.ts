@@ -20,14 +20,14 @@ const thirdwebX402Facilitator = thirdwebFacilitator({
 export async function GET(req: Request) {
   const paymentHeader = req.headers.get('x-payment');
   // Provide required fields for settlePayment (network, price, etc.)
-  // For demo, use etherlinkShadownet and a price of 0 (free for now, update as needed)
+  // Use minimum required price to satisfy validation requirements
   const result = await settlePayment({
     facilitator: thirdwebX402Facilitator,
     resourceUrl: 'https://api.example.com/protected-endpoint',
     method: 'GET',
     paymentData: paymentHeader || undefined,
     network: etherlinkShadownet,
-    price: '0', // Set to actual price if needed
+    price: '0.0001', // Minimum amount required by Zod validation (at least 0.0001)
   });
   // Check for payment success using the correct property
   if (result.status !== 200) {

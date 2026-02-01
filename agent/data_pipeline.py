@@ -11,12 +11,52 @@ from .data_consumer import fetch_node_data
 class DataPipeline:
     async def purchase_single_node(self, node_id):
         """
-        Simulates a single-node purchase for development/testing.
-        Replace this logic with actual payment and data retrieval in production.
+        Executes real x402 purchase of a single node using fetch_node_data.
+        Fetches node details from database and performs actual blockchain payment.
         """
-        print(f"[DataPipeline] Simulating purchase of node: {node_id}")
-        # Simulate a signal (replace with real data in production)
-        return {"node_id": node_id, "signal": "simulated_signal", "timestamp": datetime.utcnow().isoformat()}
+        print(f"[DataPipeline] Real purchase of node: {node_id}")
+        
+        # Fetch node details from database
+        import requests
+        import asyncio
+        try:
+            res = requests.get(f"http://localhost:3600/api/nodes", timeout=5)
+            if res.status_code == 200:
+                nodes = res.json()
+                target_node = next((n for n in nodes if n.get('id') == node_id), None)
+                
+                if not target_node:
+                    print(f"   ❌ Node {node_id} not found in database")
+                    return None
+                
+                # Execute fetch_node_data in executor to avoid blocking event loop
+                def sync_fetch():
+                    return fetch_node_data(
+                        node_url=target_node.get('endpointUrl'),
+                        api_key=target_node.get('apiKey'),
+                        price=target_node.get('price'),
+                        category=target_node.get('category')
+                    )
+                
+                # Use run_in_executor to handle sync function in async context
+                loop = asyncio.get_event_loop()
+                signal = await loop.run_in_executor(None, sync_fetch)
+                
+                if signal:
+                    print(f"   ✅ Real x402 purchase successful: {node_id}")
+                    return {
+                        "node_id": node_id, 
+                        "signal": signal.value if hasattr(signal, 'value') else signal,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "real_purchase": True
+                    }
+                else:
+                    print(f"   ❌ Real x402 purchase failed: {node_id}")
+                    return None
+                    
+        except Exception as e:
+            print(f"   ❌ [DataPipeline Error] {e}")
+            return None
 
     async def get_latest_tape(self):
         """

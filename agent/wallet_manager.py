@@ -116,6 +116,41 @@ class WalletManager:
             self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
             return tx_hash.hex()
 
+    def get_balance(self, token='USDC'):
+        """Get current token balance for the wallet."""
+        try:
+            if token == 'USDC':
+                # Get USDC balance
+                env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
+                usdc_address = None
+                try:
+                    with open(env_path) as f:
+                        for line in f:
+                            if line.startswith("USDC_ADDRESS="):
+                                usdc_address = line.strip().split("=", 1)[1]
+                                break
+                except:
+                    pass
+                if not usdc_address:
+                    usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"
+                
+                erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
+                balance_wei = erc20.functions.balanceOf(self.address).call()
+                decimals = erc20.functions.decimals().call()
+                balance = balance_wei / (10 ** decimals)
+                return float(balance)
+            elif token in ['CRO', 'TCRO', 'native']:
+                # Get native token balance
+                balance_wei = self.w3.eth.get_balance(self.address)
+                balance = self.w3.from_wei(balance_wei, 'ether')
+                return float(balance)
+            else:
+                print(f"   ⚠️ [WalletManager] Unknown token: {token}")
+                return 0.0
+        except Exception as e:
+            print(f"   ❌ [WalletManager] Error getting {token} balance: {e}")
+            return 0.0
+    
     def execute_swap(self, token_in, token_out, amount):
         # Implement router swap logic here (simplified, replace with your router contract logic)
         # This is a placeholder for a real DEX swap

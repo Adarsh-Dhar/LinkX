@@ -6,39 +6,82 @@ from openai import OpenAI
 
 class AlphaStrategist:
     def __init__(self):
+        # GitHub Models API configuration
+        self.token = os.getenv("GITHUB_TOKEN")
+        self.endpoint = "https://models.inference.ai.azure.com"
+        
         self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            base_url=self.endpoint,
+            api_key=self.token,
         )
-        # EXACT ID from OpenRouter Documentation
-        self.model = "tngtech/deepseek-r1t2-chimera:free"
+        # GitHub Models free tier model with 8,192 token context
+        self.model = "gpt-4o-mini"
 
     def rethink_strategy(self, market_snapshot, working_memory, max_retries=2):
         """
         Cognitive reasoning step using DeepSeek R1T2 Chimera.
+        Now includes granularity information from database.
         """
+        # Get current balance for context
+        try:
+            from .wallet_manager import WalletManager
+            wallet = WalletManager()
+            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 100.0
+        except:
+            current_balance = 100.0
+        
+        # Fetch available nodes with granularity information
+        available_nodes = []
+        try:
+            import requests
+            res = requests.get("http://localhost:3600/api/nodes", timeout=5)
+            if res.status_code == 200:
+                nodes = res.json()
+                for node in nodes:
+                    available_nodes.append({
+                        "id": node.get("id"),
+                        "name": node.get("name"),
+                        "category": node.get("category"),
+                        "price": node.get("price", 0),
+                        "granularity": node.get("granularity", "5m"),
+                        "qualityScore": node.get("qualityScore", 0)
+                    })
+        except:
+            # Fallback if API is not available
+            available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
+            
         prompt = f"""
         ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-        You are an autonomous trading desk operator.
+        You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
         
         ## MARKET CONTEXT:
         {json.dumps(market_snapshot)}
         
         ## MEMORY:
         {json.dumps(working_memory)}
-
-        ## MANDATE:
-        - Only 'PURCHASE_DATA' if current memory is stale (>5m) or market regime changed.
-        - Respond ONLY in JSON.
-
-        ## RESPONSE SCHEMA:
+        
+        ## AVAILABLE NODES:
+        {json.dumps(available_nodes)}
+        
+        ## CRITICAL CONSTRAINTS:
+        - MINIMUM accuracy for data purchase: 85%
+        - MAXIMUM cost per node: 50.0 USDC
+        - Node granularity determines staleness: "1m" = stale after 2min, "5m" = stale after 10min, "1h" = stale after 2h
+        - Only 'PURCHASE_DATA' if memory is stale based on granularity OR market regime changed significantly
+        - risk_confidence MUST be a decimal number between 0.0-1.0 (e.g., 0.85, not "high")
+        - Only execute trades with risk_confidence >= 0.15
+        - Consider node quality scores when selecting targets
+        
+        ## RESPONSE SCHEMA (MUST BE VALID JSON):
         {{
-          "thought": "Analysis of data utility vs cost.",
+          "thought": "Brief analysis of data utility vs cost and market conditions",
           "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
-          "target_node_id": "UUID string (if PURCHASE_DATA)",
+          "target_node_id": "UUID string (only if PURCHASE_DATA)",
           "execution_bias": "LONG | SHORT | NEUTRAL",
-          "risk_confidence": 0.0-1.0
+          "risk_confidence": 0.XX
         }}
+        
+        CRITICAL: risk_confidence must be a numeric decimal (0.0 to 1.0), never text.
         """
         import re
         import time
@@ -51,11 +94,9 @@ class AlphaStrategist:
                         {"role": "user", "content": prompt}
                     ],
                     response_format={ "type": "json_object" },
-                    max_tokens=1000, 
-                    extra_headers={
-                        "HTTP-Referer": "http://localhost:3000",
-                        "X-Title": "AlphaConsumer Agent"
-                    }
+                    # GitHub Models free tier limits max_tokens to 2048
+                    max_tokens=2048,
+                    temperature=0.2
                 )
                 content = response.choices[0].message.content
                 # Remove any Markdown code block markers (``` or ```json) and whitespace
@@ -83,13 +124,9 @@ class AlphaStrategist:
         }
 
     async def route_model(self, phase, prompt, system_prompt=None):
-        if phase == "assessment":
-            model = "google/gemini-flash-1.5"
-        elif phase == "execution":
-            model = "anthropic/claude-3.5-sonnet"
-        else:
-            model = "google/gemini-flash-1.5"
-        return await self.get_structured_response(prompt, model=model, system_prompt=system_prompt)
+        # GitHub Models uses single gpt-4o-mini for all phases
+        # This method maintained for compatibility but simplified
+        return await self.get_structured_response(prompt, model=self.model, system_prompt=system_prompt)
 
 # --- UNIVERSAL DECORATOR ---
 class UniversalTool:

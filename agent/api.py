@@ -22,17 +22,17 @@ import sys
 
 
 
-# --- OpenRouter Client Setup ---
+# --- GitHub Models Client Setup ---
 import os
 from openai import OpenAI
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 client = None
-if OPENROUTER_API_KEY:
+if GITHUB_TOKEN:
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=OPENROUTER_API_KEY
+        base_url="https://models.inference.ai.azure.com",
+        api_key=GITHUB_TOKEN
     )
-# If you need to use OpenRouter, use the API key and endpoint as needed in your code.
+# GitHub Models provides free gpt-4o-mini with 8,192 token context window.
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 agent_instance = None
 
-# --- INTENT PARSER USING OPENROUTER ---
+# --- INTENT PARSER USING GITHUB MODELS ---
 import json
 def parse_human_intent(user_message: str):
     # --- Local fallback for simple commands ---
@@ -85,15 +85,17 @@ Example: \"Don't spend more than 1.5 per trade\" -> {\"action\": \"SET_LIMIT\", 
 Return ONLY JSON.
     """
     if not client:
-        return {"action": "IGNORE", "error": "OpenAI SDK not installed"}
+        return {"action": "IGNORE", "error": "GitHub Models client not configured"}
     try:
         response = client.chat.completions.create(
-            model="tngtech/deepseek-r1t2-chimera:free",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            response_format={ "type": "json_object" }
+            response_format={ "type": "json_object" },
+            max_tokens=2048,
+            temperature=0.2
         )
         content = response.choices[0].message.content
         return json.loads(content)
@@ -105,7 +107,7 @@ class ChatRequest(BaseModel):
     message: str
 
 
-# --- INTENT-DRIVEN CHAT ENDPOINT (OpenRouter) ---
+# --- INTENT-DRIVEN CHAT ENDPOINT (GitHub Models) ---
 
 # --- GEMINI-LIKE INTENT-DRIVEN CHAT ENDPOINT ---
 @app.post("/chat")

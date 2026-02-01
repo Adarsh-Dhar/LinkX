@@ -35,7 +35,7 @@ class PredictiveAgent:
 
         print(f"   ✅ [Tape] Synced: Using {len(df)} most recent data points.")
 
-        # 3. PREPARE CONTEXT: Convert DataFrame to a snapshot for OpenRouter
+        # 3. PREPARE CONTEXT: Convert DataFrame to a snapshot for GitHub Models
         market_snapshot = {
             "current_price": float(df['price'].iloc[-1]),
             "price_change_5m": float(df['price'].iloc[-1] - df['price'].iloc[-5]),
@@ -43,7 +43,7 @@ class PredictiveAgent:
             "timestamp": df['timestamp'].iloc[-1]
         }
 
-        # 4. REASONING: Consult DeepSeek R1 via OpenRouter
+        # 4. REASONING: Consult GPT-4o-mini via GitHub Models
         # Pass the short_term_memory so it knows what it already bought
         decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory)
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
@@ -79,14 +79,45 @@ class PredictiveAgent:
             print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0)}) below threshold. Holding.")
 
     async def execute_move(self, decision, intel):
-        """Execute the final trade on Etherlink."""
+        """Execute the final trade on Etherlink using TradingEngine."""
+        from .trading_engine import TradingEngine
+        from .wallet_manager import WalletManager
+        
         bias = decision.get('execution_bias', 'NEUTRAL')
-        if bias == "NEUTRAL":
+        risk_confidence = decision.get('risk_confidence', 0)
+        
+        if bias == "NEUTRAL" or risk_confidence < 0.15:
+            print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence}")
             return
 
-        print(f"   🚀 [EXECUTION] Action: {bias} | Basis: {decision['thought'][:50]}...")
-        # Your trading_engine.execute_swap logic goes here
-        pass
+        print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence} | Basis: {decision['thought'][:50]}...")
+        
+        try:
+            # Initialize trading engine with shared wallet
+            wallet = WalletManager()
+            engine = TradingEngine(wallet=wallet)
+            
+            # Calculate trade amount based on confidence and available balance
+            # Get current USDC balance
+            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 100.0
+            trade_amount = min(current_balance * risk_confidence * 0.1, 50.0)  # Max 10% of balance, cap at 50 USDC
+            
+            if bias == "LONG":
+                # Execute long position: USDC -> WXTZ
+                tx_hash = engine.execute_swap("USDC", "WXTZ", trade_amount)
+                print(f"   ✅ [LONG Execution] Swapped {trade_amount} USDC -> WXTZ. Hash: {tx_hash}")
+            elif bias == "SHORT":
+                # Execute short position: WXTZ -> USDC (if we have WXTZ)
+                # For now, use a smaller amount for short positions
+                short_amount = trade_amount * 0.5
+                tx_hash = engine.execute_swap("WXTZ", "USDC", short_amount)
+                print(f"   ✅ [SHORT Execution] Swapped {short_amount} WXTZ -> USDC. Hash: {tx_hash}")
+                
+            return tx_hash
+            
+        except Exception as e:
+            print(f"   ❌ [Execution Error] {e}")
+            return None
 
     async def run_loop(self):
         self.is_running = True
@@ -95,4 +126,4 @@ class PredictiveAgent:
                 await self.run_cycle()
             except Exception as e:
                 print(f"   ❌ [Critical Agent Error] {e}")
-            await asyncio.sleep(15) 
+            await asyncio.sleep(15)
