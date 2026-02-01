@@ -58,11 +58,16 @@ class PredictiveAgent:
         print(f"   ✅ [Tape] Synced: Using {len(df)} most recent data points.")
 
         # 3. PREPARE CONTEXT: Convert DataFrame to a snapshot for GitHub Models
+        price_col = "price" if "price" in df.columns else "value" if "value" in df.columns else None
+        if price_col is None:
+            print("   ❌ [Tape] Missing price/value column in tape data; skipping cycle.")
+            return
+
         market_snapshot = {
-            "current_price": float(df['price'].iloc[-1]),
-            "price_change_5m": float(df['price'].iloc[-1] - df['price'].iloc[-5]),
-            "recent_volatility": float(df['price'].tail(10).std()),
-            "timestamp": df['timestamp'].iloc[-1]
+            "current_price": float(df[price_col].iloc[-1]),
+            "price_change_5m": float(df[price_col].iloc[-1] - df[price_col].iloc[-5]),
+            "recent_volatility": float(df[price_col].tail(10).std()),
+            "timestamp": df['timestamp'].iloc[-1] if "timestamp" in df.columns else datetime.utcnow().isoformat()
         }
 
         # 4. FETCH FREE METADATA (Discovery Layer - no payment required)

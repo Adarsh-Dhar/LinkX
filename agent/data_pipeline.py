@@ -139,6 +139,9 @@ class DataPipeline:
             if not df.empty:
                 # Ensure columns are lowercase for the Neural Brain (price, timestamp)
                 df.columns = [c.lower() for c in df.columns]
+                # Normalize chart schema: dashboard returns `value` not `price`
+                if "price" not in df.columns and "value" in df.columns:
+                    df["price"] = df["value"]
                 # Log success for debugging
                 print(f"✅ [Pipeline] Synced {len(df)} price points.")
             return df

@@ -31,10 +31,11 @@ export default function AlphaProductCard({ product }: { product: Product }) {
     setLoading(true)
     try {
       // --- 1. CONNECT TO WALLET (METAMASK) ---
-      if (!window.ethereum) {
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) {
         throw new Error("Please install MetaMask to purchase.");
       }
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(ethereum);
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
       console.log(`💳 Connected: ${userAddress}`);
@@ -44,8 +45,8 @@ export default function AlphaProductCard({ product }: { product: Product }) {
       // We pass the 'signer' so the library can request signatures and transactions from MetaMask
       const facilitator = new Facilitator({
         network: CronosNetwork.CronosTestnet,
-        signer: signer 
-      });
+        signer: signer
+      } as any);
 
       // --- 3. PREPARE PAYMENT DATA ---
       const usdcPrice = Number(product.price || 0);

@@ -198,6 +198,7 @@ load_dotenv()
 VVS_ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
 WXTZ_ADDRESS    = os.getenv("WXTZ_ADDRESS")
 USDC_CONTRACT   = os.getenv("USDC_CONTRACT")
+WCRO_ADDRESS    = os.getenv("WCRO_ADDRESS") or WXTZ_ADDRESS
 # ==========================================
 
 RPC_URL = os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
