@@ -1,17 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePortfolioSync } from "@/hooks/use-portfolio-sync";
 
 // Type for chart data points
 interface ChartPoint {
   time: string;
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
+  timestamp?: string;
   value?: number;
+  wxtzBalance?: number;
+  usdcBalance?: number;
 }
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +21,8 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 
 // Default empty state to prevent UI flickering before load
 const defaultStats = {
-  walletBalance: 0,
+  wxtzBalance: 0,
+  usdcBalance: 0,
   walletBalanceUsd: 0,
   alphaPurchased: 0,
   totalPnL: 0,
@@ -34,19 +33,24 @@ const defaultStats = {
 };
 
 export default function Dashboard() {
+  const { syncPortfolio } = usePortfolioSync();
   const [stats, setStats] = useState(defaultStats);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
   // Derived chart data with 'value' key for Recharts
-  const chartDataWithValue: ChartPoint[] = chartData.map((d) => ({ ...d, value: d.close }));
+  const chartDataWithValue: ChartPoint[] = chartData.map((d) => ({ ...d, value: d.value || 0 }));
   const [loading, setLoading] = useState(true);
 
   // FETCH DATA
   useEffect(() => {
     async function fetchDashboardData() {
       try {
+        // Sync portfolio to save latest balances
+        await syncPortfolio();
+
+        // Fetch dashboard stats and chart data
         const [statsRes, chartRes] = await Promise.all([
-          fetch("http://localhost:3600/api/dashboard/stats"),
-          fetch("http://localhost:3600/api/dashboard/chart"),
+          fetch("/api/dashboard/stats"),
+          fetch("/api/dashboard/chart"),
         ]);
 
         if (statsRes.ok) {
@@ -71,7 +75,7 @@ export default function Dashboard() {
     // Poll every 1 minute for live updates
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [syncPortfolio]);
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6">
@@ -94,7 +98,7 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Wallet Balance"
-              value={`${stats.walletBalance.toFixed(2)} CRO`}
+              value={`${stats.wxtzBalance.toFixed(4)} WXTZ • ${stats.usdcBalance.toFixed(2)} USDC`}
               icon={<Wallet />}
             />
             <StatCard
@@ -121,9 +125,9 @@ export default function Dashboard() {
                 <CardTitle>Cumulative Returns</CardTitle>
               </CardHeader>
               <CardContent className="pl-2 w-full">
-                <div className="h-[350px] w-full">
+                <div className="h-[350px] w-full min-h-[350px]">
                   {chartDataWithValue.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={350} style={{ display: 'flex' }}>
                       <LineChart data={chartDataWithValue}>
                         <XAxis
                           dataKey="time"

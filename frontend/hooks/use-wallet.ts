@@ -12,9 +12,11 @@ interface WalletState {
   chainId: number | null
 }
 
-const USDC_ADDRESS = "0xff16f6b57736e4f358603681677c38666579998b" // Etherlink Shadownet USDC
+const WXTZ_ADDRESS = "0xd0d8db4db6b24ab85a954df21c84f9d23612d552" // WXTZ from contract deploy
+const TEST_WXTZ_ADDRESS = "0x59dfaed9a27d853ff3f2398be76da62dc50c35d7" // TestWXTZ from contract deploy
+const USDC_ADDRESS = "0xd2be74974d5a50c2c131c9a0e9751c9449dc9888" // Test USDC from contract deploy
 const ETHERLINK_SHADOWNET_CHAIN_ID = 128123
-const USDC_ABI = [
+const ERC20_ABI = [
   "function balanceOf(address account) view returns (uint256)",
   "function decimals() view returns (uint8)",
 ]
@@ -52,14 +54,29 @@ export function useWallet() {
       const network = await provider.getNetwork()
       const chainId = Number(network.chainId)
 
-      // Get CRO balance
-      const balance = await provider.getBalance(address)
-      const balanceFormatted = ethers.formatEther(balance)
+      // Get WXTZ balance (ERC20)
+      let wxtzBalance = "0"
+      try {
+        const wxtzContract = new ethers.Contract(WXTZ_ADDRESS, ERC20_ABI, provider)
+        const testWxtzContract = new ethers.Contract(TEST_WXTZ_ADDRESS, ERC20_ABI, provider)
+        const [wxtzBalanceRaw, wxtzDecimals, testWxtzBalanceRaw, testWxtzDecimals] = await Promise.all([
+          wxtzContract.balanceOf(address),
+          wxtzContract.decimals(),
+          testWxtzContract.balanceOf(address),
+          testWxtzContract.decimals(),
+        ])
+        const wxtzValue = Number(ethers.formatUnits(wxtzBalanceRaw, wxtzDecimals))
+        const testWxtzValue = Number(ethers.formatUnits(testWxtzBalanceRaw, testWxtzDecimals))
+        wxtzBalance = (wxtzValue + testWxtzValue).toString()
+      } catch (error) {
+        console.warn("Error fetching WXTZ balance:", error)
+        wxtzBalance = "0"
+      }
 
       // Get USDC balance
       let usdcBalance = "0"
       try {
-        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider)
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider)
         const usdcBalanceRaw = await usdcContract.balanceOf(address)
         usdcBalance = ethers.formatUnits(usdcBalanceRaw, 6) // USDC has 6 decimals
       } catch (error) {
@@ -69,7 +86,7 @@ export function useWallet() {
 
       setState({
         address,
-        balance: balanceFormatted,
+        balance: wxtzBalance,
         usdcBalance,
         isConnected: true,
         isConnecting: false,
@@ -113,21 +130,36 @@ export function useWallet() {
     try {
       const provider = new ethers.BrowserProvider(ethereum)
 
-      // Get CRO balance
-      const balance = await provider.getBalance(state.address)
-      const balanceFormatted = ethers.formatEther(balance)
+      // Get WXTZ balance (ERC20)
+      let wxtzBalance = "0"
+      try {
+        const wxtzContract = new ethers.Contract(WXTZ_ADDRESS, ERC20_ABI, provider)
+        const testWxtzContract = new ethers.Contract(TEST_WXTZ_ADDRESS, ERC20_ABI, provider)
+        const [wxtzBalanceRaw, wxtzDecimals, testWxtzBalanceRaw, testWxtzDecimals] = await Promise.all([
+          wxtzContract.balanceOf(state.address),
+          wxtzContract.decimals(),
+          testWxtzContract.balanceOf(state.address),
+          testWxtzContract.decimals(),
+        ])
+        const wxtzValue = Number(ethers.formatUnits(wxtzBalanceRaw, wxtzDecimals))
+        const testWxtzValue = Number(ethers.formatUnits(testWxtzBalanceRaw, testWxtzDecimals))
+        wxtzBalance = (wxtzValue + testWxtzValue).toString()
+      } catch (error) {
+        console.warn("Error fetching WXTZ balance:", error)
+        wxtzBalance = "0"
+      }
 
       // Get USDC balance
       let usdcBalance = "0"
       try {
-        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider)
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider)
         const usdcBalanceRaw = await usdcContract.balanceOf(state.address)
         usdcBalance = ethers.formatUnits(usdcBalanceRaw, 6)
       } catch (error) {
         console.error("Error fetching USDC balance:", error)
       }
 
-      setState((prev) => ({ ...prev, balance: balanceFormatted, usdcBalance }))
+      setState((prev) => ({ ...prev, balance: wxtzBalance, usdcBalance }))
     } catch (error) {
       console.error("Failed to refresh balances:", error)
     }

@@ -28,7 +28,7 @@ interface SimulationResult {
 }
 
 export default function TradingPanel() {
-  const [tokenIn, setTokenIn] = useState("tCRO")
+  const [tokenIn, setTokenIn] = useState("tXTZ")
   const [tokenOut, setTokenOut] = useState("USDC")
   const [amount, setAmount] = useState<number | "">(100)
   const [loading, setLoading] = useState(false)
@@ -48,7 +48,7 @@ export default function TradingPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token_in: tokenIn, // 'tCRO' for native CRO
+          token_in: tokenIn, // 'tXTZ' for native XTZ
           token_out: tokenOut,
           amount: typeof amount === "number" ? amount : 0,
           simulate_only: false,
@@ -125,17 +125,17 @@ export default function TradingPanel() {
         <div>
           <label className="block text-sm text-gray-400 mb-2">From Token</label>
           <select value={tokenIn} onChange={(e) => setTokenIn(e.target.value)} className="w-full bg-black/40 border border-cyan-500/30 rounded px-3 py-2 text-white bg-black/40 focus:border-cyan-500 focus:outline-none">
-            <option value="tCRO">tCRO (Native CRO)</option>
-            <option value="WCRO">WCRO (Wrapped CRO)</option>
+            <option value="tXTZ">tXTZ (Native XTZ)</option>
+            <option value="WXTZ">WXTZ (Wrapped XTZ)</option>
           </select>
-          <p className="text-xs text-gray-500 mt-1">tCRO is the native CRO token. Use WCRO for wrapped CRO.</p>
+          <p className="text-xs text-gray-500 mt-1">tXTZ is the native XTZ token. Use WXTZ for wrapped XTZ.</p>
         </div>
 
         <div>
           <label className="block text-sm text-gray-400 mb-2">To Token</label>
           <select value={tokenOut} onChange={(e) => setTokenOut(e.target.value)} className="w-full bg-black/40 border border-cyan-500/30 rounded px-3 py-2 text-white bg-black/40 focus:border-cyan-500 focus:outline-none">
             <option value="USDC">USDC</option>
-            <option value="WCRO">WCRO (Wrapped CRO)</option>
+            <option value="WXTZ">WXTZ (Wrapped XTZ)</option>
           </select>
         </div>
 

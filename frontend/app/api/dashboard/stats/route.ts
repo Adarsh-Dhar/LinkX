@@ -54,7 +54,8 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      walletBalance: latestSnapshot?.croBalance || 0,
+      wxtzBalance: latestSnapshot?.wxtzBalance || 0,
+      usdcBalance: latestSnapshot?.usdcBalance || 0,
       walletBalanceUsd: currentBalanceUsd,
       alphaPurchased: alphaCount,
       totalPnL: totalPnL,

@@ -16,7 +16,7 @@ export default function ChatPage() {
       id: "1",
       type: "agent",
       content:
-        "👋 Welcome to Alpha-Consumer! I'm your AI trading agent. I can help you with:\n\n📋 Commands:\n  • 'cro balance' or 'check balance' - Check your balances\n  • 'swap 1 usdc to vvs' - Execute a swap\n  • 'get signals' - Get trading signals\n  • 'portfolio value' - Check portfolio value\n  • 'estimate swap 10 usdc to vvs' - Estimate a swap\n\nWhat would you like to do?",
+        "👋 Welcome to Alpha-Consumer! I'm your AI trading agent. I can help you with:\n\n📋 Commands:\n  • 'xtz balance' or 'check balance' - Check your balances\n  • 'swap 1 usdc to vvs' - Execute a swap\n  • 'get signals' - Get trading signals\n  • 'portfolio value' - Check portfolio value\n  • 'estimate swap 10 usdc to vvs' - Estimate a swap\n\nWhat would you like to do?",
       timestamp: new Date(),
     },
   ])
@@ -41,10 +41,10 @@ export default function ChatPage() {
       lowerMessage.includes("balance") ||
       lowerMessage.includes("check balance")
     ) {
-      if (lowerMessage.includes("cro")) {
-        return "💰 CRO Balance: 41.148926 CRO\n\nCurrent Value: ~$1,230.00"
+      if (lowerMessage.includes("xtz") || lowerMessage.includes("wxtz")) {
+        return "💰 WXTZ Balance: 41.148926 WXTZ\n\nCurrent Value: ~$1,230.00"
       }
-      return "📊 Your Balances:\n\n  • CRO: 41.148926 CRO (~$1,230.00)\n  • USDC: 500.00 USDC\n  • VVS: 150.50 VVS (~$45.15)\n\nTotal Portfolio Value: $1,775.15"
+      return "📊 Your Balances:\n\n  • WXTZ: 41.148926 WXTZ (~$1,230.00)\n  • USDC: 500.00 USDC\n  • VVS: 150.50 VVS (~$45.15)\n\nTotal Portfolio Value: $1,775.15"
     }
 
     // Swap execution
@@ -80,12 +80,12 @@ export default function ChatPage() {
       lowerMessage.includes("signal") ||
       lowerMessage.includes("trading")
     ) {
-      return `📊 Trading Signals (2 active):\n\n  • {'ticker': 'CRO', 'signal': 'BUY', 'confidence': 0.85, 'sentiment': 'bullish', 'recommended_action': 'ACCUMULATE'}\n\n  • {'ticker': 'VVS', 'signal': 'BUY', 'confidence': 0.78, 'sentiment': 'bullish', 'recommended_action': 'BUY', 'amount_usdc': 5, 'reason': 'Strong accumulation pattern detected. Volume surge on VVS Finance.'}\n\nWould you like to act on any of these signals?`
+      return `📊 Trading Signals (2 active):\n\n  • {'ticker': 'WXTZ', 'signal': 'BUY', 'confidence': 0.85, 'sentiment': 'bullish', 'recommended_action': 'ACCUMULATE'}\n\n  • {'ticker': 'VVS', 'signal': 'BUY', 'confidence': 0.78, 'sentiment': 'bullish', 'recommended_action': 'BUY', 'amount_usdc': 5, 'reason': 'Strong accumulation pattern detected. Volume surge on VVS Finance.'}\n\nWould you like to act on any of these signals?`
     }
 
     // Portfolio value
     if (lowerMessage.includes("portfolio")) {
-      return "📈 Portfolio Value: $1,775.15\n\nBreakdown:\n  • CRO Holdings: $1,230.00 (69.3%)\n  • USDC Holdings: $500.00 (28.1%)\n  • VVS Holdings: $45.15 (2.5%)\n\n24h Change: +2.3% 📈"
+      return "📈 Portfolio Value: $1,775.15\n\nBreakdown:\n  • WXTZ Holdings: $1,230.00 (69.3%)\n  • USDC Holdings: $500.00 (28.1%)\n  • VVS Holdings: $45.15 (2.5%)\n\n24h Change: +2.3% 📈"
     }
 
     // Exit/quit
@@ -94,7 +94,7 @@ export default function ChatPage() {
     }
 
     // Default response
-    return `🤔 I'm not sure about "${userMessage}". Try one of these commands:\n\n  • 'cro balance' - Check CRO balance\n  • 'swap 10 usdc to vvs' - Execute swap\n  • 'get signals' - Trading signals\n  • 'portfolio value' - Portfolio overview\n  • 'estimate swap' - Estimate trades\n\nOr just ask me anything about your trading!`
+    return `🤔 I'm not sure about "${userMessage}". Try one of these commands:\n\n  • 'xtz balance' - Check WXTZ balance\n  • 'swap 10 usdc to vvs' - Execute swap\n  • 'get signals' - Trading signals\n  • 'portfolio value' - Portfolio overview\n  • 'estimate swap' - Estimate trades\n\nOr just ask me anything about your trading!`
   }
 
   const handleSendMessage = async () => {
@@ -161,8 +161,8 @@ export default function ChatPage() {
       ) {
         let debugJson = null;
         let txData = null;
-        let transferAmountCRO = null;
-        let balanceCRO = null;
+        let transferAmountXTZ = null;
+        let balanceXTZ = null;
         // Try to extract from Debug Data block
         if (data.response && data.response.includes('Debug Data:')) {
           const debugMatch = data.response.match(/Debug Data:\n```json\n([\s\S]+?)```/);
@@ -201,7 +201,7 @@ export default function ChatPage() {
           if (amountHex && amountHex.length === 64) {
             const transferAmount = parseInt(amountHex, 16);
             if (!isNaN(transferAmount)) {
-              transferAmountCRO = transferAmount / 1e18;
+              transferAmountXTZ = transferAmount / 1e18;
             } else {
               // eslint-disable-next-line no-console
               console.log('Could not parse transferAmount from amountHex:', amountHex);
@@ -213,13 +213,13 @@ export default function ChatPage() {
         }
         // Extract current balance if present
         if (debugJson && debugJson.currentBalance) {
-          balanceCRO = debugJson.currentBalance / 1e18;
+          balanceXTZ = debugJson.currentBalance / 1e18;
         }
         // Show in agent message if available, else show fallback
-        if (transferAmountCRO !== null) {
-          content += `\n\n❌ Insufficient balance!\nNeeded: ${transferAmountCRO} CRO`;
-          if (balanceCRO !== null) {
-            content += `\nAvailable: ${balanceCRO} CRO`;
+        if (transferAmountXTZ !== null) {
+          content += `\n\n❌ Insufficient balance!\nNeeded: ${transferAmountXTZ} WXTZ`;
+          if (balanceXTZ !== null) {
+            content += `\nAvailable: ${balanceXTZ} WXTZ`;
           }
         } else {
           content += `\n\n❌ Insufficient balance! Could not extract transfer amount from transaction data.`;

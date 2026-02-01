@@ -49,8 +49,8 @@ export default function AlphaProductCard({ product }: { product: Product }) {
 
       // --- 3. PREPARE PAYMENT DATA ---
       const usdcPrice = Number(product.price || 0);
-      const safeCroString = (usdcPrice / 100).toFixed(18); // Example conversion logic
-      const valueInWei = ethers.parseEther(safeCroString).toString();
+      const safeWxtzString = (usdcPrice / 100).toFixed(18); // Example conversion logic
+      const valueInWei = ethers.parseEther(safeWxtzString).toString();
       const PROVIDER_ADDRESS = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9";
 
       // --- 4. SIGN PAYMENT INTENT (EIP-712) ---

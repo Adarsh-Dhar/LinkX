@@ -30,7 +30,7 @@ export default function TopBar() {
           <div className="text-right">
             <div className="text-xs text-muted-foreground">Balance</div>
             <div className="text-sm font-semibold">
-              {parseFloat(balance || "0").toFixed(2)} CRO • {parseFloat(usdcBalance || "0").toFixed(2)} USDC
+              {parseFloat(balance || "0").toFixed(4)} WXTZ • {parseFloat(usdcBalance || "0").toFixed(2)} USDC
             </div>
           </div>
           <div className="flex items-center gap-2">

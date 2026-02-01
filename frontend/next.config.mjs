@@ -6,15 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        // CORRECT: Maps '/api/trade/execute' -> 'http://localhost:8000/trade/execute'
-        destination: 'http://localhost:8000/:path*',
-      },
-    ]
-  },
+  // Note: Do not proxy all /api routes. App Router handlers live under app/api.
+  // If you need a proxy, add a narrow rewrite for a specific path instead of /api/:path*.
 }
+
 
 export default nextConfig

@@ -21,7 +21,7 @@ model Trade {
   id              String   @id @default(uuid())
   
   // Token Details
-  tokenIn         String   // e.g. "CRO"
+  tokenIn         String   // e.g. "XTZ"
   tokenOut        String   // e.g. "USDC"
   amountIn        Float    // Raw amount sent
   amountOut       Float    // Raw amount received
@@ -95,8 +95,8 @@ model PortfolioSnapshot {
   timestamp       DateTime @default(now())
   
   totalValueUsd   Float    // Combined value of all assets
-  croBalance      Float
-  usdcBalance     Float
+  wxtzBalance     Float    // WXTZ balance in tokens
+  usdcBalance     Float    // USDC balance in stablecoin
   otherBalance    Float    @default(0)
   
   // Optional: Track Alpha count at this snapshot for historical comparison
@@ -139,4 +139,46 @@ model TradeDecision {
   dataLogId   String
   dataLog     DataLog  @relation(fields: [dataLogId], references: [id])
   decidedAt   DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// 8. AGENT ACTIVITY (Agent Decisions, Node Purchases, Scores)
+// --------------------------------------------------------
+model AgentActivity {
+  id              String   @id @default(uuid())
+  
+  // Activity Type
+  type            String   // "node_purchase", "trade_decision", "utility_score", "signal_received", "risk_skip", "cycle_start", "cycle_end"
+  
+  // Core Data
+  title           String   // e.g. "Purchased Market Microstructure"
+  description     String?  // Detailed message
+  
+  // For Node Purchases
+  nodeId          String?  // Reference to AlphaNode
+  nodePrice       Float?   // Price in USDC
+  nodeQuality     Int?     // Quality score (0-100)
+  
+  // For Utility Scores
+  utilityScore    Float?   // 0.0 to 1.0
+  alphaPerUsdcRatio Float?  // Alpha/USDC score
+  
+  // For Signals
+  signalValue     Float?   // Normalized signal value
+  signalSource    String?  // Which node/API provided it
+  
+  // For Trade Decisions
+  tradeBias       String?  // "BUY", "SELL", "NEUTRAL"
+  tradeConfidence Float?   // 0.0 to 1.0
+  tradeReason     String?  // AI reasoning
+  
+  // For Risk Management
+  riskAction      String?  // "SKIP", "EXECUTE", "HOLD"
+  riskReason      String?  // Why risk management made this decision
+  
+  // Metadata
+  agentThought    String?  // Full strategist thought
+  metadata        String?  // JSON blob for extra context
+  
+  timestamp       DateTime @default(now())
 }

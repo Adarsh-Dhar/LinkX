@@ -4,6 +4,7 @@ import os
 import time
 import asyncio
 import pandas as pd
+import requests
 from datetime import datetime
 from .tools import AlphaStrategist
 
@@ -16,6 +17,19 @@ class PredictiveAgent:
         self.block_data_purchases = False
         self.is_running = False
 
+    async def log_activity(self, activity_data):
+        """Log agent activity to the frontend database."""
+        try:
+            response = requests.post(
+                "http://localhost:3600/api/agent/activity",
+                json=activity_data,
+                timeout=2
+            )
+            if response.status_code != 201:
+                print(f"   ⚠️  [Activity Log] Failed to log activity: {response.status_code}")
+        except Exception as e:
+            print(f"   ⚠️  [Activity Log] Error logging activity: {e}")
+
     async def run_cycle(self):
         """The Cognitive Decision Loop with Real x402 Payment Integration."""
         print(f"\n══════════════════════════════════════════════════════════════")
@@ -24,6 +38,13 @@ class PredictiveAgent:
         if self.paused:
             print("⏸️  AGENT IS PAUSED: Skipping cycle.")
             return
+
+        # Log cycle start
+        await self.log_activity({
+            "type": "cycle_start",
+            "title": "Agent Cycle Started",
+            "description": f"Beginning predictive cycle at {datetime.now().isoformat()}"
+        })
 
         # 1. PERCEPTION: Fetch the Tape from the fixed Pipeline method
         df = await self.pipeline.get_latest_tape()
@@ -45,7 +66,6 @@ class PredictiveAgent:
         }
 
         # 4. FETCH FREE METADATA (Discovery Layer - no payment required)
-        import requests
         try:
             res = requests.get("http://localhost:3600/api/nodes", timeout=5)
             if res.status_code != 200:
@@ -62,6 +82,18 @@ class PredictiveAgent:
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 
+        # Log utility score computation
+        await self.log_activity({
+            "type": "utility_score",
+            "title": f"Utility Score Computed",
+            "description": decision['thought'],
+            "utilityScore": float(decision.get('utility_score', 0)),
+            "alphaPerUsdcRatio": float(decision.get('alpha_per_usdc', 0)),
+            "tradeBias": decision.get('execution_bias', 'NEUTRAL'),
+            "tradeConfidence": float(decision.get('risk_confidence', 0)),
+            "agentThought": decision['thought']
+        })
+
         # 6. SELECTIVE ACTION: Real x402 Payment for High-Confidence Purchases
         intel = {}
         if decision['verdict'] == "PURCHASE_DATA":
@@ -75,6 +107,17 @@ class PredictiveAgent:
                 
                 print(f"   💳 [x402] Initiating real blockchain payment for {target_node['name']}")
                 print(f"      Price: {target_node['price']} USDC | Quality: {target_node['qualityScore']}/100")
+                
+                # Execute REAL USDC transfer to provider
+                # Log node purchase
+                await self.log_activity({
+                    "type": "node_purchase",
+                    "title": f"Purchased {target_node['name']}",
+                    "description": f"Acquired data node at {target_node['price']} USDC",
+                    "nodeId": target_node_id,
+                    "nodePrice": float(target_node['price']),
+                    "nodeQuality": int(target_node.get('qualityScore', 0))
+                })
                 
                 # Execute REAL USDC transfer to provider
                 try:
@@ -99,6 +142,24 @@ class PredictiveAgent:
                         
                         if signal:
                             print(f"   ✅ [Data Feed] Received signal: {signal}")
+
+                            # Log signal received
+                            await self.log_activity({
+                                "type": "signal_received",
+                                "title": f"Signal from {target_node['name']}",
+                                "description": f"Received signal value: {signal}",
+                                "signalValue": float(signal)
+                            })
+
+                            # Update Memory with TTL based on granularity
+                            # Log signal received
+                            await self.log_activity({
+                                "type": "signal_received",
+                                "title": f"Signal from {target_node['name']}",
+                                "description": f"Received signal value: {signal}",
+                                "signalValue": float(signal)
+                            })
+                            
                             # Update Memory with TTL based on granularity
                             granularity = target_node.get('granularity', '5m')
                             self.short_term_memory[target_node_id] = {
@@ -147,6 +208,23 @@ class PredictiveAgent:
         else:
             print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below 0.15 threshold. Holding.")
 
+        # Log risk skip if confidence too low
+        if decision.get('risk_confidence', 0) < 0.15:
+            await self.log_activity({
+                "type": "risk_skip",
+                "title": "Risk Management - Execution Skipped",
+                "description": f"Decision confidence ({decision.get('risk_confidence', 0):.2f}) below threshold",
+                "riskAction": "SKIP",
+                "riskReason": f"Low confidence: {decision.get('risk_confidence', 0):.2f} < 0.15"
+            })
+        
+        # Log cycle end
+        await self.log_activity({
+            "type": "cycle_end",
+            "title": "Agent Cycle Complete",
+            "description": f"Completed cycle with verdict: {decision['verdict']}"
+        })
+
     async def execute_move(self, decision, intel):
         """Execute the final trade on Etherlink using TradingEngine."""
         from .trading_engine import TradingEngine
@@ -158,6 +236,16 @@ class PredictiveAgent:
         if bias == "NEUTRAL" or risk_confidence < 0.15:
             print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence}")
             return
+
+        # Log trade decision
+        await self.log_activity({
+            "type": "trade_decision",
+            "title": f"Trade Decision: {bias}",
+            "description": f"Executing {bias} position with {risk_confidence:.2f} confidence",
+            "tradeBias": bias,
+            "tradeConfidence": float(risk_confidence),
+            "agentThought": decision.get('thought', '')
+        })
 
         print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence} | Basis: {decision['thought'][:50]}...")
         
