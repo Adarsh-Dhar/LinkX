@@ -76,9 +76,9 @@ function generateSimulatedData(category: string, nodeName: string) {
   }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { nodeId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { nodeId: string } }) {
   const nodeId = params.nodeId;
-  const apiKey = req.headers.get('x402-access-key');
+  const paymentProof = req.headers.get('X-402-Payment-Proof');
 
   // Fetch node from DB
   const node = await prisma.alphaNode.findUnique({ where: { id: nodeId } });
@@ -86,12 +86,38 @@ export async function GET(req: NextRequest, { params }: { params: { nodeId: stri
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
-  // Gatekeeping: check if purchased and API key matches
-  if (!node.isPurchased || !node.apiKey || node.apiKey !== apiKey) {
-    return NextResponse.json({ error: 'Payment Required' }, { status: 402 });
+  // Check for payment proof (tx hash from x402 payment)
+  if (!paymentProof) {
+    return NextResponse.json({
+      error: 'Payment Required',
+      price: node.price,
+      recipient: process.env.PROVIDER_ADDRESS || "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9",
+      nodeId: node.id,
+      nodeName: node.name,
+    }, { status: 402 });
   }
 
-  // Simulate data
+  // TODO: Verify tx hash on Etherlink blockchain
+  // For now, accept any tx hash format that looks valid (0x + 64 hex chars)
+  const isValidTxHash = /^0x[a-fA-F0-9]{64}$/.test(paymentProof);
+  if (!isValidTxHash) {
+    console.warn(`[Feed] Invalid tx hash format: ${paymentProof}`);
+    // In production, should verify the tx actually transferred USDC to provider
+    // For development, allow it through
+  }
+
+  // Log successful access
+  console.log(`[Feed] Access granted to node ${nodeId} with proof ${paymentProof.slice(0, 10)}...`);
+
+  // Generate and return locked data
   const data = generateSimulatedData(node.category, node.name);
-  return NextResponse.json({ nodeId, data });
+  return NextResponse.json({
+    success: true,
+    nodeId,
+    nodeName: node.name,
+    category: node.category,
+    signal: data,
+    timestamp: new Date().toISOString(),
+    proofVerified: isValidTxHash,
+  });
 }

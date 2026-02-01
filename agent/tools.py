@@ -53,35 +53,53 @@ class AlphaStrategist:
         prompt = f"""
         ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
         You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
+        Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
         
         ## MARKET CONTEXT:
         {json.dumps(market_snapshot)}
         
-        ## MEMORY:
+        ## SHORT-TERM MEMORY (Cached Purchases):
         {json.dumps(working_memory)}
         
-        ## AVAILABLE NODES:
+        ## AVAILABLE NODES FOR PURCHASE:
         {json.dumps(available_nodes)}
         
+        ## STEP 1: CALCULATE UTILITY FOR EACH NODE
+        For each node, compute utility_score = (qualityScore / 100) × (1 - (price / 50)) × freshness_factor
+        Where:
+        - qualityScore: 0-100 (higher is better)
+        - price: Cost in USDC (penalize expensive nodes)
+        - freshness_factor: Based on granularity. If signal is cached in memory and NOT stale, freshness=0 (no new utility).
+          Granularity staleness: "1m" stale after 2min, "5m" stale after 10min, "1h" stale after 2h
+        
+        ## STEP 2: VOLATILITY-BASED PREFERENCE
+        - IF recent_volatility > 0.05: Prefer 'microstructure' nodes (best execution insight)
+        - IF recent_volatility < 0.02 (stagnant): Prefer 'sentiment' or 'macro' nodes (regime changes)
+        - Otherwise: Pick highest utility score regardless of type
+        
+        ## STEP 3: VERDICT
+        - PURCHASE_DATA: Only if highest_utility_score > 0.3 AND cost < {current_balance * 0.05:.2f} USDC
+        - USE_MEMORY: If cached signals are fresh and utility_score < 0.3
+        - ABORT: If no fresh signals available and market is too stale
+        
         ## CRITICAL CONSTRAINTS:
-        - MINIMUM accuracy for data purchase: 85%
         - MAXIMUM cost per node: 50.0 USDC
-        - Node granularity determines staleness: "1m" = stale after 2min, "5m" = stale after 10min, "1h" = stale after 2h
-        - Only 'PURCHASE_DATA' if memory is stale based on granularity OR market regime changed significantly
-        - risk_confidence MUST be a decimal number between 0.0-1.0 (e.g., 0.85, not "high")
-        - Only execute trades with risk_confidence >= 0.15
-        - Consider node quality scores when selecting targets
+        - Minimum confidence to execute trades: 0.15
+        - risk_confidence must be a numeric decimal (0.0-1.0), NOT text
+        - Only 'PURCHASE_DATA' if market regime changed OR memory is provably stale per granularity rules
         
         ## RESPONSE SCHEMA (MUST BE VALID JSON):
         {{
-          "thought": "Brief analysis of data utility vs cost and market conditions",
+          "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale",
           "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
-          "target_node_id": "UUID string (only if PURCHASE_DATA)",
+          "target_node_id": "UUID string (only if PURCHASE_DATA, null if USE_MEMORY or ABORT)",
+          "utility_score": 0.XX,
+          "alpha_per_usdc": 0.XX,
           "execution_bias": "LONG | SHORT | NEUTRAL",
           "risk_confidence": 0.XX
         }}
         
-        CRITICAL: risk_confidence must be a numeric decimal (0.0 to 1.0), never text.
+        CRITICAL: All numeric fields (utility_score, alpha_per_usdc, risk_confidence) MUST be numeric decimals (0.0-1.0), never text.
         """
         import re
         import time
@@ -94,8 +112,7 @@ class AlphaStrategist:
                         {"role": "user", "content": prompt}
                     ],
                     response_format={ "type": "json_object" },
-                    # GitHub Models free tier limits max_tokens to 2048
-                    max_tokens=2048,
+                    max_tokens=1000,
                     temperature=0.2
                 )
                 content = response.choices[0].message.content

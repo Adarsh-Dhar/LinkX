@@ -18,40 +18,36 @@ const thirdwebX402Facilitator = thirdwebFacilitator({
 
 
 export async function GET(req: Request) {
-  const paymentHeader = req.headers.get('x-payment');
-  // Provide required fields for settlePayment (network, price, etc.)
-  // Use minimum required price to satisfy validation requirements
-  const result = await settlePayment({
-    facilitator: thirdwebX402Facilitator,
-    resourceUrl: 'https://api.example.com/protected-endpoint',
-    method: 'GET',
-    paymentData: paymentHeader || undefined,
-    network: etherlinkShadownet,
-    price: '0.0001', // Minimum amount required by Zod validation (at least 0.0001)
-  });
-  // Check for payment success using the correct property
-  if (result.status !== 200) {
-    return new Response('Payment Required', { status: 402 });
-  }
-  // ...your API logic here (example: fetch nodes)
+  // This endpoint is PUBLIC - Discovery Layer
+  // No x402 payment check. Returns full node metadata for free window-shopping.
   try {
     const nodes = await prisma.alphaNode.findMany({
+      where: { status: 'active' },
       orderBy: { name: 'asc' },
       select: {
         id: true,
         name: true,
+        nodeType: true,
         category: true,
         description: true,
         price: true,
-        // reputation: true,
+        qualityScore: true,
+        latencyMs: true,
+        assetCoverage: true,
+        granularity: true,
+        icon: true,
         status: true,
         isPurchased: true,
-        icon: true,
-        // provider: true,
+        whitelisted: true,
+        historicalWinRate: true,
+        lastPurchaseTime: true,
+        endpointUrl: true,
+        port: true,
       },
     });
     return NextResponse.json(nodes);
   } catch (error) {
+    console.error('Error fetching nodes:', error);
     return NextResponse.json({ error: 'Failed to fetch nodes' }, { status: 500 });
   }
 }

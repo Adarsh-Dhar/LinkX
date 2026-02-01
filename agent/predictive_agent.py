@@ -1,5 +1,6 @@
 
 
+import os
 import time
 import asyncio
 import pandas as pd
@@ -16,7 +17,7 @@ class PredictiveAgent:
         self.is_running = False
 
     async def run_cycle(self):
-        """The Cognitive Decision Loop."""
+        """The Cognitive Decision Loop with Real x402 Payment Integration."""
         print(f"\n══════════════════════════════════════════════════════════════")
         print(f"♟️  PREDICTIVE AGENT CYCLE - {time.strftime('%H:%M:%S')}")
 
@@ -43,40 +44,108 @@ class PredictiveAgent:
             "timestamp": df['timestamp'].iloc[-1]
         }
 
-        # 4. REASONING: Consult GPT-4o-mini via GitHub Models
-        # Pass the short_term_memory so it knows what it already bought
+        # 4. FETCH FREE METADATA (Discovery Layer - no payment required)
+        import requests
+        try:
+            res = requests.get("http://localhost:3600/api/nodes", timeout=5)
+            if res.status_code != 200:
+                print(f"   ⚠️  [Discovery] Failed to fetch node metadata: {res.status_code}")
+                return
+            nodes_metadata = res.json()
+            print(f"   📊 [Discovery] Window-shopped {len(nodes_metadata)} available nodes (FREE)")
+        except Exception as e:
+            print(f"   ❌ [Discovery Error] {e}")
+            return
+
+        # 5. REASONING: Consult GPT-4o-mini via GitHub Models with full node metadata
         decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory)
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
+        print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 
-        # 5. SELECTIVE ACTION: Economic Data Acquisition
+        # 6. SELECTIVE ACTION: Real x402 Payment for High-Confidence Purchases
         intel = {}
         if decision['verdict'] == "PURCHASE_DATA":
-            node_id = decision.get('target_node_id')
-            if node_id:
-                print(f"   💸 [x402] Strategist justified purchase of Node: {node_id}")
-                signal = await self.pipeline.execute_targeted_buy(node_id)
+            target_node_id = decision.get('target_node_id')
+            if target_node_id:
+                # Find target node metadata
+                target_node = next((n for n in nodes_metadata if n.get('id') == target_node_id), None)
+                if not target_node:
+                    print(f"   ❌ [x402] Target node {target_node_id} not found in metadata")
+                    return
                 
-                if signal:
-                    # Update Memory with TTL
-                    self.short_term_memory[node_id] = {
-                        "value": signal,
-                        "timestamp": time.time(),
-                        "at_price": market_snapshot['current_price']
-                    }
-                    intel[node_id] = signal
+                print(f"   💳 [x402] Initiating real blockchain payment for {target_node['name']}")
+                print(f"      Price: {target_node['price']} USDC | Quality: {target_node['qualityScore']}/100")
+                
+                # Execute REAL USDC transfer to provider
+                try:
+                    from .wallet_manager import WalletManager
+                    wallet = WalletManager()
+                    
+                    # Get provider address from env or use default
+                    provider_address = os.getenv("PROVIDER_ADDRESS", "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9")
+                    
+                    # Execute transfer
+                    tx_hash = wallet.transfer_usdc(provider_address, target_node['price'])
+                    
+                    if tx_hash:
+                        print(f"   ✅ [x402] Payment confirmed! TX: {tx_hash}")
+                        
+                        # Use tx_hash as proof header to fetch locked data
+                        signal = await self.pipeline.fetch_with_proof(
+                            target_node['endpointUrl'],
+                            tx_hash,
+                            target_node['id']
+                        )
+                        
+                        if signal:
+                            print(f"   ✅ [Data Feed] Received signal: {signal}")
+                            # Update Memory with TTL based on granularity
+                            granularity = target_node.get('granularity', '5m')
+                            self.short_term_memory[target_node_id] = {
+                                "value": signal,
+                                "timestamp": time.time(),
+                                "at_price": market_snapshot['current_price'],
+                                "granularity": granularity,
+                                "tx_hash": tx_hash
+                            }
+                            intel[target_node_id] = signal
+                        else:
+                            print(f"   ❌ [Data Feed] Failed to retrieve locked data despite payment")
+                    else:
+                        print(f"   ❌ [x402] Payment transfer failed - insufficient funds or network error")
+                
+                except Exception as e:
+                    print(f"   ❌ [x402 Error] {e}")
+                    import traceback
+                    traceback.print_exc()
         
         elif decision['verdict'] == "USE_MEMORY":
-            # Filter memory for data < 5 minutes old
+            # Filter memory for data that is NOT stale based on granularity
             now = time.time()
-            valid_memory = {k: v['value'] for k, v in self.short_term_memory.items() if now - v['timestamp'] < 300}
-            print(f"   🧠 [Memory] Reusing {len(valid_memory)} valid signals. Saving USDC.")
+            valid_memory = {}
+            for node_id, data in self.short_term_memory.items():
+                granularity = data.get('granularity', '5m')
+                age_seconds = now - data['timestamp']
+                
+                # Define staleness thresholds based on granularity
+                staleness_map = {
+                    '1m': 120,    # 2 minutes
+                    '5m': 600,    # 10 minutes
+                    '1h': 7200,   # 2 hours
+                }
+                max_age = staleness_map.get(granularity, 300)  # Default 5 min
+                
+                if age_seconds < max_age:
+                    valid_memory[node_id] = data['value']
+            
+            print(f"   🧠 [Memory] Reusing {len(valid_memory)}/{len(self.short_term_memory)} cached signals. Saving USDC.")
             intel = valid_memory
 
-        # 6. EXECUTION: Only move if confidence is institutional-grade
-        if decision.get('risk_confidence', 0) > 0.1:
+        # 7. EXECUTION: Only move if confidence is institutional-grade
+        if decision.get('risk_confidence', 0) >= 0.15:
             await self.execute_move(decision, intel)
         else:
-            print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0)}) below threshold. Holding.")
+            print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below 0.15 threshold. Holding.")
 
     async def execute_move(self, decision, intel):
         """Execute the final trade on Etherlink using TradingEngine."""

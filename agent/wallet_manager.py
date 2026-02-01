@@ -1,13 +1,18 @@
 # agent/wallet_manager.py
 """
-Stub for WalletManager to resolve import errors.
-Expand with real logic as needed.
+WalletManager for Etherlink with x402 payment integration.
+Supports simulation mode for testing without real blockchain transactions.
 """
+
+import os
+import json
+import uuid
+from datetime import datetime
+from web3 import Web3
+
 
 def get_daily_spend(*args, **kwargs):
     """Return total USDC spent today (persisted in a file)."""
-    import json, os
-    from datetime import datetime
     spend_file = os.path.join(os.path.dirname(__file__), 'daily_spend.json')
     today = datetime.now().strftime('%Y-%m-%d')
     if not os.path.exists(spend_file):
@@ -19,9 +24,9 @@ def get_daily_spend(*args, **kwargs):
     except Exception:
         return 0.0
 
+
 def can_spend(amount, *args, **kwargs):
     """Return True if spending 'amount' will not exceed today's limit."""
-    import os
     max_limit = kwargs.get('max_cost', 500.0)
     # If no limit is set, always allow
     if max_limit is None:
@@ -29,10 +34,9 @@ def can_spend(amount, *args, **kwargs):
     spent = get_daily_spend()
     return (spent + float(amount)) <= max_limit
 
+
 def add_spend(amount):
     """Add amount to today's spend (persisted in a file)."""
-    import json, os
-    from datetime import datetime
     spend_file = os.path.join(os.path.dirname(__file__), 'daily_spend.json')
     today = datetime.now().strftime('%Y-%m-%d')
     data = {}
@@ -47,16 +51,27 @@ def add_spend(amount):
         json.dump(data, f)
 
 
-from web3 import Web3
-import os
-
 class WalletManager:
     def __init__(self, private_key=None, rpc_url=None):
         self.private_key = private_key or os.getenv("WALLET_PRIVATE_KEY")
         self.rpc_url = rpc_url or os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
-        self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
-        self.account = self.w3.eth.account.from_key(self.private_key)
-        self.address = self.account.address
+        self.simulation_mode = os.getenv("SIMULATION_MODE", "false").lower() == "true"
+        
+        if self.simulation_mode:
+            print("⚠️  [WalletManager] SIMULATION_MODE enabled - using mock transactions")
+            self.w3 = None
+            self.account = None
+            self.address = os.getenv("WALLET_ADDRESS", "0x" + "0" * 40)
+        else:
+            self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
+            try:
+                self.account = self.w3.eth.account.from_key(self.private_key)
+                self.address = self.account.address
+                print(f"✅ [WalletManager] Connected to {self.rpc_url}")
+                print(f"   Wallet: {self.address}")
+            except Exception as e:
+                print(f"❌ [WalletManager] Failed to initialize: {e}")
+                raise
 
     def get_balance(self, token_address=None):
         if not token_address:
@@ -74,8 +89,16 @@ class WalletManager:
         return None
 
     def transfer_usdc(self, destination, amount):
-        # Always use the latest deployed USDC address from contract/.env
-        import traceback
+        """Transfer USDC to destination address. In simulation mode, returns mock tx hash."""
+        # Support simulation mode for testing
+        if self.simulation_mode:
+            mock_tx_hash = "0x" + uuid.uuid4().hex[:64]
+            print(f"   💳 [SIMULATION] Mock USDC transfer: {amount} USDC to {destination}")
+            print(f"   📋 [Mock TX] {mock_tx_hash}")
+            add_spend(amount)
+            return mock_tx_hash
+        
+        # Get USDC address from contract/.env
         usdc_address = None
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
         try:
@@ -87,37 +110,69 @@ class WalletManager:
         except Exception as e:
             print(f"[WalletManager] Error reading .env for USDC_ADDRESS: {e}")
             usdc_address = None
+        
         if not usdc_address:
-            usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"  # fallback to latest deployed
-            # Always use the fixed provider address for all nodes
-            if not destination:
-                destination = "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9"
+            usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"  # Fallback to latest deployed
+        
+        if not destination:
+            destination = os.getenv("PROVIDER_ADDRESS", "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9")
+        
+        try:
             erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
             decimals = erc20.functions.decimals().call()
             amt_wei = int(float(amount) * (10 ** decimals))
             nonce = self.w3.eth.get_transaction_count(self.address)
-            # Build a transaction with a high gas limit, but estimate first for safety
+            
+            # Build transaction
             tx_base = erc20.functions.transfer(destination, amt_wei).build_transaction({
                 'from': self.address,
                 'nonce': nonce,
                 'chainId': self.w3.eth.chain_id,
                 'gasPrice': int(self.w3.eth.gas_price * 1.2)
             })
+            
+            # Estimate gas with fallback
             try:
                 estimated_gas = erc20.functions.transfer(destination, amt_wei).estimate_gas({'from': self.address})
                 gas_limit = int(estimated_gas * 1.2)
             except Exception as eg:
                 print(f"[WalletManager] Gas estimation failed, using default 1000000. Error: {eg}")
                 gas_limit = 1000000
+            
             tx_base['gas'] = gas_limit
+            
+            # Sign and send
             signed = self.w3.eth.account.sign_transaction(tx_base, self.private_key)
             tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
             print(f"   💸 [WalletManager] Sent {amount} USDC to {destination}. Tx: {tx_hash.hex()}")
-            self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
+            
+            # Wait for confirmation
+            try:
+                self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
+                print(f"   ✅ [WalletManager] Transaction confirmed")
+            except Exception as e:
+                print(f"   ⚠️  [WalletManager] Transaction may still be pending: {e}")
+            
+            add_spend(amount)
             return tx_hash.hex()
+            
+        except Exception as e:
+            print(f"   ❌ [WalletManager] Transfer failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def get_balance(self, token='USDC'):
         """Get current token balance for the wallet."""
+        # In simulation mode, return mock balances
+        if self.simulation_mode:
+            if token == 'USDC':
+                return 1000.0  # Mock 1000 USDC
+            elif token in ['CRO', 'TCRO', 'native']:
+                return 100.0   # Mock 100 CRO
+            else:
+                return 0.0
+        
         try:
             if token == 'USDC':
                 # Get USDC balance

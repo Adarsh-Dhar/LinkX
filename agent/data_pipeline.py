@@ -2,6 +2,7 @@
 
 
 
+import os
 import requests
 import pandas as pd
 import numpy as np
@@ -9,15 +10,75 @@ from datetime import datetime, timedelta
 from .data_consumer import fetch_node_data
 
 class DataPipeline:
+    def __init__(self, market_manager):
+        self.market = market_manager
+        self.chart_api_url = "http://localhost:3600/api/dashboard/chart"
+        self.nodes_api_url = "http://localhost:3600/api/market/nodes"
+        self.TOOL_CATEGORIES = {}
+        
+        # Simulation mode: skip real x402 payments
+        self.simulation_mode = os.getenv("SIMULATION_MODE", "false").lower() == "true"
+        if self.simulation_mode:
+            print("⚠️  [DataPipeline] SIMULATION_MODE enabled - using mock signals instead of real x402 payments")
+
+    async def fetch_with_proof(self, endpoint_url, tx_hash, node_id):
+        """
+        Fetch locked data from feed endpoint using x402 proof.
+        Sends tx_hash as payment proof in headers.
+        """
+        try:
+            headers = {
+                "X-402-Payment-Proof": tx_hash,
+                "Content-Type": "application/json"
+            }
+            
+            res = requests.post(
+                f"{endpoint_url}/feed",
+                headers=headers,
+                timeout=10
+            )
+            
+            if res.status_code == 200:
+                data = res.json()
+                print(f"   ✅ [x402 Feed] Received data from {endpoint_url}")
+                # Extract signal from response - prefer 'signal' field, fallback to full response
+                signal = data.get('signal', None)
+                if signal is not None:
+                    return signal
+                # Fallback: return the full data object if no signal field
+                return data
+            elif res.status_code == 402:
+                print(f"   ❌ [x402 Feed] Payment proof rejected: {res.text}")
+                return None
+            else:
+                print(f"   ⚠️  [x402 Feed] Unexpected status {res.status_code}: {res.text}")
+                return None
+                
+        except Exception as e:
+            print(f"   ❌ [x402 Feed Error] {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     async def purchase_single_node(self, node_id):
         """
-        Executes real x402 purchase of a single node using fetch_node_data.
-        Fetches node details from database and performs actual blockchain payment.
+        Execute real x402 purchase of a single node.
+        In simulation mode, returns mock signal without blockchain payment.
         """
+        if self.simulation_mode:
+            print(f"[DataPipeline] SIMULATION: Mock purchase of node {node_id}")
+            import asyncio
+            await asyncio.sleep(0.5)  # Simulate network latency
+            return {
+                "signal": 0.72,
+                "node_id": node_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "simulated": True
+            }
+        
         print(f"[DataPipeline] Real purchase of node: {node_id}")
         
         # Fetch node details from database
-        import requests
         import asyncio
         try:
             res = requests.get(f"http://localhost:3600/api/nodes", timeout=5)

@@ -57,26 +57,28 @@ model Trade {
 // --------------------------------------------------------
 
 model AlphaNode {
-  trades          Trade[]     @relation("TradeAlphaNodes")
-  id              String   @id @default(uuid())
-  name            String
-  nodeType        String?   // e.g. "microstructure", "sentiment", "macro"
-  description     String?
-  category        String
-  endpointUrl     String   // e.g. "http://localhost:4001/api/microstructure"
-  port            Int?      // e.g. 4001, 4002, 4003
-  price           Float    @default(0.0)
-  qualityScore    Int      @default(0)
-  latencyMs       Int      @default(0)
-  assetCoverage   String?  // e.g. "WETH/USDC"
-  granularity     String?  // e.g. "5m", "1h" - data freshness
-  icon            String   @default("activity")
-  status          String   @default("active") // "active", "inactive"
-  isPurchased     Boolean  @default(false)
-  whitelisted     Boolean  @default(false)
-  lastUpdated     DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  trades              Trade[]     @relation("TradeAlphaNodes")
+  id                  String   @id @default(uuid())
+  name                String
+  nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
+  description         String?
+  category            String
+  endpointUrl         String   // e.g. "http://localhost:4001/api/microstructure"
+  port                Int?      // e.g. 4001, 4002, 4003
+  price               Float    @default(0.0)
+  qualityScore        Int      @default(0)
+  latencyMs           Int      @default(0)
+  assetCoverage       String?  // e.g. "WETH/USDC"
+  granularity         String?  // e.g. "5m", "1h" - data freshness
+  icon                String   @default("activity")
+  status              String   @default("active") // "active", "inactive"
+  isPurchased         Boolean  @default(false)
+  whitelisted         Boolean  @default(false)
+  historicalWinRate   Float    @default(0.0) // Weighted win rate from linked trades (0-1)
+  lastPurchaseTime    DateTime? // Timestamp of last purchase for staleness checks
+  lastUpdated         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
   // Add more fields as needed for future node types
 }
 
