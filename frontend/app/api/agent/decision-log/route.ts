@@ -8,7 +8,7 @@ export async function GET() {
     take: 50,
     include: {
       trade: true,
-      dataLog: { include: { node: { select: { name: true } } } }
+      dataLog: true
     }
   });
   return NextResponse.json({
@@ -17,8 +17,7 @@ export async function GET() {
       action: l.trade?.strategy || 'N/A',
       token: l.trade?.tokenOut || 'N/A',
       signal: l.dataLog?.normalized ?? l.dataLog?.data,
-      reason: l.trade?.reasoning || '',
-      nodeName: l.dataLog?.node?.name || l.dataLog?.nodeId
+      reason: l.trade?.reasoning || ''
     }))
   });
 }

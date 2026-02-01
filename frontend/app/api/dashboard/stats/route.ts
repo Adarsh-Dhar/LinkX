@@ -24,8 +24,12 @@ export async function GET() {
       },
     });
 
-    // 3. Count Alpha Signals
-    const alphaCount = await prisma.alphaSignal.count();
+    // 3. Count Purchased Alpha Nodes
+    const alphaCount = await prisma.alphaNode.count({
+      where: {
+        isPurchased: true,
+      },
+    });
 
     // 4. Calculate Win Rate
     const totalTrades = tradeStats._count._all;
