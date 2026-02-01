@@ -207,7 +207,7 @@ pragma solidity ^0.8.13;
 
 
 
-// Ultra-minimal VVSPair for deployment testing only
+// Minimal VVSPair with functional reserves/swap (no LP token accounting)
 contract VVSPair is IVVSPair {
     address public factory;
     address public token0;
@@ -215,14 +215,50 @@ contract VVSPair is IVVSPair {
     uint112 private reserve0;
     uint112 private reserve1;
     uint32  private blockTimestampLast;
+
     constructor() { factory = msg.sender; }
-    function initialize(address _token0, address _token1) external { token0 = _token0; token1 = _token1; }
-    function getReserves() public view returns (uint112, uint112, uint32) { return (reserve0, reserve1, blockTimestampLast); }
-    function mint(address) external pure returns (uint) { return 0; }
-    function burn(address) external pure returns (uint, uint) { return (0, 0); }
-    function swap(uint,uint,address,bytes calldata) external pure {}
-    function skim(address) external pure {}
-    function sync() external pure {}
+
+    function initialize(address _token0, address _token1) external {
+        require(msg.sender == factory, "FORBIDDEN");
+        token0 = _token0;
+        token1 = _token1;
+    }
+
+    function getReserves() public view returns (uint112, uint112, uint32) {
+        return (reserve0, reserve1, blockTimestampLast);
+    }
+
+    function _update() internal {
+        reserve0 = uint112(IERC20(token0).balanceOf(address(this)));
+        reserve1 = uint112(IERC20(token1).balanceOf(address(this)));
+        blockTimestampLast = uint32(block.timestamp % 2**32);
+    }
+
+    function mint(address) external returns (uint) {
+        _update();
+        return 1;
+    }
+
+    function burn(address) external returns (uint, uint) {
+        _update();
+        return (0, 0);
+    }
+
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata) external {
+        require(amount0Out > 0 || amount1Out > 0, "INSUFFICIENT_OUTPUT");
+        if (amount0Out > 0) IERC20(token0).transfer(to, amount0Out);
+        if (amount1Out > 0) IERC20(token1).transfer(to, amount1Out);
+        _update();
+    }
+
+    function skim(address) external {
+        _update();
+    }
+
+    function sync() external {
+        _update();
+    }
+
     function permit(address, address, uint, uint, uint8, bytes32, bytes32) external pure override { revert("permit"); }
     function name() public pure returns (string memory) { return ""; }
     function symbol() public pure returns (string memory) { return ""; }

@@ -9,7 +9,15 @@
 from dotenv import load_dotenv
 from pathlib import Path
 from pydantic import BaseModel
-load_dotenv(Path(__file__).parent.parent / '.env.etherlink')
+
+project_root = Path(__file__).parent.parent
+env_etherlink = project_root / '.env.etherlink'
+env_default = project_root / '.env'
+
+if env_etherlink.exists():
+    load_dotenv(env_etherlink)
+else:
+    load_dotenv(env_default)
 
 # Expose optimization graph data for dashboard (must be after app is defined)
 

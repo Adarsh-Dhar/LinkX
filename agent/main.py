@@ -26,11 +26,17 @@ class MarketManager:
 
 class IntelligentAgent:
     def __init__(self):
-        # Always load .env.etherlink from workspace root
+        # Load .env.etherlink if present, otherwise fallback to root .env
         from pathlib import Path
-        env_path = Path(__file__).parent.parent / '.env.etherlink'
         from dotenv import load_dotenv
-        load_dotenv(env_path)
+        project_root = Path(__file__).parent.parent
+        env_etherlink = project_root / '.env.etherlink'
+        env_default = project_root / '.env'
+
+        if env_etherlink.exists():
+            load_dotenv(env_etherlink)
+        elif env_default.exists():
+            load_dotenv(env_default)
         print("🤖 [Main] Initializing Intelligent Agent...")
         # 1. Wallet
         print("DEBUG WALLET_PRIVATE_KEY:", os.getenv("WALLET_PRIVATE_KEY"))
