@@ -2,10 +2,9 @@
   "name": "analyst-node",
   "version": "1.0.0",
   "description": "Analyst Node server with x402-style paywall middleware for alpha insights.",
-  "main": "index.js",
-  "type": "module",
+  "main": "index.cjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.cjs"
   },
   "keywords": [
     "x402",

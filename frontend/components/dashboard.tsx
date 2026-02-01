@@ -68,8 +68,8 @@ export default function Dashboard() {
     // Initial Fetch
     fetchDashboardData();
 
-    // Poll every 10 seconds for live updates
-    const interval = setInterval(fetchDashboardData, 10000);
+    // Poll every 1 minute for live updates
+    const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
   }, []);
 

@@ -15,7 +15,7 @@ class AlphaStrategist:
             api_key=self.token,
         )
         # GitHub Models free tier model with 8,192 token context
-        self.model = "gpt-4o-mini"
+        self.model = "gpt-4o"
 
     def rethink_strategy(self, market_snapshot, working_memory, max_retries=2):
         """
@@ -141,7 +141,7 @@ class AlphaStrategist:
         }
 
     async def route_model(self, phase, prompt, system_prompt=None):
-        # GitHub Models uses single gpt-4o-mini for all phases
+        # GitHub Models uses single gpt-4o for all phases
         # This method maintained for compatibility but simplified
         return await self.get_structured_response(prompt, model=self.model, system_prompt=system_prompt)
 

@@ -10,40 +10,60 @@ import { useEffect, useState, useRef } from "react";
 
 export default function DashboardPage() {
   const [chartData, setChartData] = useState<{ time: string; value: number }[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     let isMounted = true;
+    
     const fetchPrices = async () => {
       try {
-        const [croRes, usdcRes] = await Promise.all([
-          fetch("http://localhost:3050/market/price/CRO"),
-          fetch("http://localhost:3050/market/price/USDC")
-        ]);
-        const croData = await croRes.json();
-        const usdcData = await usdcRes.json();
-        if (!croData.price || !usdcData.price) return;
-        const now = new Date();
-        const timeStr = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-        const ratio = croData.price / usdcData.price;
-        if (isMounted) {
-          setChartData(prev => {
-            const newData = [...prev, { time: timeStr, value: ratio }];
-            if (newData.length > 30) newData.shift();
-            return newData;
-          });
+        const chartRes = await fetch("/api/dashboard/chart");
+        if (chartRes.ok) {
+          const prices = await chartRes.json();
+          if (Array.isArray(prices) && prices.length > 0 && isMounted) {
+            // On first load, populate chart with all historical data
+            if (!isInitialized) {
+              const formattedData = prices
+                .map((p: any) => ({
+                  time: p.time,
+                  value: parseFloat(p.close) || 0.06
+                }))
+                .filter((d: any) => !isNaN(d.value) && typeof d.value === 'number');
+              
+              setChartData(formattedData);
+              setIsInitialized(true);
+            } else {
+              // On subsequent fetches, add one new point
+              const now = new Date();
+              const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+              const latestPrice = prices[prices.length - 1];
+              const value = parseFloat(latestPrice.close) || 0.06;
+              
+              setChartData(prev => {
+                const newData = [...prev, { time: timeStr, value }];
+                if (newData.length > 60) newData.shift();
+                return newData;
+              });
+            }
+          }
         }
       } catch (e) {
-        // Optionally handle error
+        console.error("Failed to fetch price data:", e);
       }
     };
+    
+    // Initial fetch immediately
     fetchPrices();
-    pollingRef.current = setInterval(fetchPrices, 10000); // Poll every 10s
+    
+    // Poll every 1 minute
+    pollingRef.current = setInterval(fetchPrices, 60000);
+    
     return () => {
       isMounted = false;
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, []);
+  }, [isInitialized]);
 
   return (
     <>
@@ -64,8 +84,16 @@ export default function DashboardPage() {
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="time" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => value.toFixed(4)} />
-                  <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333" }} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => typeof value === 'number' && !isNaN(value) ? value.toFixed(4) : '0.0000'} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: "#111", border: "1px solid #333" }}
+                    formatter={(value: any) => {
+                      if (typeof value === 'number' && !isNaN(value)) {
+                        return value.toFixed(6);
+                      }
+                      return '0.000000';
+                    }}
+                  />
                   <Area type="monotone" dataKey="value" stroke="#0ea5e9" fill="url(#colorCROUSDC)" strokeWidth={2} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
