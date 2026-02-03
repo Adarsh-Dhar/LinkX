@@ -12,7 +12,7 @@ const client = createThirdwebClient({
 
 const thirdwebX402Facilitator = thirdwebFacilitator({
   client,
-  serverWalletAddress: process.env.SERVER_WALLET_ADDRESS!,
+  serverWalletAddress: process.env.WALLET_PRIVATE_KEY!,
   waitUntil: 'confirmed',
 });
 

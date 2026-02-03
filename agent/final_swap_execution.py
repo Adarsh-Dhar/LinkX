@@ -258,7 +258,7 @@ print(f"""
 Your trading system is fully configured!
 
 Status:
-  ✅ Agent initialized with gpt-4o
+  ✅ Agent initialized with gpt-4o-mini
   ✅ Trading tools ready (approve, swap, estimate)
   ✅ Testnet balances: {usdc_display:.2f} USDC, {tcro_display:.2f} tCRO
   ✅ Can execute swaps with proper liquidity

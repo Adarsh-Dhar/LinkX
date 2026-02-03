@@ -12,9 +12,9 @@ const ERC20_ABI = [
 
 export async function GET() {
   try {
-    const serverWalletAddress = process.env.SERVER_WALLET_ADDRESS;
+    const serverWalletAddress = process.env.WALLET_PRIVATE_KEY;
     if (!serverWalletAddress) {
-      return NextResponse.json({ error: "SERVER_WALLET_ADDRESS not set" }, { status: 500 });
+      return NextResponse.json({ error: "WALLET_PRIVATE_KEY not set" }, { status: 500 });
     }
 
     const envRpcUrl = process.env.ETHERLINK_RPC_URL || process.env.NEXT_PUBLIC_ETHERLINK_RPC_URL;

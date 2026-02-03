@@ -22,6 +22,21 @@ FACTORY_ADDR = Web3.to_checksum_address(
     (os.getenv("VVS_FACTORY_ADDR") or "0xe97f55c627eD81b53eDD880A9530f0F5Bc76a2f0").strip("'\"")
 )
 
+def build_tx_params(w3, account_address, nonce, gas_limit):
+    params = {
+        'from': account_address,
+        'nonce': nonce,
+        'gas': gas_limit,
+        'chainId': w3.eth.chain_id
+    }
+    try:
+        gas_price = w3.eth.gas_price
+        if gas_price:
+            params['gasPrice'] = int(gas_price * 1.2)
+    except Exception:
+        pass
+    return params
+
 ERC20_ABI = [
     {"constant":False,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"},
     {"constant":True,"inputs":[{"name":"account","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"},
@@ -64,13 +79,9 @@ def main():
     if pair_addr == "0x0000000000000000000000000000000000000000":
         print("Creating pair...")
         nonce = w3.eth.get_transaction_count(account.address)
-        tx = factory.functions.createPair(USDC_ADDR, WXTZ_ADDR).build_transaction({
-            'from': account.address,
-            'nonce': nonce,
-            'gas': 5000000,
-            'gasPrice': int(w3.eth.gas_price * 1.2),
-            'chainId': w3.eth.chain_id
-        })
+        tx = factory.functions.createPair(USDC_ADDR, WXTZ_ADDR).build_transaction(
+            build_tx_params(w3, account.address, nonce, 5000000)
+        )
         signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
         w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
@@ -106,13 +117,9 @@ def main():
     
     # Transfer USDC to pair
     print("📤 Transferring USDC to pair...")
-    tx = usdc.functions.transfer(pair_addr, usdc_amount).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = usdc.functions.transfer(pair_addr, usdc_amount).build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     wait_for_receipt(w3, tx_hash, "USDC transfer")
@@ -121,13 +128,9 @@ def main():
     
     # Transfer TWXTZ to pair
     print("📤 Transferring TWXTZ to pair...")
-    tx = wxtz.functions.transfer(pair_addr, wxtz_amount).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = wxtz.functions.transfer(pair_addr, wxtz_amount).build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     wait_for_receipt(w3, tx_hash, "TWXTZ transfer")
@@ -136,13 +139,9 @@ def main():
     
     # Call mint
     print("⚡ Minting LP tokens...")
-    tx = pair.functions.mint(account.address).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 5000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = pair.functions.mint(account.address).build_transaction(
+        build_tx_params(w3, account.address, nonce, 5000000)
+    )
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     print(f"   TX: {tx_hash.hex()}")
@@ -153,13 +152,9 @@ def main():
     # Sync reserves to reflect balances
     print("🔄 Syncing reserves...")
     nonce += 1
-    sync_tx = pair.functions.sync().build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    sync_tx = pair.functions.sync().build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     signed = w3.eth.account.sign_transaction(sync_tx, private_key=PRIVATE_KEY)
     sync_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     wait_for_receipt(w3, sync_hash, "Sync")

@@ -82,7 +82,7 @@ class PredictiveAgent:
             print(f"   ❌ [Discovery Error] {e}")
             return
 
-        # 5. REASONING: Consult gpt-4o via GitHub Models with full node metadata
+        # 5. REASONING: Consult gpt-4o-mini via GitHub Models with full node metadata
         decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory)
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")

@@ -10,6 +10,24 @@ class TradingEngine:
     def trade(self, *args, **kwargs):
         # Implement trading logic here
         pass
+    def _get_tx_params(self, w3, nonce, gas_limit):
+        """Build transaction parameters with proper gas handling for both legacy and EIP-1559 networks"""
+        tx_params = {
+            'from': self.wallet.address,
+            'nonce': nonce,
+            'gas': gas_limit,
+            'chainId': w3.eth.chain_id
+        }
+        # Try to get gas price - if None, Web3 will estimate it
+        try:
+            gas_price = w3.eth.gas_price
+            if gas_price:
+                tx_params['gasPrice'] = int(gas_price * 1.2)
+        except:
+            # If gas_price fails, don't include it and let Web3 estimate
+            pass
+        return tx_params
+
 
     def execute_swap(self, token_in, token_out, amount_in, max_slippage=5.0):
         try:
@@ -129,13 +147,22 @@ class TradingEngine:
                 if reserve_in == 0 or reserve_out == 0:
                     try:
                         print("   ⚠️ Reserves are zero. Syncing pair...")
-                        sync_tx = pair.functions.sync().build_transaction({
+                        # Build transaction params with proper gas handling
+                        tx_params = {
                             'from': self.wallet.address,
                             'nonce': nonce,
                             'gas': 2000000,
-                            'gasPrice': int(w3.eth.gas_price * 1.2),
                             'chainId': w3.eth.chain_id
-                        })
+                        }
+                        # Handle gas price (legacy) vs maxFeePerGas (EIP-1559)
+                        try:
+                            gas_price = w3.eth.gas_price
+                            if gas_price:
+                                tx_params['gasPrice'] = int(gas_price * 1.2)
+                        except:
+                            pass
+                    
+                        sync_tx = pair.functions.sync().build_transaction(tx_params)
                         signed_sync = w3.eth.account.sign_transaction(sync_tx, private_key=self.wallet.private_key)
                         sync_hash = w3.eth.send_raw_transaction(signed_sync.raw_transaction)
                         w3.eth.wait_for_transaction_receipt(sync_hash, timeout=120)
@@ -170,13 +197,21 @@ class TradingEngine:
                     {"constant":False,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"}
                 ]
                 erc20_transfer = w3.eth.contract(address=token_in_addr, abi=erc20_transfer_abi)
-                transfer_tx = erc20_transfer.functions.transfer(pair_address, amount_in_wei).build_transaction({
+                # Build transaction params with proper gas handling
+                tx_params = {
                     'from': self.wallet.address,
                     'nonce': nonce,
                     'gas': 2000000,
-                    'gasPrice': int(w3.eth.gas_price * 1.2),
                     'chainId': w3.eth.chain_id
-                })
+                }
+                try:
+                    gas_price = w3.eth.gas_price
+                    if gas_price:
+                        tx_params['gasPrice'] = int(gas_price * 1.2)
+                except:
+                    pass
+                
+                transfer_tx = erc20_transfer.functions.transfer(pair_address, amount_in_wei).build_transaction(tx_params)
                 signed_transfer = w3.eth.account.sign_transaction(transfer_tx, private_key=self.wallet.private_key)
                 transfer_hash = w3.eth.send_raw_transaction(signed_transfer.raw_transaction)
                 print(f"   ⏳ Waiting for transfer confirmation (Hash: {transfer_hash.hex()})...")
@@ -185,13 +220,21 @@ class TradingEngine:
 
                 amount0_out = amount_out_min if token_out_addr == token0 else 0
                 amount1_out = amount_out_min if token_out_addr == token1 else 0
-                swap_tx = pair.functions.swap(amount0_out, amount1_out, self.wallet.address, b'').build_transaction({
+                # Build transaction params with proper gas handling
+                tx_params = {
                     'from': self.wallet.address,
                     'nonce': nonce,
                     'gas': 5000000,
-                    'gasPrice': int(w3.eth.gas_price * 1.2),
                     'chainId': w3.eth.chain_id
-                })
+                }
+                try:
+                    gas_price = w3.eth.gas_price
+                    if gas_price:
+                        tx_params['gasPrice'] = int(gas_price * 1.2)
+                except:
+                    pass
+                
+                swap_tx = pair.functions.swap(amount0_out, amount1_out, self.wallet.address, b'').build_transaction(tx_params)
                 signed_swap = w3.eth.account.sign_transaction(swap_tx, private_key=self.wallet.private_key)
                 tx_hash = w3.eth.send_raw_transaction(signed_swap.raw_transaction)
                 print(f"   ⏳ Waiting for Swap confirmation (Hash: {tx_hash.hex()})...")
@@ -215,13 +258,21 @@ class TradingEngine:
             if current_allowance < amount_in_wei:
                 print(f"   Current allowance: {current_allowance}, Approving: {amount_in_wei}")
                 # Approve with unlimited amount for future swaps
-                approve_tx = erc20_contract.functions.approve(router_addr, Web3.to_wei(10000000, 'ether')).build_transaction({
+                # Build transaction params with proper gas handling
+                tx_params = {
                     'from': self.wallet.address,
                     'nonce': nonce,
                     'gas': 2000000,
-                    'gasPrice': int(w3.eth.gas_price * 1.2),
                     'chainId': w3.eth.chain_id
-                })
+                }
+                try:
+                    gas_price = w3.eth.gas_price
+                    if gas_price:
+                        tx_params['gasPrice'] = int(gas_price * 1.2)
+                except:
+                    pass
+                
+                approve_tx = erc20_contract.functions.approve(router_addr, Web3.to_wei(10000000, 'ether')).build_transaction(tx_params)
                 
                 signed_approve = w3.eth.account.sign_transaction(approve_tx, private_key=self.wallet.private_key)
                 approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
@@ -237,13 +288,7 @@ class TradingEngine:
             # Execute swap with calculated minimum output
             swap_tx = router.functions.swapExactTokensForTokens(
                 amount_in_wei, amount_out_min, path, self.wallet.address, deadline
-            ).build_transaction({
-                'from': self.wallet.address,
-                'nonce': nonce,
-                'gas': 5000000,  # Increased to handle network requirements
-                'gasPrice': int(w3.eth.gas_price * 1.2),
-                'chainId': w3.eth.chain_id
-            })
+            ).build_transaction(self._get_tx_params(w3, nonce, 5000000))
             
             signed_tx = w3.eth.account.sign_transaction(swap_tx, private_key=self.wallet.private_key)
             tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)

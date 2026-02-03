@@ -16,6 +16,36 @@ RPC_URL = os.getenv("RPC_URL")
 PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
 USDC_ADDR = os.getenv("USDC_CONTRACT")
 
+def build_tx_params(w3, account_address, nonce, gas_limit):
+    params = {
+        'from': account_address,
+        'nonce': nonce,
+        'gas': gas_limit,
+        'chainId': w3.eth.chain_id
+    }
+    try:
+        gas_price = w3.eth.gas_price
+        if gas_price:
+            params['gasPrice'] = int(gas_price * 1.2)
+    except Exception:
+        pass
+    return params
+
+def build_deploy_tx(w3, account_address, nonce, data, gas_fallback):
+    tx = build_tx_params(w3, account_address, nonce, gas_fallback)
+    tx['data'] = data
+    try:
+        estimated = w3.eth.estimate_gas({
+            'from': account_address,
+            'data': data
+        })
+        # Add 20% buffer
+        tx['gas'] = int(estimated * 1.2)
+    except Exception:
+        # Keep fallback gas if estimation fails
+        pass
+    return tx
+
 def main():
     print("🏗️  Deploying Complete DEX Stack...")
     
@@ -38,14 +68,13 @@ def main():
     from eth_abi import encode
     constructor_args = encode(['address'], [account.address])
     
-    tx = {
-        'from': account.address,
-        'data': factory_artifact['bytecode']['object'] + constructor_args.hex(),
-        'nonce': nonce,
-        'gas': 20000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    }
+    tx = build_deploy_tx(
+        w3,
+        account.address,
+        nonce,
+        factory_artifact['bytecode']['object'] + constructor_args.hex(),
+        30000000
+    )
     
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -65,14 +94,13 @@ def main():
     with open("/Users/adarsh/Documents/alpha-consumer/contract/out/TestWXTZ.sol/TestWXTZ.json") as f:
         wxtz_artifact = json.load(f)
     
-    tx = {
-        'from': account.address,
-        'data': wxtz_artifact['bytecode']['object'],
-        'nonce': nonce,
-        'gas': 20000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    }
+    tx = build_deploy_tx(
+        w3,
+        account.address,
+        nonce,
+        wxtz_artifact['bytecode']['object'],
+        30000000
+    )
     
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -94,14 +122,13 @@ def main():
     # Constructor: address factory__, address WXTZ__
     constructor_args = encode(['address', 'address'], [factory_addr, wxtz_addr])
     
-    tx = {
-        'from': account.address,
-        'data': router_artifact['bytecode']['object'] + constructor_args.hex(),
-        'nonce': nonce,
-        'gas': 20000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    }
+    tx = build_deploy_tx(
+        w3,
+        account.address,
+        nonce,
+        router_artifact['bytecode']['object'] + constructor_args.hex(),
+        60000000
+    )
     
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -120,16 +147,9 @@ def main():
     factory_abi = factory_artifact['abi']
     factory = w3.eth.contract(address=factory_addr, abi=factory_abi)
     
-    tx = factory.functions.createPair(
-        Web3.to_checksum_address(USDC_ADDR),
-        Web3.to_checksum_address(wxtz_addr)
-    ).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 20000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = factory.functions.createPair(USDC_ADDR, wxtz_addr).build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -163,13 +183,9 @@ def main():
     
     # Approve USDC
     print("   🔐 Approving USDC...")
-    tx = usdc.functions.approve(router_addr, usdc_amount * 1000).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = usdc.functions.approve(router_addr, usdc_amount * 1000).build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
@@ -177,13 +193,9 @@ def main():
     
     # Approve TWXTZ
     print("   🔐 Approving TWXTZ...")
-    tx = wxtz.functions.approve(router_addr, wxtz_amount * 1000).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    tx = wxtz.functions.approve(router_addr, wxtz_amount * 1000).build_transaction(
+        build_tx_params(w3, account.address, nonce, 2000000)
+    )
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
@@ -205,13 +217,7 @@ def main():
         wxtz_amount * 90 // 100,
         account.address,
         deadline
-    ).build_transaction({
-        'from': account.address,
-        'nonce': nonce,
-        'gas': 20000000,
-        'gasPrice': int(w3.eth.gas_price * 1.2),
-        'chainId': w3.eth.chain_id
-    })
+    ).build_transaction(build_tx_params(w3, account.address, nonce, 5000000))
     
     signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)

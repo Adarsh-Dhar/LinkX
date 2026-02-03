@@ -7,15 +7,18 @@ from openai import OpenAI
 class AlphaStrategist:
     def __init__(self):
         # GitHub Models API configuration
-        self.token = os.getenv("GITHUB_TOKEN")
-        self.endpoint = "https://models.inference.ai.azure.com"
+        self.token = os.getenv("GITHUB_MODELS_API_KEY") or os.getenv("GITHUB_TOKEN")
+        self.endpoint = os.getenv("GITHUB_MODELS_ENDPOINT", "https://models.inference.ai.azure.com")
+        
+        if not self.token:
+            raise ValueError("GITHUB_MODELS_API_KEY or GITHUB_TOKEN environment variable is required")
         
         self.client = OpenAI(
             base_url=self.endpoint,
             api_key=self.token,
         )
-        # GitHub Models free tier model with 8,192 token context
-        self.model = "gpt-4o"
+        # GitHub Models available models: gpt-4o-mini, claude-3.5-sonnet, deepseek-reasoner
+        self.model = "gpt-4o-mini"
 
     def rethink_strategy(self, market_snapshot, working_memory, max_retries=2):
         """
@@ -141,7 +144,7 @@ class AlphaStrategist:
         }
 
     async def route_model(self, phase, prompt, system_prompt=None):
-        # GitHub Models uses single gpt-4o for all phases
+        # GitHub Models uses single gpt-4o-mini for all phases
         # This method maintained for compatibility but simplified
         return await self.get_structured_response(prompt, model=self.model, system_prompt=system_prompt)
 
