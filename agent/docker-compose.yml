@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  alpha-agent:
+    build: .
+    container_name: alpha_consumer_agent
+    ports:
+      - "8000:8000"
+    environment:
+      # --- USER CONFIGURATION ---
+      # Users put their own wallet key here
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      
+      # --- NETWORK CONFIGURATION ---
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - RPC_URL=https://node.shadownet.etherlink.com
+      
+      # --- CONNECTION TO YOUR SERVER ---
+      # If running locally, use 'host.docker.internal' to reach your laptop
+      # In production, this would be 'https://api.alpha-consumer.com'
+      - TRADING_SIGNALS_URL=http://host.docker.internal:3050
+      
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

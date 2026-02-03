@@ -1,0 +1,18 @@
+# Required for Web3 account management
+eth-account
+# Ensure uvicorn is installed in the virtual environment
+uvicorn
+torch
+numpy
+pandas
+scikit-learn
+aiohttp
+# GitHub Models uses OpenAI-compatible SDK
+openai>=1.0.0
+requests==2.32.4
+web3
+eth-account
+python-dotenv
+fastapi
+uvicorn
+anthropic

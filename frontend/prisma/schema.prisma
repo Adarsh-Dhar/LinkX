@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+
+// --------------------------------------------------------
+// 1. TRADES (Populates: Win Rate, Total P&L, Avg Confidence)
+// --------------------------------------------------------
+model Trade {
+  id              String   @id @default(uuid())
+  
+  // Token Details
+  tokenIn         String   // e.g. "XTZ"
+  tokenOut        String   // e.g. "USDC"
+  amountIn        Float    // Raw amount sent
+  amountOut       Float    // Raw amount received
+  
+  // USD Values (Critical for P&L)
+  priceInUsd      Float    // Price of tokenIn at moment of trade
+  priceOutUsd     Float    // Price of tokenOut at moment of trade
+  valueInUsd      Float    // (amountIn * priceInUsd)
+  valueOutUsd     Float    // (amountOut * priceOutUsd)
+  
+  // Metrics
+  realizedPnL     Float    // (valueOutUsd - valueInUsd) - fees
+  pnlPercentage   Float    // ((valueOutUsd - valueInUsd) / valueInUsd) * 100
+  isWin           Boolean  // True if realizedPnL > 0
+  
+  // AI Data
+  confidence      Float    // 0.0 to 1.0 (Populates "Avg Confidence")
+  strategy        String?  // e.g. "arbitrage", "trend_follow"
+  reasoning       String?  // The "thought" from the AI
+  
+  // Blockchain Info
+  txHash          String   @unique
+  blockNumber     Int?
+  status          String   @default("CONFIRMED") // PENDING, CONFIRMED, FAILED
+  
+  timestamp       DateTime @default(now())
+  alphaNodes      AlphaNode[] @relation("TradeAlphaNodes")
+  tradeDecisions TradeDecision[]
+}
+
+// --------------------------------------------------------
+// 2. ALPHA / SIGNALS (Populates: "Alpha Purchased")
+// --------------------------------------------------------
+
+model AlphaNode {
+  trades              Trade[]     @relation("TradeAlphaNodes")
+  id                  String   @id @default(uuid())
+  name                String
+  nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
+  description         String?
+  category            String
+  endpointUrl         String   // e.g. "http://localhost:4001/api/microstructure"
+  port                Int?      // e.g. 4001, 4002, 4003
+  price               Float    @default(0.0)
+  qualityScore        Int      @default(0)
+  latencyMs           Int      @default(0)
+  assetCoverage       String?  // e.g. "WETH/USDC"
+  granularity         String?  // e.g. "5m", "1h" - data freshness
+  icon                String   @default("activity")
+  status              String   @default("active") // "active", "inactive"
+  isPurchased         Boolean  @default(false)
+  whitelisted         Boolean  @default(false)
+  historicalWinRate   Float    @default(0.0) // Weighted win rate from linked trades (0-1)
+  lastPurchaseTime    DateTime? // Timestamp of last purchase for staleness checks
+  lastUpdated         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  // Add more fields as needed for future node types
+}
+
+/// Example seed data for the three demo nodes:
+/// 1. Microstructure Node: name = "Market Microstructure & Execution", nodeType = "microstructure", endpointUrl = "http://localhost:4001/api/microstructure", port = 4001
+/// 2. Sentiment Node: name = "Alternative Intelligence & Sentiment", nodeType = "sentiment", endpointUrl = "http://localhost:4002/api/sentiment", port = 4002
+/// 3. Macro Node: name = "Supply Chain & Global Macro", nodeType = "macro", endpointUrl = "http://localhost:4003/api/macro", port = 4003
+
+// --------------------------------------------------------
+// 3. EQUITY HISTORY (Populates: "Cumulative Returns" Chart)
+// --------------------------------------------------------
+model PortfolioSnapshot {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  
+  totalValueUsd   Float    // Combined value of all assets
+  wxtzBalance     Float    // WXTZ balance in tokens
+  usdcBalance     Float    // USDC balance in stablecoin
+  otherBalance    Float    @default(0)
+  
+  // Optional: Track Alpha count at this snapshot for historical comparison
+  alphaCount      Int      @default(0)
+}
+
+// --------------------------------------------------------
+// 4. SETTINGS (Populates: "Wallet Balance" / Config)
+// --------------------------------------------------------
+model SystemState {
+  key             String   @id // e.g. "last_sync_block", "wallet_address"
+  value           String
+  updatedAt       DateTime @updatedAt
+}
+
+// --------------------------------------------------------
+// 5. ALPHA MARKET (The 48 Data Providers)
+// --------------------------------------------------------
+// AlphaNode model removed
+
+// --------------------------------------------------------
+// 6. DATA LOG (History of Data Points Fetched)
+// --------------------------------------------------------
+model DataLog {
+  id          String   @id @default(uuid())
+  // nodeId and node relation removed
+  data        String   // Raw data fetched (JSON, text, etc.)
+  normalized  Float?   // Normalized signal value, if applicable
+  fetchedAt   DateTime @default(now())
+  tradeDecisions TradeDecision[]
+}
+
+// --------------------------------------------------------
+// 7. TRADE DECISION (Link Trade to Data Point)
+// --------------------------------------------------------
+model TradeDecision {
+  id          String   @id @default(uuid())
+  tradeId     String
+  trade       Trade    @relation(fields: [tradeId], references: [id])
+  dataLogId   String
+  dataLog     DataLog  @relation(fields: [dataLogId], references: [id])
+  decidedAt   DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// 8. AGENT ACTIVITY (Agent Decisions, Node Purchases, Scores)
+// --------------------------------------------------------
+model AgentActivity {
+  id              String   @id @default(uuid())
+  
+  // Activity Type
+  type            String   // "node_purchase", "trade_decision", "utility_score", "signal_received", "risk_skip", "cycle_start", "cycle_end"
+  
+  // Core Data
+  title           String   // e.g. "Purchased Market Microstructure"
+  description     String?  // Detailed message
+  
+  // For Node Purchases
+  nodeId          String?  // Reference to AlphaNode
+  nodePrice       Float?   // Price in USDC
+  nodeQuality     Int?     // Quality score (0-100)
+  
+  // For Utility Scores
+  utilityScore    Float?   // 0.0 to 1.0
+  alphaPerUsdcRatio Float?  // Alpha/USDC score
+  
+  // For Signals
+  signalValue     Float?   // Normalized signal value
+  signalSource    String?  // Which node/API provided it
+  
+  // For Trade Decisions
+  tradeBias       String?  // "BUY", "SELL", "NEUTRAL"
+  tradeConfidence Float?   // 0.0 to 1.0
+  tradeReason     String?  // AI reasoning
+  
+  // For Risk Management
+  riskAction      String?  // "SKIP", "EXECUTE", "HOLD"
+  riskReason      String?  // Why risk management made this decision
+  
+  // Metadata
+  agentThought    String?  // Full strategist thought
+  metadata        String?  // JSON blob for extra context
+  
+  timestamp       DateTime @default(now())
+}
