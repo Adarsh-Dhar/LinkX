@@ -207,8 +207,21 @@ class PredictiveAgent:
             print(f"   🧠 [Memory] Reusing {len(valid_memory)}/{len(self.short_term_memory)} cached signals. Saving USDC.")
             intel = valid_memory
 
-        # 7. EXECUTION: Only move if confidence is institutional-grade
-        if decision.get('risk_confidence', 0) >= 0.15:
+        # 7. EXECUTION: Allow FORCE_ACTION override from env
+        force_action = os.getenv("FORCE_ACTION", "").strip().upper()
+        if force_action:
+            if force_action in ["BUY", "LONG"]:
+                decision['execution_bias'] = "LONG"
+            elif force_action in ["SELL", "SHORT"]:
+                decision['execution_bias'] = "SHORT"
+            elif force_action in ["HOLD", "NEUTRAL"]:
+                decision['execution_bias'] = "NEUTRAL"
+            decision['risk_confidence'] = 1.0
+            decision['verdict'] = "FORCE_ACTION"
+            print(f"   🧭 [Force Action] Overriding decision with {decision['execution_bias']}")
+
+        # 8. EXECUTION: Only move if confidence is institutional-grade (or forced)
+        if decision.get('risk_confidence', 0) >= 0.15 and decision.get('execution_bias') != "NEUTRAL":
             await self.execute_move(decision, intel)
         else:
             print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below 0.15 threshold. Holding.")
@@ -237,20 +250,24 @@ class PredictiveAgent:
         
         bias = decision.get('execution_bias', 'NEUTRAL')
         risk_confidence = decision.get('risk_confidence', 0)
+        force_action = os.getenv("FORCE_ACTION", "").strip().upper()
+        forced = False
+        if force_action:
+            if force_action in ["BUY", "LONG"]:
+                bias = "LONG"
+                forced = True
+            elif force_action in ["SELL", "SHORT"]:
+                bias = "SHORT"
+                forced = True
+            elif force_action in ["HOLD", "NEUTRAL"]:
+                bias = "NEUTRAL"
+                forced = True
+            if forced:
+                risk_confidence = 1.0
         
-        if bias == "NEUTRAL" or risk_confidence < 0.15:
+        if (bias == "NEUTRAL" or risk_confidence < 0.15) and not forced:
             print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence}")
             return
-
-        # Log trade decision
-        await self.log_activity({
-            "type": "trade_decision",
-            "title": f"Trade Decision: {bias}",
-            "description": f"Executing {bias} position with {risk_confidence:.2f} confidence",
-            "tradeBias": bias,
-            "tradeConfidence": float(risk_confidence),
-            "agentThought": decision.get('thought', '')
-        })
 
         print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence} | Basis: {decision['thought'][:50]}...")
         
@@ -275,6 +292,20 @@ class PredictiveAgent:
                 return None
             
             if bias == "LONG":
+                await self.log_activity({
+                    "type": "trade_decision",
+                    "title": f"Trade Decision: {bias}",
+                    "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {trade_amount:.4f} USDC",
+                    "tradeBias": bias,
+                    "tradeConfidence": float(risk_confidence),
+                    "agentThought": decision.get('thought', ''),
+                    "metadata": {
+                        "tradeAmount": float(trade_amount),
+                        "tokenIn": "USDC",
+                        "tokenOut": "WXTZ",
+                        "forceAction": force_action or None
+                    }
+                })
                 # Execute long position: USDC -> WXTZ
                 tx_hash = engine.execute_swap("USDC", "WXTZ", trade_amount)
                 print(f"   ✅ [LONG Execution] Swapped {trade_amount} USDC -> WXTZ. Hash: {tx_hash}")
@@ -293,6 +324,20 @@ class PredictiveAgent:
                         "riskReason": "Insufficient WXTZ balance"
                     })
                     return None
+                await self.log_activity({
+                    "type": "trade_decision",
+                    "title": f"Trade Decision: {bias}",
+                    "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {short_amount:.4f} WXTZ",
+                    "tradeBias": bias,
+                    "tradeConfidence": float(risk_confidence),
+                    "agentThought": decision.get('thought', ''),
+                    "metadata": {
+                        "tradeAmount": float(short_amount),
+                        "tokenIn": "WXTZ",
+                        "tokenOut": "USDC",
+                        "forceAction": force_action or None
+                    }
+                })
                 tx_hash = engine.execute_swap("WXTZ", "USDC", short_amount)
                 print(f"   ✅ [SHORT Execution] Swapped {short_amount} WXTZ -> USDC. Hash: {tx_hash}")
                 

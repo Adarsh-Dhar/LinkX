@@ -102,19 +102,46 @@ export async function GET() {
         timestamp: node.lastPurchaseTime,
         icon: 'node',
       })),
-      ...agentActivities.map((activity) => ({
-        id: activity.id,
-        type: activity.type,
-        title: activity.title,
-        description: activity.description || activity.agentThought || `${activity.type}: ${activity.title}`,
-        value: activity.utilityScore ?? activity.tradeConfidence ?? activity.nodePrice ?? 0,
-        isPositive: 
-          activity.type === 'node_purchase' || 
-          (activity.type === 'utility_score' && (activity.utilityScore ?? 0) > 0.5) ||
-          (activity.type === 'trade_decision' && activity.tradeBias === 'BUY'),
-        timestamp: activity.timestamp,
-        icon: getAgentActivityIcon(activity.type),
-      })),
+      ...agentActivities.map((activity) => {
+        let metadata: Record<string, any> | null = null;
+        if (activity.metadata) {
+          try {
+            metadata = JSON.parse(activity.metadata);
+          } catch {
+            metadata = null;
+          }
+        }
+
+        const tradeAmount = metadata?.tradeAmount ?? null;
+        const tokenIn = metadata?.tokenIn ?? null;
+        const tokenOut = metadata?.tokenOut ?? null;
+
+        const description = activity.description
+          || (tradeAmount && tokenIn
+            ? `Amount: ${tradeAmount} ${tokenIn}${tokenOut ? ` → ${tokenOut}` : ''}`
+            : activity.agentThought || `${activity.type}: ${activity.title}`);
+
+        const value =
+          activity.nodePrice
+          ?? tradeAmount
+          ?? activity.utilityScore
+          ?? activity.tradeConfidence
+          ?? 0;
+
+        return {
+          id: activity.id,
+          type: activity.type,
+          title: activity.title,
+          description,
+          value,
+          isPositive:
+            activity.type === 'node_purchase' ||
+            (activity.type === 'utility_score' && (activity.utilityScore ?? 0) > 0.5) ||
+            (activity.type === 'trade_decision' && (activity.tradeBias === 'BUY' || activity.tradeBias === 'LONG')),
+          timestamp: activity.timestamp,
+          icon: getAgentActivityIcon(activity.type),
+        };
+      }),
       ...priceMovements.map((movement, index) => ({
         id: `price_${index}`,
         type: 'price_movement',
