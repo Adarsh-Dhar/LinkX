@@ -264,26 +264,34 @@ class PredictiveAgent:
         
         bias = decision.get('execution_bias', 'NEUTRAL')
         risk_confidence = decision.get('risk_confidence', 0)
+        
+        # Check for forced action (prioritize instance variable over env)
         force_action = os.getenv("FORCE_ACTION", "").strip().upper()
+        active_override = self.forced_bias or force_action
         forced = False
-        if force_action:
-            if force_action in ["BUY", "LONG"]:
+        
+        if active_override:
+            if active_override in ["BUY", "LONG"]:
                 bias = "LONG"
                 forced = True
-            elif force_action in ["SELL", "SHORT"]:
+            elif active_override in ["SELL", "SHORT"]:
                 bias = "SHORT"
                 forced = True
-            elif force_action in ["HOLD", "NEUTRAL"]:
+            elif active_override in ["HOLD", "NEUTRAL"]:
                 bias = "NEUTRAL"
                 forced = True
             if forced:
                 risk_confidence = 1.0
+                override_source = "Instance Override" if self.forced_bias else "ENV Override"
+                print(f"   🧭 [{override_source}] Forcing {bias} in execute_move")
         
-        if (bias == "NEUTRAL" or risk_confidence < 0.15) and not forced:
-            print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence}")
+        # Apply dynamic risk threshold instead of hardcoded 0.15
+        if (bias == "NEUTRAL" or risk_confidence < self.risk_threshold) and not forced:
+            print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence:.2f} < threshold={self.risk_threshold:.2f}")
             return
 
-        print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence} | Basis: {decision['thought'][:50]}...")
+        print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence:.2f} | Threshold: {self.risk_threshold:.2f}")
+        print(f"   💭 [Basis] {decision['thought'][:80]}...")
         
         try:
             # Initialize trading engine with shared wallet
@@ -317,12 +325,21 @@ class PredictiveAgent:
                         "tradeAmount": float(trade_amount),
                         "tokenIn": "USDC",
                         "tokenOut": "WXTZ",
-                        "forceAction": force_action or None
+                        "forceAction": active_override or None,
+                        "humanOverride": {
+                            "risk_threshold": self.risk_threshold,
+                            "forced_bias": self.forced_bias
+                        }
                     }
                 })
                 # Execute long position: USDC -> WXTZ
                 tx_hash = engine.execute_swap("USDC", "WXTZ", trade_amount)
-                print(f"   ✅ [LONG Execution] Swapped {trade_amount} USDC -> WXTZ. Hash: {tx_hash}")
+                if tx_hash:
+                    print(f"   ✅ [LONG Execution] Swapped {trade_amount:.4f} USDC -> WXTZ")
+                    print(f"   📋 [Tx Hash] {tx_hash}")
+                else:
+                    print(f"   ❌ [LONG Execution Failed] Swap returned None")
+                return tx_hash
             elif bias == "SHORT":
                 # Execute short position: WXTZ -> USDC (if we have WXTZ)
                 # For now, use a smaller amount for short positions
@@ -349,11 +366,20 @@ class PredictiveAgent:
                         "tradeAmount": float(short_amount),
                         "tokenIn": "WXTZ",
                         "tokenOut": "USDC",
-                        "forceAction": force_action or None
+                        "forceAction": active_override or None,
+                        "humanOverride": {
+                            "risk_threshold": self.risk_threshold,
+                            "forced_bias": self.forced_bias
+                        }
                     }
                 })
                 tx_hash = engine.execute_swap("WXTZ", "USDC", short_amount)
-                print(f"   ✅ [SHORT Execution] Swapped {short_amount} WXTZ -> USDC. Hash: {tx_hash}")
+                if tx_hash:
+                    print(f"   ✅ [SHORT Execution] Swapped {short_amount:.4f} WXTZ -> USDC")
+                    print(f"   📋 [Tx Hash] {tx_hash}")
+                else:
+                    print(f"   ❌ [SHORT Execution Failed] Swap returned None")
+                return tx_hash
                 
             return tx_hash
             
