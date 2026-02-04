@@ -130,28 +130,15 @@ async def apply_override(data: dict):
     pred_agent = getattr(agent_instance, 'current_predictive_instance', None)
     if not pred_agent:
         return {"status": "error", "message": "Agent not initialized yet"}
-    
-    # Apply risk threshold override
-    if "risk" in data:
-        try:
-            new_threshold = float(data["risk"])
-            if 0.0 <= new_threshold <= 1.0:
-                pred_agent.risk_threshold = new_threshold
-            else:
-                return {"status": "error", "message": "Risk threshold must be between 0.0 and 1.0"}
-        except ValueError:
-            return {"status": "error", "message": "Invalid risk value"}
-    
-    # Apply directional bias override
-    if "bias" in data:
-        bias_value = data["bias"].strip().upper()
-        if bias_value in ["LONG", "SHORT", "NEUTRAL"]:
-            pred_agent.forced_bias = bias_value
-        elif bias_value == "NONE":
-            pred_agent.forced_bias = None  # Clear override
-        else:
-            return {"status": "error", "message": "Bias must be LONG, SHORT, NEUTRAL, or NONE"}
-    
+
+    # Use the agent's method for real-time override
+    risk = data.get("risk")
+    bias = data.get("bias")
+    try:
+        pred_agent.apply_human_interference(risk=risk, bias=bias)
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to apply override: {e}"}
+
     return {
         "status": "Override Applied Successfully",
         "current_config": {

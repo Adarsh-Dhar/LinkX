@@ -20,7 +20,7 @@ class AlphaStrategist:
         # GitHub Models available models: gpt-4o-mini, claude-3.5-sonnet, deepseek-reasoner
         self.model = "gpt-4o-mini"
 
-    def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
+        def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
         """
         Cognitive reasoning step using gpt-4o-mini via GitHub Models.
         Returns a JSON decision object with utility scores.
@@ -57,69 +57,71 @@ class AlphaStrategist:
         except:
             # Fallback if API is not available
             available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
-            
-        prompt = f"""
-        ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-        You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
-        Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
         
-        ## FUND MANAGER COMMANDS (HIGH PRIORITY - NON-NEGOTIABLE):
-        - MANDATED DIRECTIONAL BIAS: {rules.get('forced_bias') or 'None (AI Discretion Authorized)'}
-        - CONFIDENCE FLOOR REQUIREMENT: {rules.get('risk_threshold'):.2f}
-        
-        ## OPERATIONAL CONSTRAINTS:
-        1. If Mandated Bias is 'SHORT', you are FORBIDDEN from suggesting 'LONG'. Vice versa.
-        2. If Mandated Bias is 'NEUTRAL', do NOT execute trades regardless of signals.
-        3. Your risk_confidence MUST meet or exceed the Confidence Floor to authorize execution.
-        4. If Mandated Bias is 'None', use your experienced trader intuition to determine execution_bias.
-        5. The Fund Manager's directives override all market signals and technical analysis.
-        
-        ## MARKET CONTEXT:
-        {json.dumps(market_snapshot)}
-        
-        ## SHORT-TERM MEMORY (Cached Purchases):
-        {json.dumps(working_memory)}
-        
-        ## AVAILABLE NODES FOR PURCHASE:
-        {json.dumps(available_nodes)}
-        
-        ## STEP 1: CALCULATE UTILITY FOR EACH NODE
-        For each node, compute utility_score = (qualityScore / 100) × (1 - (price / 50)) × freshness_factor
-        Where:
-        - qualityScore: 0-100 (higher is better)
-        - price: Cost in USDC (penalize expensive nodes)
-        - freshness_factor: Based on granularity. If signal is cached in memory and NOT stale, freshness=0 (no new utility).
-          Granularity staleness: "1m" stale after 2min, "5m" stale after 10min, "1h" stale after 2h
-        
-        ## STEP 2: VOLATILITY-BASED PREFERENCE
-        - IF recent_volatility > 0.05: Prefer 'microstructure' nodes (best execution insight)
-        - IF recent_volatility < 0.02 (stagnant): Prefer 'sentiment' or 'macro' nodes (regime changes)
-        - Otherwise: Pick highest utility score regardless of type
-        
-        ## STEP 3: VERDICT
-        - PURCHASE_DATA: Only if highest_utility_score > 0.3 AND cost < {current_balance * 0.05:.2f} USDC
-        - USE_MEMORY: If cached signals are fresh and utility_score < 0.3
-        - ABORT: If no fresh signals available and market is too stale
-        
-        ## CRITICAL CONSTRAINTS:
-        - MAXIMUM cost per node: 50.0 USDC
-        - Minimum confidence to execute trades: 0.15
-        - risk_confidence must be a numeric decimal (0.0-1.0), NOT text
-        - Only 'PURCHASE_DATA' if market regime changed OR memory is provably stale per granularity rules
-        
-        ## RESPONSE SCHEMA (MUST BE VALID JSON):
-        {{
-          "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale",
-          "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
-          "target_node_id": "UUID string (only if PURCHASE_DATA, null if USE_MEMORY or ABORT)",
-          "utility_score": 0.XX,
-          "alpha_per_usdc": 0.XX,
-          "execution_bias": "LONG | SHORT | NEUTRAL",
-          "risk_confidence": 0.XX
-        }}
-        
-        CRITICAL: All numeric fields (utility_score, alpha_per_usdc, risk_confidence) MUST be numeric decimals (0.0-1.0), never text.
-        """
+                prompt = f"""
+                ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
+                You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
+                Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
+
+                ## FUND MANAGER OVERRIDES (HIGHEST PRIORITY)
+                - If 'forced_bias' is set to SHORT, you are FORBIDDEN from choosing LONG, even if technicals are bullish.
+                - If 'forced_bias' is set to LONG, you are FORBIDDEN from choosing SHORT, even if technicals are bearish.
+                - If 'forced_bias' is set to NEUTRAL, you must NOT execute any trades, regardless of signals.
+                - If 'forced_bias' is None, use your own logic.
+                - The Fund Manager's overrides supersede all other logic, technicals, or signals.
+                - The minimum confidence required to execute is {rules.get('risk_threshold'):.2f}.
+                - These overrides are non-negotiable and must be enforced above all else.
+
+                ## CURRENT OVERRIDES:
+                - forced_bias: {rules.get('forced_bias') or 'None (AI Discretion Authorized)'}
+                - risk_threshold: {rules.get('risk_threshold'):.2f}
+
+                ## MARKET CONTEXT:
+                {json.dumps(market_snapshot)}
+
+                ## SHORT-TERM MEMORY (Cached Purchases):
+                {json.dumps(working_memory)}
+
+                ## AVAILABLE NODES FOR PURCHASE:
+                {json.dumps(available_nodes)}
+
+                ## STEP 1: CALCULATE UTILITY FOR EACH NODE
+                For each node, compute utility_score = (qualityScore / 100) × (1 - (price / 50)) × freshness_factor
+                Where:
+                - qualityScore: 0-100 (higher is better)
+                - price: Cost in USDC (penalize expensive nodes)
+                - freshness_factor: Based on granularity. If signal is cached in memory and NOT stale, freshness=0 (no new utility).
+                    Granularity staleness: "1m" stale after 2min, "5m" stale after 10min, "1h" stale after 2h
+
+                ## STEP 2: VOLATILITY-BASED PREFERENCE
+                - IF recent_volatility > 0.05: Prefer 'microstructure' nodes (best execution insight)
+                - IF recent_volatility < 0.02 (stagnant): Prefer 'sentiment' or 'macro' nodes (regime changes)
+                - Otherwise: Pick highest utility score regardless of type
+
+                ## STEP 3: VERDICT
+                - PURCHASE_DATA: Only if highest_utility_score > 0.3 AND cost < {current_balance * 0.05:.2f} USDC
+                - USE_MEMORY: If cached signals are fresh and utility_score < 0.3
+                - ABORT: If no fresh signals available and market is too stale
+
+                ## CRITICAL CONSTRAINTS:
+                - MAXIMUM cost per node: 50.0 USDC
+                - Minimum confidence to execute trades: 0.15
+                - risk_confidence must be a numeric decimal (0.0-1.0), NOT text
+                - Only 'PURCHASE_DATA' if market regime changed OR memory is provably stale per granularity rules
+
+                ## RESPONSE SCHEMA (MUST BE VALID JSON):
+                {{
+                    "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale",
+                    "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
+                    "target_node_id": "UUID string (only if PURCHASE_DATA, null if USE_MEMORY or ABORT)",
+                    "utility_score": 0.XX,
+                    "alpha_per_usdc": 0.XX,
+                    "execution_bias": "LONG | SHORT | NEUTRAL",
+                    "risk_confidence": 0.XX
+                }}
+
+                CRITICAL: All numeric fields (utility_score, alpha_per_usdc, risk_confidence) MUST be numeric decimals (0.0-1.0), never text.
+                """
         import re
         import time
         for attempt in range(max_retries + 1):

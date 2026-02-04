@@ -20,6 +20,15 @@ class PredictiveAgent:
         self.risk_threshold = 0.15  # Default institutional-grade threshold
         self.forced_bias = None  # Can be "LONG", "SHORT", "NEUTRAL", or None for AI discretion
 
+    def apply_human_interference(self, risk: float = None, bias: str = None):
+        """Inject human overrides into the agent's state in real time."""
+        if risk is not None:
+            print(f"[C2] Human override: Setting risk_threshold to {risk}")
+            self.risk_threshold = float(risk)
+        if bias is not None:
+            print(f"[C2] Human override: Setting forced_bias to {bias}")
+            self.forced_bias = bias.upper() if bias else None
+
     async def log_activity(self, activity_data):
         """Log agent activity to the frontend database."""
         try:
