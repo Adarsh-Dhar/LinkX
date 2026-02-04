@@ -118,6 +118,49 @@ class ChatRequest(BaseModel):
 # --- INTENT-DRIVEN CHAT ENDPOINT (GitHub Models) ---
 
 # --- GEMINI-LIKE INTENT-DRIVEN CHAT ENDPOINT ---
+@app.post("/agent/control/override")
+async def apply_override(data: dict):
+    """
+    Real-time Human Override Endpoint
+    Expected JSON: {"risk": 0.5, "bias": "SHORT"}
+    Bias values: "LONG", "SHORT", "NEUTRAL", or "NONE" (clears override)
+    Risk values: 0.0 - 1.0 (confidence threshold)
+    """
+    global agent_instance
+    pred_agent = getattr(agent_instance, 'current_predictive_instance', None)
+    if not pred_agent:
+        return {"status": "error", "message": "Agent not initialized yet"}
+    
+    # Apply risk threshold override
+    if "risk" in data:
+        try:
+            new_threshold = float(data["risk"])
+            if 0.0 <= new_threshold <= 1.0:
+                pred_agent.risk_threshold = new_threshold
+            else:
+                return {"status": "error", "message": "Risk threshold must be between 0.0 and 1.0"}
+        except ValueError:
+            return {"status": "error", "message": "Invalid risk value"}
+    
+    # Apply directional bias override
+    if "bias" in data:
+        bias_value = data["bias"].strip().upper()
+        if bias_value in ["LONG", "SHORT", "NEUTRAL"]:
+            pred_agent.forced_bias = bias_value
+        elif bias_value == "NONE":
+            pred_agent.forced_bias = None  # Clear override
+        else:
+            return {"status": "error", "message": "Bias must be LONG, SHORT, NEUTRAL, or NONE"}
+    
+    return {
+        "status": "Override Applied Successfully",
+        "current_config": {
+            "risk_threshold": pred_agent.risk_threshold,
+            "forced_bias": pred_agent.forced_bias or "AI Discretion",
+            "paused": pred_agent.paused
+        }
+    }
+
 @app.post("/chat")
 async def handle_chat(request: ChatRequest):
     global agent_instance

@@ -16,6 +16,9 @@ class PredictiveAgent:
         self.paused = False
         self.block_data_purchases = False
         self.is_running = False
+        # --- HUMAN OVERRIDE STATE ---
+        self.risk_threshold = 0.15  # Default institutional-grade threshold
+        self.forced_bias = None  # Can be "LONG", "SHORT", "NEUTRAL", or None for AI discretion
 
     async def log_activity(self, activity_data):
         """Log agent activity to the frontend database."""
@@ -83,7 +86,14 @@ class PredictiveAgent:
             return
 
         # 5. REASONING: Consult gpt-4o-mini via GitHub Models with full node metadata
-        decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory)
+        # Package Human Override Rules for LLM
+        human_rules = {
+            "risk_threshold": self.risk_threshold,
+            "forced_bias": self.forced_bias
+        }
+        print(f"   🧠 [Reasoning] Consulting AlphaStrategist with {len(nodes_metadata)} nodes...")
+        print(f"   🎯 [Human Override] Threshold: {self.risk_threshold:.2f} | Bias: {self.forced_bias or 'AI Discretion'}")
+        decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory, human_rules=human_rules)
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 
@@ -207,27 +217,31 @@ class PredictiveAgent:
             print(f"   🧠 [Memory] Reusing {len(valid_memory)}/{len(self.short_term_memory)} cached signals. Saving USDC.")
             intel = valid_memory
 
-        # 7. EXECUTION: Allow FORCE_ACTION override from env
+        # 7. EXECUTION: Apply Human Override (dynamic instance variables + backward compatible env)
+        # Check environment variable for backward compatibility
         force_action = os.getenv("FORCE_ACTION", "").strip().upper()
-        if force_action:
-            if force_action in ["BUY", "LONG"]:
+        if force_action or self.forced_bias:
+            # Prioritize instance variable over env
+            active_bias = self.forced_bias if self.forced_bias else force_action
+            if active_bias in ["BUY", "LONG"]:
                 decision['execution_bias'] = "LONG"
-            elif force_action in ["SELL", "SHORT"]:
+            elif active_bias in ["SELL", "SHORT"]:
                 decision['execution_bias'] = "SHORT"
-            elif force_action in ["HOLD", "NEUTRAL"]:
+            elif active_bias in ["HOLD", "NEUTRAL"]:
                 decision['execution_bias'] = "NEUTRAL"
             decision['risk_confidence'] = 1.0
             decision['verdict'] = "FORCE_ACTION"
-            print(f"   🧭 [Force Action] Overriding decision with {decision['execution_bias']}")
+            override_source = "Instance Override" if self.forced_bias else "ENV Override"
+            print(f"   🧭 [{override_source}] Forcing {decision['execution_bias']} bias")
 
-        # 8. EXECUTION: Only move if confidence is institutional-grade (or forced)
-        if decision.get('risk_confidence', 0) >= 0.15 and decision.get('execution_bias') != "NEUTRAL":
+        # 8. EXECUTION: Only move if confidence meets dynamic threshold (or forced)
+        if decision.get('risk_confidence', 0) >= self.risk_threshold and decision.get('execution_bias') != "NEUTRAL":
             await self.execute_move(decision, intel)
         else:
-            print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below 0.15 threshold. Holding.")
+            print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below {self.risk_threshold:.2f} threshold. Holding.")
 
         # Log risk skip if confidence too low
-        if decision.get('risk_confidence', 0) < 0.15:
+        if decision.get('risk_confidence', 0) < self.risk_threshold:
             await self.log_activity({
                 "type": "risk_skip",
                 "title": "Risk Management - Execution Skipped",

@@ -20,11 +20,16 @@ class AlphaStrategist:
         # GitHub Models available models: gpt-4o-mini, claude-3.5-sonnet, deepseek-reasoner
         self.model = "gpt-4o-mini"
 
-    def rethink_strategy(self, market_snapshot, working_memory, max_retries=2):
+    def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
         """
-        Cognitive reasoning step using DeepSeek R1T2 Chimera.
-        Now includes granularity information from database.
+        Cognitive reasoning step using gpt-4o-mini via GitHub Models.
+        Returns a JSON decision object with utility scores.
+        Accepts human_rules dict with risk_threshold and forced_bias for prompt injection.
         """
+        import json
+        # Default rules if none provided
+        rules = human_rules or {"risk_threshold": 0.15, "forced_bias": None}
+        
         # Get current balance for context
         try:
             from .wallet_manager import WalletManager
@@ -57,6 +62,17 @@ class AlphaStrategist:
         ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
         You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
         Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
+        
+        ## FUND MANAGER COMMANDS (HIGH PRIORITY - NON-NEGOTIABLE):
+        - MANDATED DIRECTIONAL BIAS: {rules.get('forced_bias') or 'None (AI Discretion Authorized)'}
+        - CONFIDENCE FLOOR REQUIREMENT: {rules.get('risk_threshold'):.2f}
+        
+        ## OPERATIONAL CONSTRAINTS:
+        1. If Mandated Bias is 'SHORT', you are FORBIDDEN from suggesting 'LONG'. Vice versa.
+        2. If Mandated Bias is 'NEUTRAL', do NOT execute trades regardless of signals.
+        3. Your risk_confidence MUST meet or exceed the Confidence Floor to authorize execution.
+        4. If Mandated Bias is 'None', use your experienced trader intuition to determine execution_bias.
+        5. The Fund Manager's directives override all market signals and technical analysis.
         
         ## MARKET CONTEXT:
         {json.dumps(market_snapshot)}
