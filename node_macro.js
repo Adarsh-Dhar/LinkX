@@ -3,7 +3,7 @@
 // Monitors large-scale economic and physical world data that impacts long-term asset valuations.
 
 const express = require('express');
-const { x402Middleware, getRandom } = require('./shared_logic');
+const { x402Middleware, getRandom, TREASURY_WALLET, registerNode } = require('./shared_logic');
 const app = express();
 app.use(express.json());
 
@@ -64,5 +64,20 @@ app.post('/api/macro/feed', (req, res) => {
         }
     });
 });
+
+// Register with marketplace on startup
+registerNode({
+    name: 'Supply Chain & Global Macro',
+    nodeType: 'macro',
+    category: 'Fundamental',
+    endpointUrl: 'http://localhost:4003/api/macro',
+    port: 4003,
+    price: 0.65,
+    qualityScore: 92,
+    description: 'Monitors large-scale economic and physical world data including supply chain health, port congestion, energy grid stability, CPI expectations, and central bank biases for fundamental research.',
+    providerAddress: TREASURY_WALLET,
+    assetCoverage: 'WXTZ/USDC',
+    granularity: '1h'
+}).catch(err => console.error('Registration error:', err));
 
 app.listen(4003, () => console.log("🚀 Global Macro Node online on :4003"));

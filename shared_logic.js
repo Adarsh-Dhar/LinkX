@@ -41,4 +41,70 @@ const x402Middleware = (price) => (req, res, next) => {
     next();
 };
 
-module.exports = { x402Middleware, getRandom, ASSET_TICKER };
+/**
+ * Register node with the marketplace
+ * Allows nodes to self-announce on startup
+ * 
+ * @param {Object} config - Node configuration
+ * @param {string} config.name - Node name
+ * @param {string} config.nodeType - Type (e.g., 'sentiment', 'macro', 'microstructure')
+ * @param {string} config.category - Category (e.g., 'Technical', 'Sentiment')
+ * @param {string} config.endpointUrl - Full endpoint URL
+ * @param {number} config.port - Port number
+ * @param {number} config.price - Price per request in USDC
+ * @param {number} config.qualityScore - Quality score (0-100)
+ * @param {string} config.description - Node description
+ * @param {string} config.providerAddress - Wallet address for x402 payments
+ * @param {string} config.assetCoverage - Asset pair (e.g., 'WXTZ/USDC')
+ * @param {string} config.granularity - Data granularity (e.g., '1m', '5m')
+ * @returns {Promise<Object>} Registration response
+ */
+async function registerNode(config) {
+    const axios = require('axios');
+    const registrationUrl = 'http://localhost:3600/api/nodes/register';
+    
+    try {
+        console.log(`📡 Registering node: ${config.name}...`);
+        
+        const response = await axios.post(registrationUrl, {
+            name: config.name,
+            nodeType: config.nodeType,
+            category: config.category,
+            endpointUrl: config.endpointUrl,
+            port: config.port,
+            price: config.price,
+            qualityScore: config.qualityScore,
+            description: config.description,
+            providerAddress: config.providerAddress,
+            assetCoverage: config.assetCoverage,
+            granularity: config.granularity,
+            apiVersion: '1.0'
+        });
+        
+        console.log(`✅ Node registered successfully!`);
+        console.log(`   ID: ${response.data.nodeId}`);
+        console.log(`   Endpoint: ${config.endpointUrl}`);
+        console.log(`   Provider Wallet: ${config.providerAddress}`);
+        console.log(`   Price: ${config.price} USDC per request`);
+        
+        return response.data;
+    } catch (error) {
+        // Handle registration errors gracefully - node can still function
+        if (error.response) {
+            console.error(`❌ Registration failed: ${error.response.status} - ${error.response.data.error}`);
+            if (error.response.data.details) {
+                console.error(`   Details: ${error.response.data.details}`);
+            }
+        } else if (error.request) {
+            console.error(`❌ Registration failed: Cannot reach marketplace at ${registrationUrl}`);
+            console.error(`   Make sure the frontend is running on port 3600`);
+        } else {
+            console.error(`❌ Registration failed: ${error.message}`);
+        }
+        
+        console.log(`⚠️  Node will continue running without marketplace registration`);
+        return null;
+    }
+}
+
+module.exports = { x402Middleware, getRandom, ASSET_TICKER, TREASURY_WALLET, registerNode };

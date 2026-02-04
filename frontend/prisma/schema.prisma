@@ -63,7 +63,7 @@ model AlphaNode {
   nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
   description         String?
   category            String
-  endpointUrl         String   // e.g. "http://localhost:4001/api/microstructure"
+  endpointUrl         String   @unique // e.g. "http://localhost:4001/api/microstructure"
   port                Int?      // e.g. 4001, 4002, 4003
   price               Float    @default(0.0)
   qualityScore        Int      @default(0)
@@ -79,6 +79,16 @@ model AlphaNode {
   lastUpdated         DateTime @default(now())
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  
+  // Registration handshake fields
+  providerAddress     String?   // Wallet address that receives x402 payments
+  registeredAt        DateTime? // Timestamp of initial registration
+  registrationStatus  String   @default("pending") // "pending", "verified", "rejected"
+  apiVersion          String?  @default("1.0") // API version for compatibility checks
+  healthCheckUrl      String?  // Optional health monitoring endpoint
+  lastHealthCheck     DateTime? // Last successful health check
+  healthStatus        String   @default("unknown") // "healthy", "degraded", "down", "unknown"
+  
   // Add more fields as needed for future node types
 }
 

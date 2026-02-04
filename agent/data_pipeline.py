@@ -90,18 +90,34 @@ class DataPipeline:
                     print(f"   ❌ Node {node_id} not found in database")
                     return None
                 
-                # Execute fetch_node_data in executor to avoid blocking event loop
-                def sync_fetch():
-                    return fetch_node_data(
-                        node_url=target_node.get('endpointUrl'),
-                        api_key=target_node.get('apiKey'),
-                        price=target_node.get('price'),
-                        category=target_node.get('category')
-                    )
-                
-                # Use run_in_executor to handle sync function in async context
-                loop = asyncio.get_event_loop()
-                signal = await loop.run_in_executor(None, sync_fetch)
+                endpoint_url = target_node.get('endpointUrl')
+                price = float(target_node.get('price', 0.0))
+                provider_address = target_node.get('providerAddress')
+
+                # If provider address is available, pay directly and use tx hash as proof
+                if provider_address and endpoint_url:
+                    from .wallet_manager import WalletManager
+                    wallet_manager = WalletManager()
+                    print(f"   💸 [x402] Transferring {price} USDC to {provider_address}...")
+                    tx_hash = wallet_manager.transfer_usdc(provider_address, price)
+                    if not tx_hash:
+                        print(f"   ❌ [x402] Payment transaction failed for node {node_id}")
+                        return None
+
+                    signal = await self.fetch_with_proof(endpoint_url, tx_hash, node_id)
+                else:
+                    # Fallback to legacy flow if provider address is missing
+                    def sync_fetch():
+                        return fetch_node_data(
+                            node_url=endpoint_url,
+                            api_key=target_node.get('apiKey'),
+                            price=price,
+                            category=target_node.get('category')
+                        )
+                    
+                    # Use run_in_executor to handle sync function in async context
+                    loop = asyncio.get_event_loop()
+                    signal = await loop.run_in_executor(None, sync_fetch)
                 
                 if signal:
                     print(f"   ✅ Real x402 purchase successful: {node_id}")

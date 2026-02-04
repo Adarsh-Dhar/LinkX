@@ -39,6 +39,12 @@ const routes = [
     href: "/chat",
     color: "text-orange-700",
   },
+  {
+    label: "Node Register",
+    icon: Zap,
+    href: "/node_register",
+    color: "text-emerald-400",
+  },
 ];
 
 export function Sidebar() {

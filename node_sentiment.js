@@ -3,7 +3,7 @@
 // Specializes in quantifying the "human element" of the market by aggregating data from social platforms.
 
 const express = require('express');
-const { x402Middleware, getRandom, ASSET_TICKER } = require('./shared_logic');
+const { x402Middleware, getRandom, ASSET_TICKER, TREASURY_WALLET, registerNode } = require('./shared_logic');
 const app = express();
 app.use(express.json());
 
@@ -61,5 +61,20 @@ app.post('/api/sentiment/feed', (req, res) => {
         }
     });
 });
+
+// Register with marketplace on startup
+registerNode({
+    name: 'Alternative Intelligence & Sentiment',
+    nodeType: 'sentiment',
+    category: 'Sentiment',
+    endpointUrl: 'http://localhost:4002/api/sentiment',
+    port: 4002,
+    price: 0.45,
+    qualityScore: 85,
+    description: "Quantifies the 'human element' of the market by aggregating data from social platforms to produce highly bullish or bearish sentiment scores. Tracks social velocity changes, web traffic indices, and simulated satellite retail occupancy data.",
+    providerAddress: TREASURY_WALLET,
+    assetCoverage: 'WXTZ/USDC',
+    granularity: '1m'
+}).catch(err => console.error('Registration error:', err));
 
 app.listen(4002, () => console.log("🚀 Sentiment Node online on :4002"));

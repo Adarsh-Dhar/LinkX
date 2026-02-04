@@ -41,6 +41,7 @@ export async function GET(req: Request) {
         whitelisted: true,
         historicalWinRate: true,
         lastPurchaseTime: true,
+        providerAddress: true,
         endpointUrl: true,
         port: true,
       },

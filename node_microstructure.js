@@ -3,7 +3,7 @@
 // Provides deep-level insights into the immediate liquidity and trading dynamics of the WETH/USDC pair.
 
 const express = require('express');
-const { x402Middleware, getRandom } = require('./shared_logic');
+const { x402Middleware, getRandom, TREASURY_WALLET, registerNode } = require('./shared_logic');
 const app = express();
 app.use(express.json());
 
@@ -59,5 +59,20 @@ app.post('/api/microstructure/feed', (req, res) => {
         }
     });
 });
+
+// Register with marketplace on startup
+registerNode({
+    name: 'Market Microstructure & Execution',
+    nodeType: 'microstructure',
+    category: 'Technical',
+    endpointUrl: 'http://localhost:4001/api/microstructure',
+    port: 4001,
+    price: 0.25,
+    qualityScore: 98,
+    description: 'Provides deep-level insights into immediate liquidity and trading dynamics including order book depth, trade velocity, VWAP, iceberg detection, and high-precision latency metrics for HFT strategies.',
+    providerAddress: TREASURY_WALLET,
+    assetCoverage: 'WXTZ/USDC',
+    granularity: '1s'
+}).catch(err => console.error('Registration error:', err));
 
 app.listen(4001, () => console.log("🚀 Microstructure Node online on :4001"));
