@@ -261,8 +261,18 @@ class PredictiveAgent:
             
             # Calculate trade amount based on confidence and available balance
             # Get current USDC balance
-            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 100.0
+            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 0.0
             trade_amount = min(current_balance * risk_confidence * 0.1, 50.0)  # Max 10% of balance, cap at 50 USDC
+            if current_balance <= 0 or trade_amount <= 0:
+                print(f"   🛑 [Risk Management] Skipping trade: USDC balance is {current_balance}")
+                await self.log_activity({
+                    "type": "risk_skip",
+                    "title": "Execution Skipped - Insufficient Balance",
+                    "description": f"USDC balance is {current_balance}; trade amount computed as {trade_amount}",
+                    "riskAction": "SKIP",
+                    "riskReason": "Insufficient USDC balance"
+                })
+                return None
             
             if bias == "LONG":
                 # Execute long position: USDC -> WXTZ
@@ -271,7 +281,18 @@ class PredictiveAgent:
             elif bias == "SHORT":
                 # Execute short position: WXTZ -> USDC (if we have WXTZ)
                 # For now, use a smaller amount for short positions
-                short_amount = trade_amount * 0.5
+                wxtz_balance = wallet.get_balance('WXTZ') if hasattr(wallet, 'get_balance') else 0.0
+                short_amount = min(trade_amount * 0.5, wxtz_balance)
+                if wxtz_balance <= 0 or short_amount <= 0:
+                    print(f"   🛑 [Risk Management] Skipping short: WXTZ balance is {wxtz_balance}")
+                    await self.log_activity({
+                        "type": "risk_skip",
+                        "title": "Execution Skipped - Insufficient Balance",
+                        "description": f"WXTZ balance is {wxtz_balance}; short amount computed as {short_amount}",
+                        "riskAction": "SKIP",
+                        "riskReason": "Insufficient WXTZ balance"
+                    })
+                    return None
                 tx_hash = engine.execute_swap("WXTZ", "USDC", short_amount)
                 print(f"   ✅ [SHORT Execution] Swapped {short_amount} WXTZ -> USDC. Hash: {tx_hash}")
                 

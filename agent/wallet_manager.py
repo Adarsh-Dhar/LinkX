@@ -98,18 +98,19 @@ class WalletManager:
             add_spend(amount)
             return mock_tx_hash
         
-        # Get USDC address from contract/.env
-        usdc_address = None
-        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
-        try:
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith("USDC_ADDRESS="):
-                        usdc_address = line.strip().split("=", 1)[1]
-                        break
-        except Exception as e:
-            print(f"[WalletManager] Error reading .env for USDC_ADDRESS: {e}")
-            usdc_address = None
+        # Get USDC address from env or contract/.env
+        usdc_address = os.getenv("USDC_CONTRACT")
+        if not usdc_address:
+            env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        if line.startswith("USDC_ADDRESS="):
+                            usdc_address = line.strip().split("=", 1)[1]
+                            break
+            except Exception as e:
+                print(f"[WalletManager] Error reading .env for USDC_ADDRESS: {e}")
+                usdc_address = None
         
         if not usdc_address:
             usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"  # Fallback to latest deployed
@@ -176,20 +177,30 @@ class WalletManager:
         try:
             if token == 'USDC':
                 # Get USDC balance
-                env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
-                usdc_address = None
-                try:
-                    with open(env_path) as f:
-                        for line in f:
-                            if line.startswith("USDC_ADDRESS="):
-                                usdc_address = line.strip().split("=", 1)[1]
-                                break
-                except:
-                    pass
+                usdc_address = os.getenv("USDC_CONTRACT")
+                if not usdc_address:
+                    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
+                    try:
+                        with open(env_path) as f:
+                            for line in f:
+                                if line.startswith("USDC_ADDRESS="):
+                                    usdc_address = line.strip().split("=", 1)[1]
+                                    break
+                    except:
+                        pass
                 if not usdc_address:
                     usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"
                 
                 erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
+                balance_wei = erc20.functions.balanceOf(self.address).call()
+                decimals = erc20.functions.decimals().call()
+                balance = balance_wei / (10 ** decimals)
+                return float(balance)
+            elif token == 'WXTZ':
+                wxtz_address = os.getenv("WXTZ_ADDRESS")
+                if not wxtz_address:
+                    return 0.0
+                erc20 = self.w3.eth.contract(address=wxtz_address, abi=self._erc20_abi())
                 balance_wei = erc20.functions.balanceOf(self.address).call()
                 decimals = erc20.functions.decimals().call()
                 balance = balance_wei / (10 ** decimals)
