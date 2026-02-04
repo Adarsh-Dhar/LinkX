@@ -20,7 +20,7 @@ class AlphaStrategist:
         # GitHub Models available models: gpt-4o-mini, claude-3.5-sonnet, deepseek-reasoner
         self.model = "gpt-4o-mini"
 
-        def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
+    def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
         """
         Cognitive reasoning step using gpt-4o-mini via GitHub Models.
         Returns a JSON decision object with utility scores.
@@ -29,7 +29,7 @@ class AlphaStrategist:
         import json
         # Default rules if none provided
         rules = human_rules or {"risk_threshold": 0.15, "forced_bias": None}
-        
+
         # Get current balance for context
         try:
             from .wallet_manager import WalletManager
@@ -37,7 +37,7 @@ class AlphaStrategist:
             current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 100.0
         except:
             current_balance = 100.0
-        
+
         # Fetch available nodes with granularity information
         available_nodes = []
         try:
@@ -57,8 +57,8 @@ class AlphaStrategist:
         except:
             # Fallback if API is not available
             available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
-        
-                prompt = f"""
+
+        prompt = f"""
                 ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
                 You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
                 Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
