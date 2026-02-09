@@ -1,11 +1,11 @@
 {
   "dependencies": {
-    "@prisma/client": "^6.19.2",
+    "@prisma/client": "6",
     "axios": "^1.13.3",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
     "next": "^16.1.4",
-    "prisma": "^6.19.2",
+    "prisma": "6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "thirdweb": "^5.118.0",

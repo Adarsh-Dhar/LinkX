@@ -90,6 +90,11 @@ class PredictiveAgent:
                 return
             nodes_metadata = res.json()
             print(f"   📊 [Discovery] Window-shopped {len(nodes_metadata)} available nodes (FREE)")
+            # Store more_context in short_term_memory for each node
+            for node in nodes_metadata:
+                node_id = node.get('id')
+                if node_id:
+                    self.short_term_memory.setdefault(node_id, {})['more_context'] = node.get('more_context')
         except Exception as e:
             print(f"   ❌ [Discovery Error] {e}")
             return
@@ -184,16 +189,33 @@ class PredictiveAgent:
                                 "signalValue": float(signal)
                             })
                             
-                            # Update Memory with TTL based on granularity
+                            # Update Memory with TTL based on granularity and new fields
                             granularity = target_node.get('granularity', '5m')
                             self.short_term_memory[target_node_id] = {
                                 "value": signal,
                                 "timestamp": time.time(),
                                 "at_price": market_snapshot['current_price'],
                                 "granularity": granularity,
-                                "tx_hash": tx_hash
+                                "tx_hash": tx_hash,
+                                "title": target_node.get('title') or target_node.get('name'),
+                                "description": target_node.get('description'),
+                                "more_context": target_node.get('more_context'),
+                                "ratings": target_node.get('ratings') or target_node.get('qualityScore', 0)
                             }
                             intel[target_node_id] = signal
+                            # Create DataLog entry in backend
+                            try:
+                                requests.post(
+                                    "http://localhost:3600/api/agent/data-log",
+                                    json={
+                                        "nodeId": target_node_id,
+                                        "data": str(signal),
+                                        "fetchedAt": datetime.utcnow().isoformat()
+                                    },
+                                    timeout=2
+                                )
+                            except Exception as e:
+                                print(f"   ⚠️  [DataLog] Failed to log DataLog: {e}")
                         else:
                             print(f"   ❌ [Data Feed] Failed to retrieve locked data despite payment")
                     else:
@@ -273,12 +295,12 @@ class PredictiveAgent:
         
         bias = decision.get('execution_bias', 'NEUTRAL')
         risk_confidence = decision.get('risk_confidence', 0)
-        
+
         # Check for forced action (prioritize instance variable over env)
         force_action = os.getenv("FORCE_ACTION", "").strip().upper()
         active_override = self.forced_bias or force_action
         forced = False
-        
+
         if active_override:
             if active_override in ["BUY", "LONG"]:
                 bias = "LONG"
@@ -293,7 +315,7 @@ class PredictiveAgent:
                 risk_confidence = 1.0
                 override_source = "Instance Override" if self.forced_bias else "ENV Override"
                 print(f"   🧭 [{override_source}] Forcing {bias} in execute_move")
-        
+
         # Apply dynamic risk threshold instead of hardcoded 0.15
         if (bias == "NEUTRAL" or risk_confidence < self.risk_threshold) and not forced:
             print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence:.2f} < threshold={self.risk_threshold:.2f}")
@@ -301,28 +323,29 @@ class PredictiveAgent:
 
         print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence:.2f} | Threshold: {self.risk_threshold:.2f}")
         print(f"   💭 [Basis] {decision['thought'][:80]}...")
-        
+
         try:
             # Initialize trading engine with shared wallet
             wallet = WalletManager()
             engine = TradingEngine(wallet=wallet)
-            
-            # Calculate trade amount based on confidence and available balance
-            # Get current USDC balance
-            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 0.0
-            trade_amount = min(current_balance * risk_confidence * 0.1, 50.0)  # Max 10% of balance, cap at 50 USDC
-            if current_balance <= 0 or trade_amount <= 0:
-                print(f"   🛑 [Risk Management] Skipping trade: USDC balance is {current_balance}")
-                await self.log_activity({
-                    "type": "risk_skip",
-                    "title": "Execution Skipped - Insufficient Balance",
-                    "description": f"USDC balance is {current_balance}; trade amount computed as {trade_amount}",
-                    "riskAction": "SKIP",
-                    "riskReason": "Insufficient USDC balance"
-                })
-                return None
-            
+
+            # Fetch real balances for USDC and WXTZ
+            current_usdc_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 0.0
+            current_wxtz_balance = wallet.get_balance('WXTZ') if hasattr(wallet, 'get_balance') else 0.0
+
             if bias == "LONG":
+                # Use 10% of real USDC balance scaled by AI confidence
+                trade_amount = current_usdc_balance * 0.1 * risk_confidence
+                if current_usdc_balance <= 0 or trade_amount <= 0:
+                    print(f"   🛑 [Risk Management] Skipping trade: USDC balance is {current_usdc_balance}")
+                    await self.log_activity({
+                        "type": "risk_skip",
+                        "title": "Execution Skipped - Insufficient Balance",
+                        "description": f"USDC balance is {current_usdc_balance}; trade amount computed as {trade_amount}",
+                        "riskAction": "SKIP",
+                        "riskReason": "Insufficient USDC balance"
+                    })
+                    return None
                 await self.log_activity({
                     "type": "trade_decision",
                     "title": f"Trade Decision: {bias}",
@@ -350,16 +373,14 @@ class PredictiveAgent:
                     print(f"   ❌ [LONG Execution Failed] Swap returned None")
                 return tx_hash
             elif bias == "SHORT":
-                # Execute short position: WXTZ -> USDC (if we have WXTZ)
-                # For now, use a smaller amount for short positions
-                wxtz_balance = wallet.get_balance('WXTZ') if hasattr(wallet, 'get_balance') else 0.0
-                short_amount = min(trade_amount * 0.5, wxtz_balance)
-                if wxtz_balance <= 0 or short_amount <= 0:
-                    print(f"   🛑 [Risk Management] Skipping short: WXTZ balance is {wxtz_balance}")
+                # Use real WXTZ balance for the exit/short position
+                trade_amount = current_wxtz_balance * risk_confidence
+                if current_wxtz_balance <= 0 or trade_amount <= 0:
+                    print(f"   🛑 [Risk Management] Skipping short: WXTZ balance is {current_wxtz_balance}")
                     await self.log_activity({
                         "type": "risk_skip",
                         "title": "Execution Skipped - Insufficient Balance",
-                        "description": f"WXTZ balance is {wxtz_balance}; short amount computed as {short_amount}",
+                        "description": f"WXTZ balance is {current_wxtz_balance}; short amount computed as {trade_amount}",
                         "riskAction": "SKIP",
                         "riskReason": "Insufficient WXTZ balance"
                     })
@@ -367,12 +388,12 @@ class PredictiveAgent:
                 await self.log_activity({
                     "type": "trade_decision",
                     "title": f"Trade Decision: {bias}",
-                    "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {short_amount:.4f} WXTZ",
+                    "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {trade_amount:.4f} WXTZ",
                     "tradeBias": bias,
                     "tradeConfidence": float(risk_confidence),
                     "agentThought": decision.get('thought', ''),
                     "metadata": {
-                        "tradeAmount": float(short_amount),
+                        "tradeAmount": float(trade_amount),
                         "tokenIn": "WXTZ",
                         "tokenOut": "USDC",
                         "forceAction": active_override or None,
@@ -382,16 +403,16 @@ class PredictiveAgent:
                         }
                     }
                 })
-                tx_hash = engine.execute_swap("WXTZ", "USDC", short_amount)
+                tx_hash = engine.execute_swap("WXTZ", "USDC", trade_amount)
                 if tx_hash:
-                    print(f"   ✅ [SHORT Execution] Swapped {short_amount:.4f} WXTZ -> USDC")
+                    print(f"   ✅ [SHORT Execution] Swapped {trade_amount:.4f} WXTZ -> USDC")
                     print(f"   📋 [Tx Hash] {tx_hash}")
                 else:
                     print(f"   ❌ [SHORT Execution Failed] Swap returned None")
                 return tx_hash
-                
+
             return tx_hash
-            
+
         except Exception as e:
             print(f"   ❌ [Execution Error] {e}")
             return None

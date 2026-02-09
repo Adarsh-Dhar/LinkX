@@ -59,17 +59,16 @@ model Trade {
 model AlphaNode {
   trades              Trade[]     @relation("TradeAlphaNodes")
   id                  String   @id @default(uuid())
-  name                String
+  title               String   // Formerly 'name'
   nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
   description         String?
   category            String
   endpointUrl         String   @unique // e.g. "http://localhost:4001/api/microstructure"
   port                Int?      // e.g. 4001, 4002, 4003
   price               Float    @default(0.0)
-  qualityScore        Int      @default(0)
+  ratings             Int      @default(0) // Formerly 'qualityScore'
   latencyMs           Int      @default(0)
-  assetCoverage       String?  // e.g. "WETH/USDC"
-  granularity         String?  // e.g. "5m", "1h" - data freshness
+  more_context        String?  // New field for permanent context
   icon                String   @default("activity")
   status              String   @default("active") // "active", "inactive"
   isPurchased         Boolean  @default(false)
@@ -89,7 +88,9 @@ model AlphaNode {
   lastHealthCheck     DateTime? // Last successful health check
   healthStatus        String   @default("unknown") // "healthy", "degraded", "down", "unknown"
   
-  // Add more fields as needed for future node types
+  // Dynamic data linked via DataLog
+  dataLogs      DataLog[]
+  // ... other existing fields like endpointUrl
 }
 
 /// Example seed data for the three demo nodes:
@@ -132,7 +133,8 @@ model SystemState {
 // --------------------------------------------------------
 model DataLog {
   id          String   @id @default(uuid())
-  // nodeId and node relation removed
+  nodeId      String
+  node        AlphaNode @relation(fields: [nodeId], references: [id])
   data        String   // Raw data fetched (JSON, text, etc.)
   normalized  Float?   // Normalized signal value, if applicable
   fetchedAt   DateTime @default(now())

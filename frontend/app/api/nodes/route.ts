@@ -23,18 +23,17 @@ export async function GET(req: Request) {
   try {
     const nodes = await prisma.alphaNode.findMany({
       where: { status: 'active' },
-      orderBy: { name: 'asc' },
+      orderBy: { title: 'asc' },
       select: {
         id: true,
-        name: true,
+        title: true,
         nodeType: true,
         category: true,
         description: true,
         price: true,
-        qualityScore: true,
+        ratings: true,
         latencyMs: true,
-        assetCoverage: true,
-        granularity: true,
+        more_context: true,
         icon: true,
         status: true,
         isPurchased: true,

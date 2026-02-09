@@ -28,15 +28,15 @@ export async function POST(req: Request) {
     const body = await req.json();
     
     // Validate required fields
-    const { name, nodeType, category, endpointUrl, port, providerAddress } = body;
+    const { title, nodeType, category, endpointUrl, port, providerAddress } = body;
     const description = body.description ?? (providerAddress ? `Pay to: ${providerAddress}` : undefined);
-    
-    if (!name || !endpointUrl || !port) {
+
+    if (!title || !endpointUrl || !port) {
       return NextResponse.json(
         { 
           error: 'Missing required fields',
-          required: ['name', 'endpointUrl', 'port'],
-          received: { name, endpointUrl, port }
+          required: ['title', 'endpointUrl', 'port'],
+          received: { title, endpointUrl, port }
         }, 
         { status: 400 }
       );
@@ -81,15 +81,14 @@ export async function POST(req: Request) {
     const node = await prisma.alphaNode.upsert({
       where: { endpointUrl },
       update: {
-        name,
+        title,
         nodeType,
         category,
         port,
         price: body.price ?? 0,
-        qualityScore: body.qualityScore ?? 0,
+        ratings: body.ratings ?? 0,
         description,
-        assetCoverage: body.assetCoverage,
-        granularity: body.granularity,
+        more_context: body.more_context,
         providerAddress,
         apiVersion: body.apiVersion ?? '1.0',
         lastUpdated: new Date(),
@@ -97,17 +96,16 @@ export async function POST(req: Request) {
         status: 'active'
       },
       create: {
-        name,
+        title,
         nodeType,
         category,
         endpointUrl,
         port,
         price: body.price ?? 0,
-        qualityScore: body.qualityScore ?? 0,
+        ratings: body.ratings ?? 0,
         latencyMs: body.latencyMs ?? 0,
         description,
-        assetCoverage: body.assetCoverage,
-        granularity: body.granularity,
+        more_context: body.more_context,
         providerAddress,
         apiVersion: body.apiVersion ?? '1.0',
         status: 'active',
@@ -115,9 +113,9 @@ export async function POST(req: Request) {
         registeredAt: new Date()
       }
     });
-    
-    console.log(`✅ Node registered: ${node.name} (${node.id}) at ${node.endpointUrl}`);
-    
+
+    console.log(`705 Node registered: ${node.title} (${node.id}) at ${node.endpointUrl}`);
+
     return NextResponse.json(
       { 
         success: true,
@@ -125,7 +123,7 @@ export async function POST(req: Request) {
         message: 'Node registered successfully',
         node: {
           id: node.id,
-          name: node.name,
+          title: node.title,
           endpointUrl: node.endpointUrl,
           providerAddress: node.providerAddress,
           status: node.status
@@ -156,7 +154,7 @@ export async function GET() {
     endpoint: '/api/nodes/register',
     method: 'POST',
     description: 'Self-registration endpoint for data provider nodes',
-    requiredFields: ['name', 'endpointUrl', 'port'],
+    requiredFields: ['title', 'endpointUrl', 'port'],
     optionalFields: [
       'nodeType', 'category', 'price', 'qualityScore', 
       'description', 'providerAddress', 'assetCoverage', 
