@@ -2,6 +2,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Lock, Unlock, Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -21,11 +22,19 @@ interface Product {
   bullish?: number;
 }
 
-export default function AlphaProductCard({ product }: { product: Product }) {
 
+export default function AlphaProductCard({ product }: { product: Product }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [purchased, setPurchased] = useState(product.isPurchased || product.status === "unlocked");
   const isLocked = !purchased;
+
+  // Card click handler (except button)
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Prevent navigation if the click is on the purchase button or inside it
+    if ((e.target as HTMLElement).closest("button")) return;
+    router.push(`/market/${product.id}`);
+  };
 
   const handlePurchase = async () => {
     setLoading(true)
@@ -120,7 +129,13 @@ export default function AlphaProductCard({ product }: { product: Product }) {
   }
 
   return (
-    <div className={`relative flex flex-col transition-all hover:border-primary/50 ${purchased ? "border-green-500/50 bg-green-500/5" : ""} glass glow-primary p-6 rounded-lg border border-border/30 h-full`}>
+    <div
+      className={`relative flex flex-col transition-all hover:border-primary/50 ${purchased ? "border-green-500/50 bg-green-500/5" : ""} glass glow-primary p-6 rounded-lg border border-border/30 h-full cursor-pointer`}
+      onClick={handleCardClick}
+      tabIndex={0}
+      role="button"
+      aria-label={`View details for ${product.name}`}
+    >
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-lg font-bold text-foreground flex items-center gap-2">{product.name} {purchased && <CheckCircle className="h-5 w-5 text-green-500" />}</h3>
@@ -147,10 +162,13 @@ export default function AlphaProductCard({ product }: { product: Product }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-lg font-bold text-foreground">{product.price} USDC</span>
         <Button
-          onClick={handlePurchase}
+          onClick={e => {
+            e.stopPropagation();
+            handlePurchase();
+          }}
           disabled={loading || purchased}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             isLocked
@@ -176,6 +194,16 @@ export default function AlphaProductCard({ product }: { product: Product }) {
               Purchase Access
             </>
           )}
+        </Button>
+        <Button
+          variant="secondary"
+          className="px-4 py-2 rounded-lg text-sm font-medium"
+          onClick={e => {
+            e.stopPropagation();
+            router.push(`/market/${product.id}`);
+          }}
+        >
+          Details
         </Button>
       </div>
     </div>

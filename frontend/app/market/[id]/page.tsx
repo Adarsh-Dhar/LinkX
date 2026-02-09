@@ -3,9 +3,17 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import RatingsChart from "@/components/market/ratings-chart";
 
-export default async function NodeDetailsPage({ params }: { params: { id: string } }) {
+
+
+export default async function NodeDetailsPage({ params }: { params: Promise<{ id?: string }> }) {
+	// Next.js 16+ dynamic route: params is a Promise
+	const resolvedParams = await params;
+	if (!resolvedParams?.id || typeof resolvedParams.id !== 'string' || resolvedParams.id.trim() === '') {
+		notFound();
+	}
+
 	const node = await prisma.alphaNode.findUnique({
-		where: { id: params.id },
+		where: { id: resolvedParams.id },
 		include: {
 			dataLogs: {
 				orderBy: { fetchedAt: 'desc' },
