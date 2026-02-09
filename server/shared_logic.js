@@ -62,31 +62,30 @@ const x402Middleware = (price) => (req, res, next) => {
 async function registerNode(config) {
     const axios = require('axios');
     const registrationUrl = 'http://localhost:3600/api/nodes/register';
-    
     try {
-        console.log(`📡 Registering node: ${config.name}...`);
-        
-        const response = await axios.post(registrationUrl, {
-            name: config.name,
+        // Prefer new keys, fallback for backward compatibility
+        const payload = {
+            title: config.title || config.name,
             nodeType: config.nodeType,
             category: config.category,
             endpointUrl: config.endpointUrl,
             port: config.port,
             price: config.price,
-            qualityScore: config.qualityScore,
+            ratings: config.ratings || config.qualityScore,
             description: config.description,
+            more_context: config.more_context,
             providerAddress: config.providerAddress,
             assetCoverage: config.assetCoverage,
             granularity: config.granularity,
             apiVersion: '1.0'
-        });
-        
+        };
+        console.log(`📡 Registering node: ${payload.title}...`);
+        const response = await axios.post(registrationUrl, payload);
         console.log(`✅ Node registered successfully!`);
         console.log(`   ID: ${response.data.nodeId}`);
-        console.log(`   Endpoint: ${config.endpointUrl}`);
-        console.log(`   Provider Wallet: ${config.providerAddress}`);
-        console.log(`   Price: ${config.price} USDC per request`);
-        
+        console.log(`   Endpoint: ${payload.endpointUrl}`);
+        console.log(`   Provider Wallet: ${payload.providerAddress}`);
+        console.log(`   Price: ${payload.price} USDC per request`);
         return response.data;
     } catch (error) {
         // Handle registration errors gracefully - node can still function
@@ -101,7 +100,6 @@ async function registerNode(config) {
         } else {
             console.error(`❌ Registration failed: ${error.message}`);
         }
-        
         console.log(`⚠️  Node will continue running without marketplace registration`);
         return null;
     }

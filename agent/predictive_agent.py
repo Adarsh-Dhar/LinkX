@@ -134,18 +134,20 @@ class PredictiveAgent:
                     print(f"   ❌ [x402] Target node {target_node_id} not found in metadata")
                     return
                 
-                print(f"   💳 [x402] Initiating real blockchain payment for {target_node['name']}")
-                print(f"      Price: {target_node['price']} USDC | Quality: {target_node['qualityScore']}/100")
+                node_title = target_node.get('title') or target_node.get('name')
+                node_ratings = target_node.get('ratings') or target_node.get('qualityScore', 0)
+                print(f"   💳 [x402] Initiating real blockchain payment for {node_title}")
+                print(f"      Price: {target_node['price']} USDC | Ratings: {node_ratings}/100")
                 
                 # Execute REAL USDC transfer to provider
                 # Log node purchase
                 await self.log_activity({
                     "type": "node_purchase",
-                    "title": f"Purchased {target_node['name']}",
+                    "title": f"Purchased {node_title}",
                     "description": f"Acquired data node at {target_node['price']} USDC",
                     "nodeId": target_node_id,
                     "nodePrice": float(target_node['price']),
-                    "nodeQuality": int(target_node.get('qualityScore', 0))
+                    "nodeRatings": int(node_ratings)
                 })
                 
                 # Execute REAL USDC transfer to provider
@@ -175,7 +177,7 @@ class PredictiveAgent:
                             # Log signal received
                             await self.log_activity({
                                 "type": "signal_received",
-                                "title": f"Signal from {target_node['name']}",
+                                "title": f"Signal from {node_title}",
                                 "description": f"Received signal value: {signal}",
                                 "signalValue": float(signal)
                             })
@@ -197,10 +199,10 @@ class PredictiveAgent:
                                 "at_price": market_snapshot['current_price'],
                                 "granularity": granularity,
                                 "tx_hash": tx_hash,
-                                "title": target_node.get('title') or target_node.get('name'),
+                                "title": node_title,
                                 "description": target_node.get('description'),
                                 "more_context": target_node.get('more_context'),
-                                "ratings": target_node.get('ratings') or target_node.get('qualityScore', 0)
+                                "ratings": node_ratings
                             }
                             intel[target_node_id] = signal
                             # Create DataLog entry in backend
