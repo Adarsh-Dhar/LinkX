@@ -58,26 +58,28 @@ class AlphaStrategist:
             # Fallback if API is not available
             available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
 
-        # Extract human intelligence if present
-        user_intel = working_memory.get('human_intelligence', {}).get('value') if isinstance(working_memory, dict) else None
+        # Extract human context if present
+        user_context = working_memory.get('human_intel', {}).get('value') if isinstance(working_memory, dict) else None
+        user_priority = working_memory.get('human_intel', {}).get('priority') if isinstance(working_memory, dict) else None
         prompt = f"""
-                ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-                You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
-                Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
+            ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
+            You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
+            Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
 
-                ## USER-PROVIDED INTEL (HIGHEST PRIORITY IF PRESENT)
-                USER-PROVIDED INTEL: {user_intel or 'None'}
+            ## USER-PROVIDED CONTEXT (HUMAN INTEL)
+            USER-PROVIDED CONTEXT: {user_context or 'None'}
+            PRIORITY: {user_priority or 'NORMAL'}
 
-                If USER-PROVIDED INTEL is not None, you must treat it as a high-priority market alert or context injection from a human operator. If it contradicts technical signals, you must prioritize the USER-PROVIDED INTEL and divert your strategy accordingly. Explain how you used it in your thought process.
+            If USER-PROVIDED CONTEXT is not None and PRIORITY is HIGH, you must treat it as a superior market alert or context injection from a human operator. If it contradicts technical signals, you must prioritize the USER-PROVIDED CONTEXT and divert your strategy accordingly. Explain how you used it in your thought process.
 
-                ## FUND MANAGER OVERRIDES (HIGHEST PRIORITY)
-                - If 'forced_bias' is set to SHORT, you are FORBIDDEN from choosing LONG, even if technicals are bullish.
-                - If 'forced_bias' is set to LONG, you are FORBIDDEN from choosing SHORT, even if technicals are bearish.
-                - If 'forced_bias' is set to NEUTRAL, you must NOT execute any trades, regardless of signals.
-                - If 'forced_bias' is None, use your own logic.
-                - The Fund Manager's overrides supersede all other logic, technicals, or signals.
-                - The minimum confidence required to execute is {rules.get('risk_threshold'):.2f}.
-                - These overrides are non-negotiable and must be enforced above all else.
+            ## FUND MANAGER OVERRIDES (HIGHEST PRIORITY)
+            - If 'forced_bias' is set to SHORT, you are FORBIDDEN from choosing LONG, even if technicals are bullish.
+            - If 'forced_bias' is set to LONG, you are FORBIDDEN from choosing SHORT, even if technicals are bearish.
+            - If 'forced_bias' is set to NEUTRAL, you must NOT execute any trades, regardless of signals.
+            - If 'forced_bias' is None, use your own logic.
+            - The Fund Manager's overrides supersede all other logic, technicals, or signals.
+            - The minimum confidence required to execute is {rules.get('risk_threshold'):.2f}.
+            - These overrides are non-negotiable and must be enforced above all else.
 
                 ## CURRENT OVERRIDES:
                 - forced_bias: {rules.get('forced_bias') or 'None (AI Discretion Authorized)'}

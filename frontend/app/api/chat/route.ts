@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { isRateLimited } from "./rateLimiter";
+import fs from "fs";
+import path from "path";
 
 // Intent extraction using OpenRouter for chat-to-agent C2
 async function extractIntent(message: string): Promise<{ action: string; params?: any }> {
@@ -46,15 +49,37 @@ Return ONLY valid JSON.`;
 // It acts as a proxy to the Python Agent.
 export async function POST(req: Request) {
   try {
-    const { message } = await req.json();
+    const { message, userId = "anonymous" } = await req.json();
+
+    // Rate limiting
+    if (isRateLimited(userId)) {
+      return NextResponse.json({
+        response: "⏳ Rate limit exceeded. Please wait before sending more context."
+      }, { status: 429 });
+    }
 
     // 1. Extract intent from user message
     const intent = await extractIntent(message);
     console.log("[Chat Intent]", intent);
 
-    // 2. Route based on intent action
+    // 2. If message is actionable context, write override_state.json
+    // Example: "There is a massive short squeeze starting on BTC"
+    if (intent.action === "CHAT" && message && message.length > 10) {
+      // Write override_state.json with external_context and priority HIGH
+      const overridePath = path.resolve(process.cwd(), "override_state.json");
+      const overrideState = {
+        external_context: message,
+        priority: "HIGH",
+        timestamp: Date.now()
+      };
+      fs.writeFileSync(overridePath, JSON.stringify(overrideState, null, 2));
+      return NextResponse.json({
+        response: "🟣 Human context injected. Agent will divert its mind."
+      });
+    }
+
+    // 3. Route based on intent action (risk/bias overrides)
     if (intent.action === "SET_RISK" || intent.action === "SET_BIAS") {
-      // Send override command to agent
       const overrideResponse = await fetch("http://127.0.0.1:8000/agent/control/override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,9 +88,7 @@ export async function POST(req: Request) {
           bias: intent.action === "SET_BIAS" ? intent.bias : undefined
         })
       });
-
       const overrideData = await overrideResponse.json();
-      
       if (overrideData.status === "Override Applied Successfully") {
         const config = overrideData.current_config;
         return NextResponse.json({
@@ -78,7 +101,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Otherwise, forward to chat endpoint
+    // 4. Otherwise, forward to chat endpoint
     const response = await fetch("http://127.0.0.1:8000/chat", {
       method: "POST",
       headers: {
@@ -91,7 +114,6 @@ export async function POST(req: Request) {
     try {
       data = await response.json();
     } catch (e) {
-      // If response is not JSON, fallback to text
       const text = await response.text();
       return NextResponse.json({
         response: `⚠️ Agent returned non-JSON response: ${text}`
@@ -99,21 +121,17 @@ export async function POST(req: Request) {
     }
 
     if (!response.ok) {
-      // Forward the agent's error message if available
       return NextResponse.json({
         response: data.reply || `Agent Server Error: ${response.statusText}`
       }, { status: response.status });
     }
 
-    // 4. Return the Agent's reply to the frontend UI
     return NextResponse.json({ 
       response: data.reply 
     });
 
   } catch (error) {
     console.error("Chat Proxy Error:", error);
-    
-    // Fallback response if Python server is down
     return NextResponse.json({ 
       response: "⚠️ Error: Could not connect to the Alpha Agent (Python). Is 'agent/api.py' running?" 
     }, { status: 500 });

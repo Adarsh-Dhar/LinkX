@@ -9,21 +9,23 @@ from datetime import datetime
 from .tools import AlphaStrategist
 
 class PredictiveAgent:
-        def check_for_overrides(self):
-            """Check for override_state.json and inject external_context if present."""
-            import json
-            if os.path.exists('override_state.json'):
-                with open('override_state.json', 'r') as f:
-                    override = json.load(f)
-                    # Inject the external context into the agent's reasoning memory
-                    if 'external_context' in override:
-                        self.short_term_memory['human_intelligence'] = {
-                            'value': override['external_context'],
-                            'timestamp': time.time(),
-                            'granularity': '1h'
-                        }
-                    return override
-            return None
+    def check_for_overrides(self):
+        """
+        Check for override_state.json and inject external_context if present.
+        If found, inject into self.short_term_memory['human_intel'] with fresh timestamp.
+        """
+        import json
+        if os.path.exists('override_state.json'):
+            with open('override_state.json', 'r') as f:
+                override = json.load(f)
+                if 'external_context' in override:
+                    self.short_term_memory['human_intel'] = {
+                        'value': override['external_context'],
+                        'timestamp': time.time(),
+                        'priority': override.get('priority', 'NORMAL')
+                    }
+                return override
+        return None
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.strategist = AlphaStrategist()
