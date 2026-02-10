@@ -58,10 +58,17 @@ class AlphaStrategist:
             # Fallback if API is not available
             available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
 
+        # Extract human intelligence if present
+        user_intel = working_memory.get('human_intelligence', {}).get('value') if isinstance(working_memory, dict) else None
         prompt = f"""
                 ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
                 You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
                 Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
+
+                ## USER-PROVIDED INTEL (HIGHEST PRIORITY IF PRESENT)
+                USER-PROVIDED INTEL: {user_intel or 'None'}
+
+                If USER-PROVIDED INTEL is not None, you must treat it as a high-priority market alert or context injection from a human operator. If it contradicts technical signals, you must prioritize the USER-PROVIDED INTEL and divert your strategy accordingly. Explain how you used it in your thought process.
 
                 ## FUND MANAGER OVERRIDES (HIGHEST PRIORITY)
                 - If 'forced_bias' is set to SHORT, you are FORBIDDEN from choosing LONG, even if technicals are bullish.
@@ -111,7 +118,7 @@ class AlphaStrategist:
 
                 ## RESPONSE SCHEMA (MUST BE VALID JSON):
                 {{
-                    "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale",
+                    "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale (explain how USER-PROVIDED INTEL was used if present)",
                     "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
                     "target_node_id": "UUID string (only if PURCHASE_DATA, null if USE_MEMORY or ABORT)",
                     "utility_score": 0.XX,
