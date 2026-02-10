@@ -24,6 +24,33 @@ export default async function NodeDetailsPage({ params }: { params: Promise<{ id
 
 	if (!node) notFound();
 
+	// Example: ratings history from dataLogs (if available)
+	// You may want to replace this with real ratings history if you store it elsewhere
+
+	// Try to extract ratings from history_rating in log.data (JSON string), fallback to normalized
+	const ratings = (node.dataLogs || [])
+		.map((log: any) => {
+			let rating: number | undefined = undefined;
+			// Try to parse history_rating from log.data
+			try {
+				const parsed = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
+				if (typeof parsed?.history_rating === 'number') {
+					rating = parsed.history_rating;
+				}
+			} catch {}
+			// Fallback to normalized if available
+			if (rating === undefined && typeof log.normalized === 'number') {
+				rating = Math.round(log.normalized * 100);
+			}
+			if (rating === undefined) return null;
+			return {
+				time: new Date(log.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+				rating,
+			};
+		})
+		.filter((r): r is { time: string; rating: number } => r !== null)
+		.reverse();
+
 	return (
 		<div className="p-6 space-y-8">
 			<header>
@@ -32,11 +59,13 @@ export default async function NodeDetailsPage({ params }: { params: Promise<{ id
 				<div className="mt-2 badge">{node.more_context}</div>
 			</header>
 
-			{/* Ratings History Graph */}
-			<section className="bg-card p-4 rounded-lg border">
-				<h2 className="text-xl font-semibold mb-4">Ratings Over Time</h2>
-				<RatingsChart nodeId={node.id} />
-			</section>
+			{/* Ratings History Graph (only if data exists) */}
+			{ratings.length > 0 && (
+				<section className="bg-card p-4 rounded-lg border">
+					<h2 className="text-xl font-semibold mb-4">Ratings Over Time</h2>
+					<RatingsChart ratings={ratings} />
+				</section>
+			)}
 
 			{/* Historical Data Logs */}
 			<section>

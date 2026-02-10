@@ -4,18 +4,19 @@ import { useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 type RegisterForm = {
-	name: string;
+	title: string;
 	category: string;
 	nodeType: string;
-	endpointUrl: string;
-	port: string;
-	price: string;
-	qualityScore: string;
 	description: string;
+	endpointUrl: string;
+	price: string;
+	ratings: string;
+	latencyMs: string;
+	more_context: string;
+	icon: string;
 	providerAddress: string;
-	assetCoverage: string;
-	granularity: string;
 	apiVersion: string;
+	healthCheckUrl: string;
 };
 
 type RegisterResponse =
@@ -23,19 +24,20 @@ type RegisterResponse =
 	| { error: string; details?: string };
 
 const DEFAULTS: RegisterForm = {
-	name: "Alternative Intelligence & Sentiment",
-	category: "Sentiment",
+	title: "Alternative Intelligence & Sentiment",
+	category: "sentiment",
 	nodeType: "sentiment",
-	endpointUrl: "http://localhost:4002/api/sentiment",
-	port: "4002",
-	price: "0.45",
-	qualityScore: "85",
 	description:
 		"Quantifies the 'human element' of the market by aggregating social data to generate sentiment signals.",
+	endpointUrl: "http://localhost:4002/api/sentiment",
+	price: "0.45",
+	ratings: "85",
+	latencyMs: "0",
+	more_context: "",
+	icon: "activity",
 	providerAddress: "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9",
-	assetCoverage: "WXTZ/USDC",
-	granularity: "1m",
 	apiVersion: "1.0",
+	healthCheckUrl: "",
 };
 
 export default function NodeRegisterPage() {
@@ -45,10 +47,8 @@ export default function NodeRegisterPage() {
 
 	const isValid = useMemo(() => {
 		return (
-			form.name.trim() &&
-			form.endpointUrl.trim() &&
-			form.port.trim() &&
-			Number.isFinite(Number(form.port))
+			form.title.trim() &&
+			form.endpointUrl.trim()
 		);
 	}, [form]);
 
@@ -68,18 +68,19 @@ export default function NodeRegisterPage() {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					name: form.name.trim(),
-					category: form.category.trim() || undefined,
+					title: form.title.trim(),
+					category: form.category.trim(),
 					nodeType: form.nodeType.trim() || undefined,
-					endpointUrl: form.endpointUrl.trim(),
-					port: Number(form.port),
-					price: form.price ? Number(form.price) : undefined,
-					qualityScore: form.qualityScore ? Number(form.qualityScore) : undefined,
 					description: form.description.trim() || undefined,
+					endpointUrl: form.endpointUrl.trim(),
+					price: form.price ? Number(form.price) : undefined,
+					ratings: form.ratings ? Number(form.ratings) : undefined,
+					latencyMs: form.latencyMs ? Number(form.latencyMs) : undefined,
+					more_context: form.more_context.trim() || undefined,
+					icon: form.icon.trim() || undefined,
 					providerAddress: form.providerAddress.trim() || undefined,
-					assetCoverage: form.assetCoverage.trim() || undefined,
-					granularity: form.granularity.trim() || undefined,
 					apiVersion: form.apiVersion.trim() || undefined,
+					healthCheckUrl: form.healthCheckUrl.trim() || undefined,
 				}),
 			});
 
@@ -109,42 +110,17 @@ export default function NodeRegisterPage() {
 					className="grid gap-6 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 shadow-xl"
 				>
 					<div className="grid gap-4 sm:grid-cols-2">
-						<Field label="Node Name" value={form.name} onChange={onChange("name")} required />
-						<Field label="Category" value={form.category} onChange={onChange("category")} placeholder="Sentiment" />
-						<Field label="Node Type" value={form.nodeType} onChange={onChange("nodeType")} placeholder="sentiment" />
-						<Field label="Endpoint URL" value={form.endpointUrl} onChange={onChange("endpointUrl")} required />
-						<Field label="Port" value={form.port} onChange={onChange("port")} required />
-						<Field label="Price (USDC)" value={form.price} onChange={onChange("price")} placeholder="0.45" />
-						<Field
-							label="Quality Score"
-							value={form.qualityScore}
-							onChange={onChange("qualityScore")}
-							placeholder="85"
-						/>
-						<Field
-							label="Provider Wallet"
-							value={form.providerAddress}
-							onChange={onChange("providerAddress")}
-							placeholder="0x..."
-						/>
-						<Field
-							label="Asset Coverage"
-							value={form.assetCoverage}
-							onChange={onChange("assetCoverage")}
-							placeholder="WXTZ/USDC"
-						/>
-						<Field
-							label="Granularity"
-							value={form.granularity}
-							onChange={onChange("granularity")}
-							placeholder="1m"
-						/>
-						<Field
-							label="API Version"
-							value={form.apiVersion}
-							onChange={onChange("apiVersion")}
-							placeholder="1.0"
-						/>
+						  <Field label="Node Title" value={form.title} onChange={onChange("title") } required />
+						  <Field label="Category" value={form.category} onChange={onChange("category")} placeholder="sentiment" />
+						  <Field label="Node Type" value={form.nodeType} onChange={onChange("nodeType")} placeholder="sentiment" />
+						  <Field label="Endpoint URL" value={form.endpointUrl} onChange={onChange("endpointUrl")} required />
+						  <Field label="Price (USDC)" value={form.price} onChange={onChange("price")} placeholder="0.45" />
+						  <Field label="Ratings" value={form.ratings} onChange={onChange("ratings")} placeholder="85" />
+						  <Field label="Latency (ms)" value={form.latencyMs} onChange={onChange("latencyMs")} placeholder="0" />
+						  <Field label="Icon" value={form.icon} onChange={onChange("icon")} placeholder="activity" />
+						  <Field label="Provider Wallet" value={form.providerAddress} onChange={onChange("providerAddress")} placeholder="0x..." />
+						  <Field label="API Version" value={form.apiVersion} onChange={onChange("apiVersion")} placeholder="1.0" />
+						  <Field label="Health Check URL" value={form.healthCheckUrl} onChange={onChange("healthCheckUrl")} placeholder="http://..." />
 					</div>
 
 					<TextArea
@@ -152,6 +128,12 @@ export default function NodeRegisterPage() {
 						value={form.description}
 						onChange={onChange("description")}
 						placeholder="Describe your node's data and coverage."
+					/>
+					<TextArea
+						label="More Context"
+						value={form.more_context}
+						onChange={onChange("more_context")}
+						placeholder="Permanent context for this node (optional)"
 					/>
 
 					<div className="flex flex-wrap items-center gap-3">
@@ -170,7 +152,7 @@ export default function NodeRegisterPage() {
 							Reset to Defaults
 						</button>
 						<span className="text-xs text-slate-400">
-							Required fields: name, endpoint URL, port
+							Required fields: title, endpoint URL
 						</span>
 					</div>
 				</form>

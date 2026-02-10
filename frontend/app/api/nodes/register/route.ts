@@ -28,15 +28,15 @@ export async function POST(req: Request) {
     const body = await req.json();
     
     // Validate required fields
-    const { title, nodeType, category, endpointUrl, port, providerAddress } = body;
+    const { title, nodeType, category, endpointUrl, providerAddress } = body;
     const description = body.description ?? (providerAddress ? `Pay to: ${providerAddress}` : undefined);
 
-    if (!title || !endpointUrl || !port) {
+    if (!title || !endpointUrl) {
       return NextResponse.json(
         { 
           error: 'Missing required fields',
-          required: ['title', 'endpointUrl', 'port'],
-          received: { title, endpointUrl, port }
+          required: ['title', 'endpointUrl'],
+          received: { title, endpointUrl }
         }, 
         { status: 400 }
       );
@@ -53,29 +53,7 @@ export async function POST(req: Request) {
       );
     }
     
-    // Check for port conflicts with other active nodes
-    const portConflict = await prisma.alphaNode.findFirst({
-      where: {
-        port: body.port,
-        status: 'active',
-        endpointUrl: { not: endpointUrl } // Allow same node to re-register
-      }
-    });
-    
-    if (portConflict) {
-      return NextResponse.json(
-        { 
-          error: 'Port conflict',
-          details: `Port ${body.port} is already in use by node: ${portConflict.name}`,
-          conflictingNode: {
-            id: portConflict.id,
-            name: portConflict.name,
-            endpointUrl: portConflict.endpointUrl
-          }
-        }, 
-        { status: 409 }
-      );
-    }
+    // No port conflict check needed
     
     // Upsert node - allow re-registration to update metadata
     const node = await prisma.alphaNode.upsert({
@@ -84,7 +62,6 @@ export async function POST(req: Request) {
         title,
         nodeType,
         category,
-        port,
         price: body.price ?? 0,
         ratings: body.ratings ?? 0,
         description,
@@ -100,7 +77,6 @@ export async function POST(req: Request) {
         nodeType,
         category,
         endpointUrl,
-        port,
         price: body.price ?? 0,
         ratings: body.ratings ?? 0,
         latencyMs: body.latencyMs ?? 0,
@@ -154,25 +130,26 @@ export async function GET() {
     endpoint: '/api/nodes/register',
     method: 'POST',
     description: 'Self-registration endpoint for data provider nodes',
-    requiredFields: ['title', 'endpointUrl', 'port'],
+    requiredFields: ['title', 'endpointUrl'],
     optionalFields: [
-      'nodeType', 'category', 'price', 'qualityScore', 
-      'description', 'providerAddress', 'assetCoverage', 
-      'granularity', 'apiVersion'
+      'nodeType', 'category', 'price', 'ratings', 
+      'description', 'providerAddress', 'more_context', 
+      'latencyMs', 'icon', 'apiVersion', 'healthCheckUrl'
     ],
     example: {
-      name: 'Example Sentiment Node',
+      title: 'Example Sentiment Node',
       nodeType: 'sentiment',
       category: 'Technical',
       endpointUrl: 'http://localhost:4002/api/sentiment',
-      port: 4002,
       price: 0.5,
-      qualityScore: 85,
+      ratings: 85,
+      latencyMs: 0,
       description: 'Real-time sentiment analysis powered by AI',
       providerAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-      assetCoverage: 'WXTZ/USDC',
-      granularity: '1m',
-      apiVersion: '1.0'
+      more_context: 'Permanent context for this node',
+      icon: 'activity',
+      apiVersion: '1.0',
+      healthCheckUrl: 'http://localhost:4002/health'
     }
   });
 }

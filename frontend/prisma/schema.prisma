@@ -63,8 +63,7 @@ model AlphaNode {
   nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
   description         String?
   category            String
-  endpointUrl         String   @unique // e.g. "http://localhost:4001/api/microstructure"
-  port                Int?      // e.g. 4001, 4002, 4003
+  endpointUrl         String   @unique // e.g. "http://localhost:4001/api/
   price               Float    @default(0.0)
   ratings             Int      @default(0) // Formerly 'qualityScore'
   latencyMs           Int      @default(0)

@@ -1,19 +1,12 @@
 "use client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-export default function RatingsChart({ nodeId }: { nodeId: string }) {
-  // In a real app, you'd use SWR or useEffect to fetch historical ratings
-  const mockData = [
-    { time: '10:00', rating: 82 },
-    { time: '11:00', rating: 85 },
-    { time: '12:00', rating: 84 },
-    { time: '13:00', rating: 89 },
-  ];
-
+export default function RatingsChart({ ratings }: { ratings: { time: string, rating: number }[] }) {
+  if (!ratings || ratings.length === 0) return null;
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={mockData}>
+        <LineChart data={ratings}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="time" />
           <YAxis domain={[0, 100]} />
