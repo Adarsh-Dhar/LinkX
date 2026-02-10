@@ -61,16 +61,18 @@ class AlphaStrategist:
         # Extract human context if present
         user_context = working_memory.get('human_intel', {}).get('value') if isinstance(working_memory, dict) else None
         user_priority = working_memory.get('human_intel', {}).get('priority') if isinstance(working_memory, dict) else None
+        human_info = working_memory.get('human_intel', 'No human intelligence provided.')
         prompt = f"""
             ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
             You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
             Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
 
             ## HUMAN INTELLIGENCE OVERRIDE
-            HUMAN INTELLIGENCE: {user_context or 'None'}
-            PRIORITY: {user_priority or 'NORMAL'}
+            HUMAN INTELLIGENCE OVERRIDE: {human_info}
 
-            Note: If HUMAN INTELLIGENCE is present, you must weigh it as a primary signal. If it contradicts technical node data, you must prioritize the human context and divert from standard strategy. Clearly explain in your thought process how human intelligence affected your decision.
+            CRITICAL INSTRUCTION: If Human Intelligence is present, treat it as the primary 'Source of Truth'. If technical signals from data nodes (Sentiment/Macro/Microstructure) contradict the user-provided human context, you MUST divert your standard strategy to align with the human intelligence. Clearly explain in your thought process how human intelligence affected your decision.
+
+            PRIORITY: {user_priority or 'NORMAL'}
 
             If HUMAN INTELLIGENCE is present and PRIORITY is HIGH, treat it as a superior market alert or context injection from a human operator. If it contradicts technical signals, you must prioritize the HUMAN INTELLIGENCE and divert your strategy accordingly. Explain how you used it in your thought process.
 
