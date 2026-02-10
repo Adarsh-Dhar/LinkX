@@ -138,6 +138,17 @@ model DataLog {
   normalized  Float?   // Normalized signal value, if applicable
   fetchedAt   DateTime @default(now())
   tradeDecisions TradeDecision[]
+  userRating  LogRating? // Add this line
+}
+
+// Add this model at the end of the file
+model LogRating {
+  id        String   @id @default(uuid())
+  logId     String   @unique
+  log       DataLog  @relation(fields: [logId], references: [id])
+  rating    Int      // 1-10
+  comment   String?
+  createdAt DateTime @default(now())
 }
 
 // --------------------------------------------------------

@@ -75,8 +75,7 @@ async function main() {
       nodeId: node.id,
       data: JSON.stringify({ 
         signal: Math.random(), 
-        source: node.title,
-        history_rating: node.ratings - Math.floor(Math.random() * 5) 
+        source: node.title
       }),
       fetchedAt: new Date(Date.now() - i * 3600000), 
     }))
