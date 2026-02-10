@@ -1,183 +1,75 @@
 
-# --- AlphaStrategist for Cognitive Reasoning/Action ---
-import os
+
+# --- Production-Ready AlphaStrategist with Mind Diversion ---
 import json
-from openai import OpenAI
+import os
+import google.generativeai as genai
+from datetime import datetime
 
 class AlphaStrategist:
-    def __init__(self):
-        # GitHub Models API configuration
-        self.token = os.getenv("GITHUB_MODELS_API_KEY") or os.getenv("GITHUB_TOKEN")
-        self.endpoint = os.getenv("GITHUB_MODELS_ENDPOINT", "https://models.inference.ai.azure.com")
-        
-        if not self.token:
-            raise ValueError("GITHUB_MODELS_API_KEY or GITHUB_TOKEN environment variable is required")
-        
-        self.client = OpenAI(
-            base_url=self.endpoint,
-            api_key=self.token,
-        )
-        # GitHub Models available models: gpt-4o-mini, claude-3.5-sonnet, deepseek-reasoner
-        self.model = "gpt-4o-mini"
+    def __init__(self, api_key: str):
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
-    def rethink_strategy(self, market_snapshot, working_memory, human_rules=None, max_retries=2):
+    def get_strategy(self, market_data, node_signals, memory):
         """
-        Cognitive reasoning step using gpt-4o-mini via GitHub Models.
-        Returns a JSON decision object with utility scores.
-        Accepts human_rules dict with risk_threshold and forced_bias for prompt injection.
+        Generates a high-level trading strategy by weighing technical node signals 
+        against high-priority human intelligence injected via chat.
         """
-        import json
-        # Default rules if none provided
-        rules = human_rules or {"risk_threshold": 0.15, "forced_bias": None}
-
-        # Get current balance for context
-        try:
-            from .wallet_manager import WalletManager
-            wallet = WalletManager()
-            current_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 100.0
-        except:
-            current_balance = 100.0
-
-        # Fetch available nodes with granularity information
-        available_nodes = []
-        try:
-            import requests
-            res = requests.get("http://localhost:3600/api/nodes", timeout=5)
-            if res.status_code == 200:
-                nodes = res.json()
-                for node in nodes:
-                    available_nodes.append({
-                        "id": node.get("id"),
-                        "name": node.get("name"),
-                        "category": node.get("category"),
-                        "price": node.get("price", 0),
-                        "granularity": node.get("granularity", "5m"),
-                        "qualityScore": node.get("qualityScore", 0)
-                    })
-        except:
-            # Fallback if API is not available
-            available_nodes = [{"id": "fallback", "granularity": "5m", "price": 1.0}]
-
-        # Extract human context if present
-        user_context = working_memory.get('human_intel', {}).get('value') if isinstance(working_memory, dict) else None
-        user_priority = working_memory.get('human_intel', {}).get('priority') if isinstance(working_memory, dict) else None
-        human_info = working_memory.get('human_intel', 'No human intelligence provided.')
+        # Extract context injected from the chat interface
+        human_intel = memory.get('human_intel', "No external human context provided.")
+        # Prepare the signals for the prompt
+        formatted_signals = json.dumps(node_signals, indent=2)
         prompt = f"""
-            ## ROLE: INSTITUTIONAL ALPHA STRATEGIST
-            You are an autonomous trading desk operator managing {current_balance:.2f} USDC.
-            Your mandate: Calculate the Alpha-per-USDC utility for each available node and purchase only institutional-grade signals.
+        You are the Brain of LinkX, an autonomous trading agent. 
+        Your goal is to execute profitable trades while strictly adhering to high-level mandates.
 
-            ## HUMAN INTELLIGENCE OVERRIDE
-            HUMAN INTELLIGENCE OVERRIDE: {human_info}
+        --- 1. HIGH-PRIORITY HUMAN INTELLIGENCE (FROM CHAT) ---
+        CONTEXT: {human_intel}
 
-            CRITICAL INSTRUCTION: If Human Intelligence is present, treat it as the primary 'Source of Truth'. If technical signals from data nodes (Sentiment/Macro/Microstructure) contradict the user-provided human context, you MUST divert your standard strategy to align with the human intelligence. Clearly explain in your thought process how human intelligence affected your decision.
+        --- 2. TECHNICAL NODE SIGNALS ---
+        {formatted_signals}
 
-            PRIORITY: {user_priority or 'NORMAL'}
+        --- 3. MARKET ENVIRONMENT ---
+        Current Data: {market_data}
 
-            If HUMAN INTELLIGENCE is present and PRIORITY is HIGH, treat it as a superior market alert or context injection from a human operator. If it contradicts technical signals, you must prioritize the HUMAN INTELLIGENCE and divert your strategy accordingly. Explain how you used it in your thought process.
+        --- CRITICAL OPERATIONAL RULES ---
+        1. SOURCE OF TRUTH: If "HUMAN INTELLIGENCE" provides a specific bias or market outlook, 
+           treat it as the primary Source of Truth. 
+        2. MIND DIVERSION: If technical signals (Sentiment, Macro, Microstructure) suggest a 
+           different move than the Human Context, you MUST divert your mind and prioritize 
+           the Human Intelligence.
+        3. FALLBACK: If no clear Human Intelligence is provided, use a weighted consensus 
+           of the technical node signals based on their quality scores.
 
-            ## FUND MANAGER OVERRIDES (HIGHEST PRIORITY)
-            - If 'forced_bias' is set to SHORT, you are FORBIDDEN from choosing LONG, even if technicals are bullish.
-            - If 'forced_bias' is set to LONG, you are FORBIDDEN from choosing SHORT, even if technicals are bearish.
-            - If 'forced_bias' is set to NEUTRAL, you must NOT execute any trades, regardless of signals.
-            - If 'forced_bias' is None, use your own logic.
-            - The Fund Manager's overrides supersede all other logic, technicals, or signals.
-            - The minimum confidence required to execute is {rules.get('risk_threshold'):.2f}.
-            - These overrides are non-negotiable and must be enforced above all else.
+        --- OUTPUT FORMAT ---
+        You must return ONLY a JSON object with this structure:
+        {{
+            "bias": "LONG" | "SHORT" | "NEUTRAL",
+            "confidence": 0.0 to 1.0,
+            "reasoning": "A concise explanation of why you chose this move, mentioning if you diverted focus based on human intel."
+        }}
+        """
+        try:
+            response = self.model.generate_content(prompt)
+            # Clean response for markdown formatting if present
+            raw_text = response.text.replace('```json', '').replace('```', '').strip()
+            strategy = json.loads(raw_text)
+            # Validation logic
+            if strategy['bias'] not in ['LONG', 'SHORT', 'NEUTRAL']:
+                strategy['bias'] = 'NEUTRAL'
+            return strategy['bias'], float(strategy.get('confidence', 0.5))
+        except Exception as e:
+            print(f"Error in Strategist Reasoning: {e}")
+            return "NEUTRAL", 0.0
 
-                ## CURRENT OVERRIDES:
-                - forced_bias: {rules.get('forced_bias') or 'None (AI Discretion Authorized)'}
-                - risk_threshold: {rules.get('risk_threshold'):.2f}
-
-                ## MARKET CONTEXT:
-                {json.dumps(market_snapshot)}
-
-                ## SHORT-TERM MEMORY (Cached Purchases):
-                {json.dumps(working_memory)}
-
-                ## AVAILABLE NODES FOR PURCHASE:
-                {json.dumps(available_nodes)}
-
-                ## STEP 1: CALCULATE UTILITY FOR EACH NODE
-                For each node, compute utility_score = (qualityScore / 100) × (1 - (price / 50)) × freshness_factor
-                Where:
-                - qualityScore: 0-100 (higher is better)
-                - price: Cost in USDC (penalize expensive nodes)
-                - freshness_factor: Based on granularity. If signal is cached in memory and NOT stale, freshness=0 (no new utility).
-                    Granularity staleness: "1m" stale after 2min, "5m" stale after 10min, "1h" stale after 2h
-
-                ## STEP 2: VOLATILITY-BASED PREFERENCE
-                - IF recent_volatility > 0.05: Prefer 'microstructure' nodes (best execution insight)
-                - IF recent_volatility < 0.02 (stagnant): Prefer 'sentiment' or 'macro' nodes (regime changes)
-                - Otherwise: Pick highest utility score regardless of type
-
-                ## STEP 3: VERDICT
-                - PURCHASE_DATA: Only if highest_utility_score > 0.3 AND cost < {current_balance * 0.05:.2f} USDC
-                - USE_MEMORY: If cached signals are fresh and utility_score < 0.3
-                - ABORT: If no fresh signals available and market is too stale
-
-                ## CRITICAL CONSTRAINTS:
-                - MAXIMUM cost per node: 50.0 USDC
-                - Minimum confidence to execute trades: 0.15
-                - risk_confidence must be a numeric decimal (0.0-1.0), NOT text
-                - Only 'PURCHASE_DATA' if market regime changed OR memory is provably stale per granularity rules
-
-                ## RESPONSE SCHEMA (MUST BE VALID JSON):
-                {{
-                    "thought": "Brief analysis: utility scores computed, market regime, cache freshness, final selection rationale (explain how HUMAN INTELLIGENCE was used if present)",
-                    "verdict": "PURCHASE_DATA | USE_MEMORY | ABORT",
-                    "target_node_id": "UUID string (only if PURCHASE_DATA, null if USE_MEMORY or ABORT)",
-                    "utility_score": 0.XX,
-                    "alpha_per_usdc": 0.XX,
-                    "execution_bias": "LONG | SHORT | NEUTRAL",
-                    "risk_confidence": 0.XX
-                }}
-
-                CRITICAL: All numeric fields (utility_score, alpha_per_usdc, risk_confidence) MUST be numeric decimals (0.0-1.0), never text.
-                """
-        import re
-        import time
-        for attempt in range(max_retries + 1):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are a professional trader. Respond only in valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={ "type": "json_object" },
-                    max_tokens=1000,
-                    temperature=0.2
-                )
-                content = response.choices[0].message.content
-                # Remove any Markdown code block markers (``` or ```json) and whitespace
-                content = re.sub(r'^```[a-zA-Z]*\s*', '', content.strip(), flags=re.MULTILINE)
-                content = re.sub(r'```$', '', content, flags=re.MULTILINE).strip()
-
-                # Check for likely complete JSON
-                if content.startswith('{') and content.endswith('}'):
-                    try:
-                        return json.loads(content)
-                    except Exception as json_err:
-                        print(f"❌ [Strategist API Error] JSON decode failed: {json_err}\nRaw content: {content}")
-                else:
-                    print(f"❌ [Strategist API Error] Incomplete or malformed JSON. Raw content: {content}")
-            except Exception as e:
-                print(f"❌ [Strategist API Error] {e}")
-            if attempt < max_retries:
-                print(f"🔁 [Strategist] Retrying LLM call (attempt {attempt+2})...")
-                time.sleep(1)
-        # If all retries fail
-        return {
-            "thought": "Malformed or incomplete response from API after retries. Defaulting to HOLD.",
-            "verdict": "ABORT",
-            "risk_confidence": 0
-        }
-
-    async def route_model(self, phase, prompt, system_prompt=None):
-        # GitHub Models uses single gpt-4o-mini for all phases
-        # This method maintained for compatibility but simplified
-        return await self.get_structured_response(prompt, model=self.model, system_prompt=system_prompt)
+class TradeAnalyzer:
+    """Production analyzer for post-trade performance review"""
+    def analyze_win_rate(self, history):
+        if not history:
+            return 0.0
+        wins = [t for t in history if t.get('profit', 0) > 0]
+        return len(wins) / len(history)
 
 # --- UNIVERSAL DECORATOR ---
 class UniversalTool:
