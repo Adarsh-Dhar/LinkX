@@ -57,39 +57,37 @@ model Trade {
 // --------------------------------------------------------
 
 model AlphaNode {
-  trades              Trade[]     @relation("TradeAlphaNodes")
-  id                  String   @id @default(uuid())
-  title               String   // Formerly 'name'
-  nodeType            String?   // e.g. "microstructure", "sentiment", "macro"
-  description         String?
-  category            String
-  endpointUrl         String   @unique // e.g. "http://localhost:4001/api/
-  price               Float    @default(0.0)
-  ratings             Int      @default(0) // Formerly 'qualityScore'
-  latencyMs           Int      @default(0)
-  more_context        String?  // New field for permanent context
-  icon                String   @default("activity")
-  status              String   @default("active") // "active", "inactive"
-  isPurchased         Boolean  @default(false)
-  whitelisted         Boolean  @default(false)
-  historicalWinRate   Float    @default(0.0) // Weighted win rate from linked trades (0-1)
-  lastPurchaseTime    DateTime? // Timestamp of last purchase for staleness checks
-  lastUpdated         DateTime @default(now())
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
-  // Registration handshake fields
-  providerAddress     String?   // Wallet address that receives x402 payments
-  registeredAt        DateTime? // Timestamp of initial registration
-  registrationStatus  String   @default("pending") // "pending", "verified", "rejected"
-  apiVersion          String?  @default("1.0") // API version for compatibility checks
-  healthCheckUrl      String?  // Optional health monitoring endpoint
-  lastHealthCheck     DateTime? // Last successful health check
-  healthStatus        String   @default("unknown") // "healthy", "degraded", "down", "unknown"
-  
-  // Dynamic data linked via DataLog
+  id            String   @id @default(uuid())
+  title         String
+  nodeType      String
+  category      String
+  description   String?
+  more_context  String?
+  price         Float
+  status        String   @default("active")
+  isPurchased   Boolean  @default(false)
+  whitelisted   Boolean  @default(false)
+  endpointUrl   String   @unique
+  port          Int
+  icon          String?
+  ratings       Int      @default(0)
+  latencyMs     Int?
+  assetCoverage String?
+  granularity   String?
+  historicalWinRate Float @default(0.0)
   dataLogs      DataLog[]
-  // ... other existing fields like endpointUrl
+  lastUpdated   DateTime @default(now())
+    trades         Trade[] @relation("TradeAlphaNodes")
+}
+
+model DataLog {
+  id        String   @id @default(uuid())
+  nodeId    String
+  node      AlphaNode @relation(fields: [nodeId], references: [id])
+  data      String
+  fetchedAt DateTime @default(now())
+    logRating LogRating?
+    tradeDecisions TradeDecision[]
 }
 
 /// Example seed data for the three demo nodes:
@@ -127,19 +125,6 @@ model SystemState {
 // --------------------------------------------------------
 // AlphaNode model removed
 
-// --------------------------------------------------------
-// 6. DATA LOG (History of Data Points Fetched)
-// --------------------------------------------------------
-model DataLog {
-  id          String   @id @default(uuid())
-  nodeId      String
-  node        AlphaNode @relation(fields: [nodeId], references: [id])
-  data        String   // Raw data fetched (JSON, text, etc.)
-  normalized  Float?   // Normalized signal value, if applicable
-  fetchedAt   DateTime @default(now())
-  tradeDecisions TradeDecision[]
-  userRating  LogRating? // Add this line
-}
 
 // Add this model at the end of the file
 model LogRating {

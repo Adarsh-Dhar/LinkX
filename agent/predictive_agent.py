@@ -133,13 +133,17 @@ class PredictiveAgent:
                 if not target_node:
                     print(f"   ❌ [x402] Target node {target_node_id} not found in metadata")
                     return
-                
-                node_title = target_node.get('title') or target_node.get('name')
-                node_ratings = target_node.get('ratings') or target_node.get('qualityScore', 0)
+                # --- Use new schema fields ---
+                node_title = target_node.get('title')
+                node_ratings = target_node.get('ratings', 0)
                 print(f"   💳 [x402] Initiating real blockchain payment for {node_title}")
                 print(f"      Price: {target_node['price']} USDC | Ratings: {node_ratings}/100")
-                
-                # Execute REAL USDC transfer to provider
+                # --- Staleness check using node timestamp ---
+                node_timestamp = target_node.get('timestamp')
+                last_seen = self.short_term_memory.get(target_node_id, {}).get('timestamp')
+                if node_timestamp and last_seen and node_timestamp <= last_seen:
+                    print(f"   ⏩ [Staleness] Node data not updated since last purchase. Skipping buy.")
+                    return
                 # Log node purchase
                 await self.log_activity({
                     "type": "node_purchase",
@@ -149,53 +153,32 @@ class PredictiveAgent:
                     "nodePrice": float(target_node['price']),
                     "nodeRatings": int(node_ratings)
                 })
-                
-                # Execute REAL USDC transfer to provider
                 try:
                     from .wallet_manager import WalletManager
                     wallet = WalletManager()
-                    
-                    # Get provider address from env or use default
                     provider_address = os.getenv("PROVIDER_ADDRESS", "0xFe5e03799Fe833D93e950d22406F9aD901Ff3Bb9")
-                    
-                    # Execute transfer
                     tx_hash = wallet.transfer_usdc(provider_address, target_node['price'])
-                    
                     if tx_hash:
                         print(f"   ✅ [x402] Payment confirmed! TX: {tx_hash}")
-                        
-                        # Use tx_hash as proof header to fetch locked data
                         signal = await self.pipeline.fetch_with_proof(
                             target_node['endpointUrl'],
                             tx_hash,
                             target_node['id']
                         )
-                        
                         if signal:
                             print(f"   ✅ [Data Feed] Received signal: {signal}")
-
-                            # Log signal received
                             await self.log_activity({
                                 "type": "signal_received",
                                 "title": f"Signal from {node_title}",
                                 "description": f"Received signal value: {signal}",
                                 "signalValue": float(signal)
                             })
-
-                            # Update Memory with TTL based on granularity
-                            # Log signal received
-                            await self.log_activity({
-                                "type": "signal_received",
-                                "title": f"Signal from {target_node['name']}",
-                                "description": f"Received signal value: {signal}",
-                                "signalValue": float(signal)
-                            })
-                            
-                            # Update Memory with TTL based on granularity and new fields
                             granularity = target_node.get('granularity', '5m')
+                            # Store node timestamp if available, else fallback to now
+                            memory_timestamp = node_timestamp if node_timestamp else time.time()
                             self.short_term_memory[target_node_id] = {
                                 "value": signal,
-                                "timestamp": time.time(),
+                                "timestamp": memory_timestamp,
                                 "at_price": market_snapshot['current_price'],
                                 "granularity": granularity,
                                 "tx_hash": tx_hash,
@@ -205,7 +188,6 @@ class PredictiveAgent:
                                 "ratings": node_ratings
                             }
                             intel[target_node_id] = signal
-                            # Create DataLog entry in backend
                             try:
                                 requests.post(
                                     "http://localhost:3600/api/agent/data-log",
@@ -222,7 +204,6 @@ class PredictiveAgent:
                             print(f"   ❌ [Data Feed] Failed to retrieve locked data despite payment")
                     else:
                         print(f"   ❌ [x402] Payment transfer failed - insufficient funds or network error")
-                
                 except Exception as e:
                     print(f"   ❌ [x402 Error] {e}")
                     import traceback
@@ -250,22 +231,13 @@ class PredictiveAgent:
             print(f"   🧠 [Memory] Reusing {len(valid_memory)}/{len(self.short_term_memory)} cached signals. Saving USDC.")
             intel = valid_memory
 
-        # 7. EXECUTION: Apply Human Override (dynamic instance variables + backward compatible env)
-        # Check environment variable for backward compatibility
-        force_action = os.getenv("FORCE_ACTION", "").strip().upper()
-        if force_action or self.forced_bias:
-            # Prioritize instance variable over env
-            active_bias = self.forced_bias if self.forced_bias else force_action
-            if active_bias in ["BUY", "LONG"]:
-                decision['execution_bias'] = "LONG"
-            elif active_bias in ["SELL", "SHORT"]:
-                decision['execution_bias'] = "SHORT"
-            elif active_bias in ["HOLD", "NEUTRAL"]:
-                decision['execution_bias'] = "NEUTRAL"
+        # 7. FINAL CHECK FOR PRIORITY OVERRIDE BEFORE EXECUTION
+        priority_override = self.check_for_priority_overrides() if hasattr(self, 'check_for_priority_overrides') else None
+        if priority_override:
+            decision['execution_bias'] = priority_override.get('bias', decision.get('execution_bias'))
             decision['risk_confidence'] = 1.0
             decision['verdict'] = "FORCE_ACTION"
-            override_source = "Instance Override" if self.forced_bias else "ENV Override"
-            print(f"   🧭 [{override_source}] Forcing {decision['execution_bias']} bias")
+            print(f"   🧭 [Priority Override] Forcing {decision['execution_bias']} bias before execution")
 
         # 8. EXECUTION: Only move if confidence meets dynamic threshold (or forced)
         if decision.get('risk_confidence', 0) >= self.risk_threshold and decision.get('execution_bias') != "NEUTRAL":
@@ -282,7 +254,6 @@ class PredictiveAgent:
                 "riskAction": "SKIP",
                 "riskReason": f"Low confidence: {decision.get('risk_confidence', 0):.2f} < 0.15"
             })
-        
         # Log cycle end
         await self.log_activity({
             "type": "cycle_end",
