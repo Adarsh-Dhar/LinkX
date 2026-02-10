@@ -22,12 +22,6 @@ const routes = [
     color: "text-sky-500",
   },
   {
-    label: "Trade",
-    icon: LineChart,
-    href: "/trade",
-    color: "text-violet-500",
-  },
-  {
     label: "Alpha Market",
     icon: ShoppingCart,
     href: "/market",

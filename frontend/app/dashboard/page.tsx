@@ -13,9 +13,15 @@ export default function DashboardPage() {
         <TradingView />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-        <DataStreamWidget />
-        <DecisionLog />
-        <ROICalculator />
+        <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow p-6 text-zinc-100 [&>*]:bg-transparent">
+          <DataStreamWidget />
+        </div>
+        <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow p-6 text-zinc-100 [&>*]:bg-transparent">
+          <DecisionLog />
+        </div>
+        <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow p-6 text-zinc-100 [&>*]:bg-transparent">
+          <ROICalculator />
+        </div>
       </div>
     </>
   );
