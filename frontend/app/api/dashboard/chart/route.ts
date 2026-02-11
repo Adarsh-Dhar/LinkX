@@ -1,34 +1,37 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-export async function GET() {
-  try {
-    // Fetch portfolio snapshots from database with historical data
-    // Get up to 60 recent snapshots (1 per minute = 1 hour of data)
+export async function GET(request: Request) {
+  // Support /api/market/price/[pair] by extracting pair from URL
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/');
+  const pair = pathParts[pathParts.length - 1];
+
+  // If the route is /api/market/price/WXTZ-USDC, return latest price
+  if (pair && pair.match(/^[A-Z]+-[A-Z]+$/)) {
+    // Fetch chart data (portfolio snapshots)
     const snapshots = await prisma.portfolioSnapshot.findMany({
       orderBy: { timestamp: 'desc' },
-      take: 60,
+      take: 1,
     });
-
     if (snapshots.length > 0) {
-      // Reverse to get chronological order for chart
-      const chartData = snapshots.reverse().map((snap) => {
-        const hour = String(snap.timestamp.getHours()).padStart(2, '0');
-        const minute = String(snap.timestamp.getMinutes()).padStart(2, '0');
-        const second = String(snap.timestamp.getSeconds()).padStart(2, '0');
-        const timeStr = `${hour}:${minute}:${second}`;
-
-        return {
-          time: timeStr,
-          value: parseFloat(snap.totalValueUsd.toFixed(2)),
-          wxtzBalance: parseFloat(snap.wxtzBalance.toFixed(4)),
-          usdcBalance: parseFloat(snap.usdcBalance.toFixed(2)),
-          timestamp: snap.timestamp.toISOString(),
-        };
-      });
-
-      return NextResponse.json(chartData);
+      // For WXTZ-USDC, calculate price as wxtzBalance/usdcBalance (or vice versa)
+      const snap = snapshots[0];
+      let price = null;
+      if (pair === 'WXTZ-USDC' && snap.usdcBalance > 0) {
+        price = snap.wxtzBalance / snap.usdcBalance;
+      } else if (pair === 'USDC-WXTZ' && snap.wxtzBalance > 0) {
+        price = snap.usdcBalance / snap.wxtzBalance;
+      }
+      if (price !== null && isFinite(price)) {
+        return NextResponse.json({ pair, price: parseFloat(price.toFixed(6)), timestamp: snap.timestamp.toISOString() });
+      }
     }
+    // If no data or invalid, return 404
+    return NextResponse.json({ error: 'Price not found' }, { status: 404 });
+  }
+  try {
+    // ...existing code for chart data route...
 
     // If no snapshots yet, return mock data with 60 historical points
     const mockData = Array.from({ length: 60 }, (_, i) => {

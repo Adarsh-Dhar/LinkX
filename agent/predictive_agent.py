@@ -139,25 +139,37 @@ class PredictiveAgent:
         }
         print(f"   🧠 [Reasoning] Consulting AlphaStrategist with {len(nodes_metadata)} nodes...")
         print(f"   🎯 [Human Override] Threshold: {self.risk_threshold:.2f} | Bias: {self.forced_bias or 'AI Discretion'}")
-        decision = self.strategist.get_strategy(market_snapshot, self.short_term_memory, human_rules)
-        print(f"🧠 [Strategist Thought]: {decision['thought']}")
+        import json
+        import re
+        res = self.strategist.get_strategy(market_snapshot, self.short_term_memory, human_rules)
+        # Robust JSON extraction from LLM output
+        try:
+            json_match = re.search(r'\{.*\}', str(res), re.DOTALL)
+            if json_match:
+                decision = json.loads(json_match.group())
+            else:
+                decision = json.loads(res)
+        except Exception as e:
+            print(f"   ⚠️ [Parse Error] Failed to parse AI response: {e}")
+            raise
+        print(f"🧠 [Strategist Thought]: {decision.get('reasoning', str(res))}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 
         # Log utility score computation
         await self.log_activity({
-            "type": "utility_score",
-            "title": f"Utility Score Computed",
-            "description": decision['thought'],
-            "utilityScore": float(decision.get('utility_score', 0)),
-            "alphaPerUsdcRatio": float(decision.get('alpha_per_usdc', 0)),
-            "tradeBias": decision.get('execution_bias', 'NEUTRAL'),
-            "tradeConfidence": float(decision.get('risk_confidence', 0)),
-            "agentThought": decision['thought']
+              "type": "utility_score",
+              "title": f"Utility Score Computed",
+              "description": decision.get('thought', decision.get('reasoning', str(res))),
+              "utilityScore": float(decision.get('utility_score', 0)),
+              "alphaPerUsdcRatio": float(decision.get('alpha_per_usdc', 0)),
+              "tradeBias": decision.get('execution_bias', 'NEUTRAL'),
+              "tradeConfidence": float(decision.get('risk_confidence', 0)),
+              "agentThought": decision.get('thought', decision.get('reasoning', str(res)))
         })
 
         # 6. SELECTIVE ACTION: Real x402 Payment for High-Confidence Purchases
         intel = {}
-        if decision['verdict'] == "PURCHASE_DATA":
+        if decision.get('verdict', None) == "PURCHASE_DATA":
             target_node_id = decision.get('target_node_id')
             if target_node_id:
                 # Find target node metadata
@@ -241,7 +253,7 @@ class PredictiveAgent:
                     import traceback
                     traceback.print_exc()
         
-        elif decision['verdict'] == "USE_MEMORY":
+        elif decision.get('verdict') == "USE_MEMORY":
             # Filter memory for data that is NOT stale based on granularity
             now = time.time()
             valid_memory = {}
@@ -272,28 +284,31 @@ class PredictiveAgent:
             print(f"   🧭 [Priority Override] Forcing {decision['execution_bias']} bias before execution")
 
         # 8. EXECUTION: Only move if confidence meets dynamic threshold (or forced)
-        # 1. Extract values with fallbacks for different naming conventions
-        actual_bias = decision.get('execution_bias') or decision.get('bias', 'NEUTRAL')
-        actual_confidence = decision.get('risk_confidence') or decision.get('confidence', 0.0)
+        # Force extraction of bias and confidence regardless of key names used
+        raw_bias = decision.get('execution_bias') or decision.get('bias') or 'NEUTRAL'
+        raw_conf = decision.get('risk_confidence') or decision.get('confidence') or 0.0
 
-        # 2. Update the logs so you can see what is happening
-        print(f"   🎯 [Debug] Bias: {actual_bias} | Confidence: {actual_confidence}")
+        # Ensure they are the correct types
+        execution_bias = str(raw_bias).upper()
+        risk_confidence = float(raw_conf)
 
-        # 3. Use these consolidated values for the threshold check
-        if actual_confidence >= self.risk_threshold and actual_bias != "NEUTRAL":
-            print(f"   🚀 [Execution] Conditions met. Executing {actual_bias}...")
+        print(f"   🎯 [Final Decision] Bias: {execution_bias} | Confidence: {risk_confidence}")
+
+        # Execute if confidence meets threshold and bias is not neutral
+        if risk_confidence >= self.risk_threshold and execution_bias != "NEUTRAL":
+            print(f"   🚀 [Execution] Conditions met. Executing {execution_bias}...")
             await self.execute_move(decision, intel)
         else:
-            print(f"   🛡️ [Risk Management] Skipping execution: bias={actual_bias}, confidence={actual_confidence:.2f} < threshold={self.risk_threshold}")
+            print(f"   🛡️ [Risk Management] Skipping: bias={execution_bias}, confidence={risk_confidence:.2f} < threshold={self.risk_threshold}")
 
         # Log risk skip if confidence too low
-        if actual_confidence < self.risk_threshold:
+        if risk_confidence < self.risk_threshold:
             await self.log_activity({
                 "type": "risk_skip",
                 "title": "Risk Management - Execution Skipped",
-                "description": f"Decision confidence ({actual_confidence:.2f}) below threshold",
+                "description": f"Decision confidence ({risk_confidence:.2f}) below threshold",
                 "riskAction": "SKIP",
-                "riskReason": f"Low confidence: {actual_confidence:.2f} < {self.risk_threshold:.2f}"
+                "riskReason": f"Low confidence: {risk_confidence:.2f} < {self.risk_threshold:.2f}"
             })
         # Log cycle end
         await self.log_activity({
