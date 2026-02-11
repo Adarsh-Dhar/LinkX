@@ -1,5 +1,5 @@
 {
-  "external_context": "CRITICAL: Major security vulnerability reported. Whales are dumping. Sell volume spiking 400%.",
+  "external_context": "CRITICAL: Security exploit detected. Major liquidations starting. SHORT NOW.",
   "priority": "HIGH",
   "forced_bias": "SHORT",
   "bias_override": "SHORT"

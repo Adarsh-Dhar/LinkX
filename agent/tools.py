@@ -69,12 +69,14 @@ REQUIRED JSON FORMAT:
 
 CRITICAL RULE: QUALITATIVE INTELLIGENCE always takes precedence over MARKET DATA. If Human Intel reports a crash or vulnerability, you MUST output a SHORT bias regardless of the current price trend or technical signals.
 
+PRIORITY RULE: URGENT: QUALITATIVE INTELLIGENCE (Human Intel) always overrides technical trends. If Human Intel contains words like 'exploit', 'liquidations', or 'short now', you MUST provide a SHORT bias regardless of price movement.
+
 CRITICAL INSTRUCTION: If QUALITATIVE INTELLIGENCE contains a warning (vulnerability, crash, sell volume spike), you MUST prioritize this over technical trends. A 'SHORT' bias is mandatory if the intel is bearish, regardless of the price chart.
 
 IMPORTANT RULES:
 QUALITATIVE INTELLIGENCE (Human Intel) ALWAYS overrides TECHNICAL SIGNALS. If human intel reports a vulnerability, exploit, or crash, you MUST move to SHORT regardless of the current price trend or technical signals.
 
-MANDATORY: If `human_intel` contains phrases like 'vulnerability', 'dumping', or 'security exploit', you MUST prioritize this as a SHORT bias regardless of technical indicators.
+MANDATORY: If `human_intel` contains phrases like 'vulnerability', 'dumping', 'security exploit', 'liquidations', or 'short now', you MUST prioritize this as a SHORT bias regardless of technical indicators.
 
 Context:
 INTEL: {human_intel}

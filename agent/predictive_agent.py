@@ -10,26 +10,27 @@ from .tools import AlphaStrategist
 
 class PredictiveAgent:
     def check_for_overrides(self):
-        """
-        Check for override_state.json and inject external_context if present.
-        If found, inject into self.short_term_memory['human_intel'] with fresh timestamp.
-        Supports both 'bias_override' and 'forced_bias' for backward compatibility.
-        """
-        override_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "override_state.json")
+        """Checks for a JSON file to inject human intel or force a bias."""
+        # Ensure we look in the directory WHERE THIS SCRIPT IS, not the root
+        import json
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        override_path = os.path.join(base_dir, "override_state.json")
         if os.path.exists(override_path):
             try:
                 with open(override_path, "r") as f:
                     override_data = json.load(f)
-                    # Accept both common naming conventions
+                    # Check for bias overrides
                     self.forced_bias = override_data.get('forced_bias') or override_data.get('bias_override')
+                    # Ensure intel is injected into memory
                     self.external_intel = override_data.get('external_context')
                     if self.external_intel:
+                        # Sync with what tools.py expects (usually 'human_intel')
                         self.short_term_memory['human_intel'] = self.external_intel
                     if self.forced_bias:
                         self.forced_bias = self.forced_bias.upper()
-                        print(f"   🎯 [OVERRIDE DETECTED] Bias: {self.forced_bias}")
+                        print(f"   🎯 [OVERRIDE ACTIVE] Bias: {self.forced_bias}")
             except Exception as e:
-                print(f"   ⚠️ [Override Error] Failed to read override file: {e}")
+                print(f"   ⚠️ [Override Error] {e}")
         return None
     def __init__(self, pipeline):
         self.pipeline = pipeline

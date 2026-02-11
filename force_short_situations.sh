@@ -3,24 +3,17 @@
 # Creates a situation that strongly encourages the agent to go SHORT
 
 
-# Detect the directory where this script sits
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-OVERRIDE_FILE="$SCRIPT_DIR/agent/override_state.json"
-
+# Always write override_state.json into ./agent/ from project root
 echo "📉 Creating BEARISH situation..."
 
-# Inject human intelligence into the agent's memory via override_state.json
-
-
-cat <<EOF > "$OVERRIDE_FILE"
+cat <<EOF > "./agent/override_state.json"
 {
-  "external_context": "CRITICAL: Major security vulnerability reported. Whales are dumping. Sell volume spiking 400%.",
+  "external_context": "CRITICAL: Security exploit detected. Major liquidations starting. SHORT NOW.",
   "priority": "HIGH",
   "forced_bias": "SHORT",
   "bias_override": "SHORT"
 }
 EOF
 
-echo "✅ Bearish situation injected at $OVERRIDE_FILE. Starting services..."
-"$SCRIPT_DIR/start_all.sh"
+echo "✅ Bearish Intelligence Injected into ./agent/override_state.json"
 ./start_all.sh
