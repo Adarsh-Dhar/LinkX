@@ -7,8 +7,31 @@ import time
 import re
 from datetime import datetime
 from openai import OpenAI
+
 from web3 import Web3
 from dotenv import load_dotenv
+
+# --- VVS ROUTER ABI (imported from abi/vvsrouter.ts) ---
+import pathlib
+
+# Load the ABI from the TypeScript file (as a Python list)
+VVSROUTER_ABI_PATH = os.path.join(os.path.dirname(__file__), '..', 'abi', 'vvsrouter.ts')
+def _load_vvsrouter_abi():
+    try:
+        with open(VVSROUTER_ABI_PATH, 'r') as f:
+            content = f.read()
+        # Extract the JSON array from the TypeScript export
+        import re, json
+        match = re.search(r'VVSRouter_ABI\s*=\s*(\[.*\])', content, re.DOTALL)
+        if match:
+            abi_json = match.group(1)
+            return json.loads(abi_json)
+    except Exception as e:
+        print(f"[tools.py] Warning: Could not load VVSRouter_ABI: {e}")
+    return []
+
+ROUTER_ABI = _load_vvsrouter_abi()
+
 
 load_dotenv()
 
@@ -27,29 +50,27 @@ class AlphaStrategist:
         )
         self.model_name = "gpt-4o-mini"
 
-    def get_strategy(self, market_data, node_signals, memory):
+    async def get_strategy(self, market_data, node_signals, memory):
         """Generates a trading strategy using LLM reasoning."""
         human_intel = memory.get('human_intel', "No external human context provided.")
         formatted_signals = json.dumps(node_signals, indent=2)
-        
+
+        # Optimized prompt to prevent AI from adding extra quotes
         prompt = f"""
-You are a Financial Analysis Engine for LinkX.
-Your response MUST be a valid JSON object with ONLY these keys:
-    - execution_bias (string, one of "LONG", "SHORT", "NEUTRAL")
-    - risk_confidence (float, 0.0 to 1.0)
-    - reasoning (string, concise explanation)
+Analyze the following market data. Formulate a strategy.
+Return ONLY a raw JSON object. Do not use Markdown. Do not use backticks.
 
-You MUST use double quotes for all keys and values. Do NOT use single quotes. 
-Do NOT include markdown, code blocks, or any text before or after the JSON.
-Return ONLY the JSON object, nothing else.
-
-Example:
-{{"execution_bias": "LONG", "risk_confidence": 0.45, "reasoning": "Technical trend is bullish."}}
+REQUIRED JSON FORMAT:
+{{
+    "execution_bias": "LONG", "SHORT", or "NEUTRAL",
+    "risk_confidence": float (0.0 to 1.0),
+    "reasoning": "string"
+}}
 
 Context:
-QUALITATIVE INTELLIGENCE: {human_intel}
-TECHNICAL SIGNALS: {formatted_signals}
-MARKET DATA: {market_data}
+INTEL: {human_intel}
+SIGNALS: {formatted_signals}
+MARKET: {market_data}
 """
         try:
             response = self.client.chat.completions.create(
@@ -58,44 +79,31 @@ MARKET DATA: {market_data}
                 temperature=0.1,
             )
             raw_text = response.choices[0].message.content.strip()
-            
-            # Robust JSON extraction (removes markdown backticks if AI ignores instruction)
+
+            # Robust Extraction: Find anything between the first { and last }
+            import re
             json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
             if not json_match:
-                raise ValueError("No JSON object found in response.")
-            
-            json_str = json_match.group().replace("'", '"')
+                raise ValueError(f"No JSON found in response: {raw_text}")
+
+            json_str = json_match.group()
+            # ONLY replace if the AI uses single quotes instead of doubles
+            if "'" in json_str and '"' not in json_str:
+                json_str = json_str.replace("'", '"')
+
             strategy = json.loads(json_str)
 
-            # Validation
-            required_keys = {'execution_bias', 'risk_confidence', 'reasoning'}
-            if not required_keys.issubset(strategy.keys()):
-                raise ValueError(f"Missing keys. Required: {required_keys}")
-            
-            bias = strategy['execution_bias']
-            confidence = float(strategy['risk_confidence'])
-            reasoning = strategy['reasoning']
-
-            print(f"🤖 [BRAIN VERDICT] Bias: {bias} | Confidence: {confidence}")
-            print(f"💡 [REASONING] {reasoning}")
-
+            # Map the response to your predictive_agent's expected keys
             return {
-                'execution_bias': bias,
-                'risk_confidence': confidence,
-                'reasoning': reasoning,
-                'utility_score': 100 if human_intel != "No external human context provided." else 0,
-                'verdict': 'TRADE' if confidence > 0.05 else 'HOLD'  # Lowered threshold per requirements
+                'execution_bias': strategy.get('execution_bias', 'NEUTRAL'),
+                'risk_confidence': float(strategy.get('risk_confidence', 0.0)),
+                'reasoning': strategy.get('reasoning', 'No reason provided'),
+                'verdict': 'TRADE' if float(strategy.get('risk_confidence', 0)) > 0.05 else 'HOLD'
             }
 
         except Exception as e:
             print(f"❌ Error in Strategist Reasoning: {e}")
-            return {
-                'execution_bias': 'NEUTRAL',
-                'risk_confidence': 0.0,
-                'reasoning': f"Reasoning failure: {str(e)}",
-                'utility_score': 0,
-                'verdict': 'HOLD'
-            }
+            return {'execution_bias': 'NEUTRAL', 'risk_confidence': 0.0, 'reasoning': str(e), 'verdict': 'HOLD'}
 
 # --- 2. TRADE ANALYZER ---
 
@@ -128,6 +136,21 @@ VVS_ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
 WXTZ_ADDRESS    = os.getenv("WXTZ_ADDRESS")
 USDC_CONTRACT   = os.getenv("USDC_CONTRACT")
 RPC_URL         = os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
+
+# Export for other modules
+__all__ = [
+    'VVS_ROUTER_ADDR',
+    'WXTZ_ADDRESS',
+    'USDC_CONTRACT',
+    'RPC_URL',
+    'ROUTER_ABI',
+    'resolve_address',
+    'execute_vvs_swap',
+    'get_portfolio_value',
+    'estimate_swap_output',
+    'get_token_balance',
+    'get_trading_signals',
+]
 
 def resolve_address(token):
     if not token:

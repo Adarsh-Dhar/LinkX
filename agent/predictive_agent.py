@@ -141,30 +141,33 @@ class PredictiveAgent:
         print(f"   🎯 [Human Override] Threshold: {self.risk_threshold:.2f} | Bias: {self.forced_bias or 'AI Discretion'}")
         import json
         import re
-        res = self.strategist.get_strategy(market_snapshot, self.short_term_memory, human_rules)
-        # Robust JSON extraction from LLM output
         try:
-            json_match = re.search(r'\{.*\}', str(res), re.DOTALL)
-            if json_match:
-                decision = json.loads(json_match.group())
-            else:
-                decision = json.loads(res)
+            decision = await self.strategist.get_strategy(market_snapshot, human_rules, self.short_term_memory)
         except Exception as e:
-            print(f"   ⚠️ [Parse Error] Failed to parse AI response: {e}")
-            raise
-        print(f"🧠 [Strategist Thought]: {decision.get('reasoning', str(res))}")
+            print(f"   ⚠️ [Agent Error] Strategist failed: {e}")
+            decision = {
+                'execution_bias': 'NEUTRAL',
+                'risk_confidence': 0.0,
+                'reasoning': str(e),
+                'thought': str(e),
+                'verdict': 'HOLD'
+            }
+
+        bias = decision.get('execution_bias', 'NEUTRAL')
+        conf = decision.get('risk_confidence', 0.0)
+        print(f"🧠 [Strategist Thought]: {decision.get('reasoning', str(decision))}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 
         # Log utility score computation
         await self.log_activity({
-              "type": "utility_score",
-              "title": f"Utility Score Computed",
-              "description": decision.get('thought', decision.get('reasoning', str(res))),
-              "utilityScore": float(decision.get('utility_score', 0)),
-              "alphaPerUsdcRatio": float(decision.get('alpha_per_usdc', 0)),
-              "tradeBias": decision.get('execution_bias', 'NEUTRAL'),
-              "tradeConfidence": float(decision.get('risk_confidence', 0)),
-              "agentThought": decision.get('thought', decision.get('reasoning', str(res)))
+            "type": "utility_score",
+            "title": f"Utility Score Computed",
+            "description": decision.get('reasoning', str(res)),
+            "utilityScore": float(decision.get('utility_score', 0)),
+            "alphaPerUsdcRatio": float(decision.get('alpha_per_usdc', 0)),
+            "tradeBias": decision.get('execution_bias', 'NEUTRAL'),
+            "tradeConfidence": float(decision.get('risk_confidence', 0)),
+            "agentThought": decision.get('reasoning', str(res))
         })
 
         # 6. SELECTIVE ACTION: Real x402 Payment for High-Confidence Purchases
@@ -314,7 +317,7 @@ class PredictiveAgent:
         await self.log_activity({
             "type": "cycle_end",
             "title": "Agent Cycle Complete",
-            "description": f"Completed cycle with verdict: {decision['verdict']}"
+            "description": f"Completed cycle with verdict: {decision.get('verdict', 'HOLD')}"
         })
 
     async def execute_move(self, decision, intel):
@@ -351,7 +354,7 @@ class PredictiveAgent:
             return
 
         print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence:.2f} | Threshold: {self.risk_threshold:.2f}")
-        print(f"   💭 [Basis] {decision['thought'][:80]}...")
+        print(f"   💭 [Basis] {(decision.get('reasoning') or decision.get('thought', 'No reasoning provided'))[:80]}...")
 
         try:
             # Initialize trading engine with shared wallet
@@ -381,7 +384,7 @@ class PredictiveAgent:
                     "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {trade_amount:.4f} USDC",
                     "tradeBias": bias,
                     "tradeConfidence": float(risk_confidence),
-                    "agentThought": decision.get('thought', ''),
+                    "agentThought": decision.get('reasoning', decision.get('thought', '')),
                     "metadata": {
                         "tradeAmount": float(trade_amount),
                         "tokenIn": "USDC",
@@ -420,7 +423,7 @@ class PredictiveAgent:
                     "description": f"Executing {bias} position with {risk_confidence:.2f} confidence | Amount: {trade_amount:.4f} WXTZ",
                     "tradeBias": bias,
                     "tradeConfidence": float(risk_confidence),
-                    "agentThought": decision.get('thought', ''),
+                    "agentThought": decision.get('reasoning', decision.get('thought', '')),
                     "metadata": {
                         "tradeAmount": float(trade_amount),
                         "tokenIn": "WXTZ",
