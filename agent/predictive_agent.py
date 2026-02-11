@@ -38,7 +38,7 @@ class PredictiveAgent:
         self.block_data_purchases = False
         self.is_running = False
         # --- HUMAN OVERRIDE STATE ---
-        self.risk_threshold = 0.15  # Default institutional-grade threshold
+        self.risk_threshold = 0.05  # Lowered minimum confidence required to execute
         self.forced_bias = None  # Can be "LONG", "SHORT", "NEUTRAL", or None for AI discretion
 
     def apply_human_interference(self, risk: float = None, bias: str = None):
@@ -96,11 +96,22 @@ class PredictiveAgent:
             print("   ❌ [Tape] Missing price/value column in tape data; skipping cycle.")
             return
 
+        # Calculate trend: simple momentum over last 10 prices
+        trend = "NEUTRAL"
+        if len(df[price_col]) >= 10:
+            price_now = float(df[price_col].iloc[-1])
+            price_10ago = float(df[price_col].iloc[-10])
+            if price_now > price_10ago:
+                trend = "BULLISH"
+            elif price_now < price_10ago:
+                trend = "BEARISH"
+
         market_snapshot = {
             "current_price": float(df[price_col].iloc[-1]),
             "price_change_5m": float(df[price_col].iloc[-1] - df[price_col].iloc[-5]),
             "recent_volatility": float(df[price_col].tail(10).std()),
-            "timestamp": df['timestamp'].iloc[-1] if "timestamp" in df.columns else datetime.utcnow().isoformat()
+            "timestamp": df['timestamp'].iloc[-1] if "timestamp" in df.columns else datetime.utcnow().isoformat(),
+            "trend": trend
         }
 
         # 4. FETCH FREE METADATA (Discovery Layer - no payment required)

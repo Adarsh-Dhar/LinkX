@@ -30,9 +30,8 @@ class AlphaStrategist:
         human_intel = memory.get('human_intel', "No external human context provided.")
         formatted_signals = json.dumps(node_signals, indent=2)
         
-        # WE CHANGED THE LABELS TO BE MORE "PROFESSIONAL" TO BYPASS FILTERS
         prompt = f"""
-        You are a Financial Analysis Engine for LinkX. 
+        You are a Financial Analysis Engine for LinkX.
         Your goal is to provide a unified market bias by synthesizing technical signals and qualitative intelligence.
 
         --- 1. QUALITATIVE INTELLIGENCE ---
@@ -41,21 +40,21 @@ class AlphaStrategist:
         --- 2. TECHNICAL QUANTITATIVE SIGNALS ---
         {formatted_signals}
 
-        --- 3. MARKET DATA ---
+        --- 3. MARKET DATA (market_snapshot) ---
         Current Data: {market_data}
 
         --- SYNTHESIS PROTOCOL ---
-        1. STRATEGIC WEIGHTING: If Qualitative Intelligence is available, assign it a higher 
-           weighting (0.8) compared to Technical Signals (0.2) in your final decision.
-        2. CONSISTENCY: If signals are missing, remain NEUTRAL unless Market Data shows a 
-           clear directional trend.
-        3. FORMAT: Return ONLY valid JSON.
+        1. STRATEGIC WEIGHTING: If Qualitative Intelligence is available, assign it a higher weighting (0.8) compared to Technical Signals (0.2) in your final decision.
+        2. If short_term_memory is empty or no node_signals are available or the nodes are irrelevant, you MUST perform Technical Analysis (TA) of the market_snapshot.
+        3. Look at price_change_5m and recent_volatility to determine a trend. If price_change_5m is strongly positive and volatility is high, bias LONG. If strongly negative, bias SHORT. If flat, bias NEUTRAL.
+        4. Even without external intel, assign a confidence score between 0 and 0.50 based on price momentum alone (higher for strong moves, lower for flat).
+        5. FORMAT: Return ONLY valid JSON.
 
         OUTPUT FORMAT:
         {{
             "bias": "LONG" | "SHORT" | "NEUTRAL",
             "confidence": 0.0 to 1.0,
-            "reasoning": "Explain the weighting used to reach this bias."
+            "reasoning": "Explain the weighting or technical logic used to reach this bias."
         }}
         """
         
