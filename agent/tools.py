@@ -6,19 +6,31 @@ import os
 import google.generativeai as genai
 from datetime import datetime
 
+from openai import OpenAI
+
 class AlphaStrategist:
-    def __init__(self, api_key: str):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+    def __init__(self, api_key=None):
+        self.api_key = (
+            api_key
+            or os.getenv("GITHUB_TOKEN")
+            or os.getenv("GITHUB_MODELS_API_KEY")
+        )
+        if not self.api_key:
+            raise ValueError(
+                "❌ No GitHub Models API key found. Set GITHUB_TOKEN or GITHUB_MODELS_API_KEY in your environment."
+            )
+        self.client = OpenAI(
+            base_url="https://api.github.com/openai/deployments/github-llm",
+            api_key=self.api_key,
+        )
+        self.model_name = "gpt-4o"
 
     def get_strategy(self, market_data, node_signals, memory):
         """
         Generates a high-level trading strategy by weighing technical node signals 
         against high-priority human intelligence injected via chat.
         """
-        # Extract context injected from the chat interface
         human_intel = memory.get('human_intel', "No external human context provided.")
-        # Prepare the signals for the prompt
         formatted_signals = json.dumps(node_signals, indent=2)
         prompt = f"""
         You are the Brain of LinkX, an autonomous trading agent. 
@@ -51,17 +63,35 @@ class AlphaStrategist:
         }}
         """
         try:
-            response = self.model.generate_content(prompt)
-            # Clean response for markdown formatting if present
-            raw_text = response.text.replace('```json', '').replace('```', '').strip()
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=512,
+                temperature=0.2,
+            )
+            raw_text = response.choices[0].message.content.replace('```json', '').replace('```', '').strip()
             strategy = json.loads(raw_text)
-            # Validation logic
-            if strategy['bias'] not in ['LONG', 'SHORT', 'NEUTRAL']:
+            if strategy.get('bias') not in ['LONG', 'SHORT', 'NEUTRAL']:
                 strategy['bias'] = 'NEUTRAL'
-            return strategy['bias'], float(strategy.get('confidence', 0.5))
+            # Return a dict with all expected keys for downstream code
+            return {
+                'bias': strategy.get('bias', 'NEUTRAL'),
+                'confidence': float(strategy.get('confidence', 0.5)),
+                'thought': strategy.get('reasoning', ''),
+                'utility_score': strategy.get('utility_score', 0),
+                'alpha_per_usdc': strategy.get('alpha_per_usdc', 0),
+                'verdict': strategy.get('verdict', 'NO_ACTION'),
+            }
         except Exception as e:
             print(f"Error in Strategist Reasoning: {e}")
-            return "NEUTRAL", 0.0
+            return {
+                'bias': 'NEUTRAL',
+                'confidence': 0.0,
+                'thought': f'Error: {e}',
+                'utility_score': 0,
+                'alpha_per_usdc': 0,
+                'verdict': 'NO_ACTION',
+            }
 
 class TradeAnalyzer:
     """Production analyzer for post-trade performance review"""

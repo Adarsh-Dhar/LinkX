@@ -28,7 +28,11 @@ class PredictiveAgent:
         return None
     def __init__(self, pipeline):
         self.pipeline = pipeline
-        self.strategist = AlphaStrategist()
+        api_key = (
+            os.getenv("GITHUB_TOKEN")
+            or os.getenv("GITHUB_MODELS_API_KEY")
+        )
+        self.strategist = AlphaStrategist(api_key=api_key)
         self.short_term_memory = {}  # Store: {node_id: {"data": x, "ts": y, "regime": z}}
         self.paused = False
         self.block_data_purchases = False
@@ -124,7 +128,7 @@ class PredictiveAgent:
         }
         print(f"   🧠 [Reasoning] Consulting AlphaStrategist with {len(nodes_metadata)} nodes...")
         print(f"   🎯 [Human Override] Threshold: {self.risk_threshold:.2f} | Bias: {self.forced_bias or 'AI Discretion'}")
-        decision = self.strategist.rethink_strategy(market_snapshot, self.short_term_memory, human_rules=human_rules)
+        decision = self.strategist.get_strategy(market_snapshot, self.short_term_memory, human_rules)
         print(f"🧠 [Strategist Thought]: {decision['thought']}")
         print(f"   📈 [Score] Utility: {decision.get('utility_score', 'N/A')}, Alpha/USDC: {decision.get('alpha_per_usdc', 'N/A')}")
 

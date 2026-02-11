@@ -40,7 +40,7 @@ export async function GET(req: Request) {
         whitelisted: true,
         historicalWinRate: true,
         lastPurchaseTime: true,
-        providerAddress: true,
+        // providerAddress: true, // Removed: not in schema
         endpointUrl: true,
         port: true,
       },

@@ -77,7 +77,8 @@ model AlphaNode {
   historicalWinRate Float @default(0.0)
   dataLogs      DataLog[]
   lastUpdated   DateTime @default(now())
-    trades         Trade[] @relation("TradeAlphaNodes")
+  lastPurchaseTime DateTime?
+  trades         Trade[] @relation("TradeAlphaNodes")
 }
 
 model DataLog {
