@@ -15,21 +15,18 @@ class PredictiveAgent:
         If found, inject into self.short_term_memory['human_intel'] with fresh timestamp.
         Supports both 'bias_override' and 'forced_bias' for backward compatibility.
         """
-        import json
-        if os.path.exists('override_state.json'):
-            with open('override_state.json', 'r') as f:
-                override = json.load(f)
-                if 'external_context' in override:
-                    self.short_term_memory['human_intel'] = {
-                        'value': override['external_context'],
-                        'timestamp': time.time(),
-                        'priority': override.get('priority', 'NORMAL')
-                    }
-                # Support both naming conventions for forced bias
-                self.forced_bias = override.get('bias_override') or override.get('forced_bias')
+        import os, json
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        override_path = os.path.join(base_dir, "override_state.json")
+        if os.path.exists(override_path):
+            with open(override_path, "r") as f:
+                data = json.load(f)
+                # Accept both keys for safety
+                self.forced_bias = data.get('forced_bias') or data.get('bias_override')
+                self.external_intel = data.get('external_context')
                 if self.forced_bias:
-                    print(f"   🎯 [Override] Forced Bias detected: {self.forced_bias}")
-                return override
+                    print(f"   🎯 [OVERRIDE DETECTED] Bias: {self.forced_bias}")
+            return data
         return None
     def __init__(self, pipeline):
         self.pipeline = pipeline
