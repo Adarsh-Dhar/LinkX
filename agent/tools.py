@@ -60,29 +60,61 @@ class AlphaStrategist:
                 max_tokens=512,
                 temperature=0.2,
             )
-            raw_text = response.choices[0].message.content.replace('```json', '').replace('```', '').strip()
-            strategy = json.loads(raw_text)
-            if strategy.get('bias') not in ['LONG', 'SHORT', 'NEUTRAL']:
-                strategy['bias'] = 'NEUTRAL'
-            # Return a dict with all expected keys for downstream code
-            return {
-                'bias': strategy.get('bias', 'NEUTRAL'),
-                'confidence': float(strategy.get('confidence', 0.5)),
+            raw_text = response.choices[0].message.content.strip()
+            # IMPROVED PARSING: Find the first '{' and last '}' to isolate JSON
+            start_idx = raw_text.find('{')
+            end_idx = raw_text.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                json_str = raw_text[start_idx:end_idx + 1]
+                strategy = json.loads(json_str)
+            else:
+                print("⚠️ Strategist failed to return valid JSON format")
+                return {
+                    'bias': 'NEUTRAL',
+                    'confidence': 0.0,
+                    'thought': 'Invalid JSON returned by Gemini',
+                    'utility_score': 0,
+                    'alpha_per_usdc': 0,
+                    'verdict': 'NO_ACTION',
+                }
+
+            # Validation logic
+            bias = strategy.get('bias', 'NEUTRAL')
+            bias = str(bias).upper()
+            if bias not in ['LONG', 'SHORT', 'NEUTRAL']:
+                bias = 'NEUTRAL'
+
+            # Extract confidence and ensure it's a float
+            confidence = strategy.get('confidence', 0.0)
+            try:
+                confidence = float(confidence)
+            except Exception:
+                confidence = 0.0
+
+            # Return a dict for downstream code that expects keys, but also allow tuple unpacking
+            result = {
+                'bias': bias,
+                'confidence': confidence,
                 'thought': strategy.get('reasoning', ''),
                 'utility_score': strategy.get('utility_score', 0),
                 'alpha_per_usdc': strategy.get('alpha_per_usdc', 0),
                 'verdict': strategy.get('verdict', 'NO_ACTION'),
             }
+            # Return an object that supports both tuple and dict access
+            class StrategyResult(dict):
+                def __iter__(self):
+                    return iter((self['bias'], self['confidence']))
+                def __getitem__(self, key):
+                    return super().__getitem__(key)
+            return StrategyResult(result)
         except Exception as e:
-            print(f"Error in Strategist Reasoning: {e}")
-            return {
-                'bias': 'NEUTRAL',
-                'confidence': 0.0,
-                'thought': f'Error: {e}',
-                'utility_score': 0,
-                'alpha_per_usdc': 0,
-                'verdict': 'NO_ACTION',
-            }
+            print(f"❌ Error in Strategist Reasoning: {e}")
+            class StrategyResult(dict):
+                def __iter__(self):
+                    return iter((self['bias'], self['confidence']))
+                def __getitem__(self, key):
+                    return super().__getitem__(key)
+            return StrategyResult({'bias': 'NEUTRAL', 'confidence': 0.0, 'thought': f'Error: {e}', 'utility_score': 0, 'alpha_per_usdc': 0, 'verdict': 'NO_ACTION'})
 
 class TradeAnalyzer:
     """Production analyzer for post-trade performance review"""
@@ -232,9 +264,9 @@ def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippa
         if not addr_in or not addr_out:
             return {"error": f"Unknown token: {token_in} or {token_out}"}
 
-        # DETECT NATIVE SWAP
-        is_native_in = (addr_in == "cro")
-        is_native_out = (addr_out == "cro")
+        # DETECT NATIVE SWAP (Etherlink/Tezos: use 'xtz')
+        is_native_in = (addr_in == "xtz")
+        is_native_out = (addr_out == "xtz")
         
         canonical_wcro = Web3.to_checksum_address(WCRO_ADDRESS)
         
