@@ -18,13 +18,14 @@ envContent.split('\n').forEach(line => {
 // Force the correct database URL
 process.env.DATABASE_URL = 'file:/Users/adarsh/Documents/alpha-consumer/agent/agent_state.db';
 
-const { PrismaClient } = require('./frontend/node_modules/@prisma/client');
+const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
 const NODES = [
   {
     name: 'Market Microstructure & Execution',
+    title: 'Market Microstructure & Execution',
     url: 'http://localhost:4001/api/microstructure',
     nodeType: 'microstructure',
     category: 'market',
@@ -35,6 +36,7 @@ const NODES = [
   },
   {
     name: 'Alternative Intelligence & Sentiment',
+    title: 'Alternative Intelligence & Sentiment',
     url: 'http://localhost:4002/api/sentiment',
     nodeType: 'sentiment',
     category: 'sentiment',
@@ -45,6 +47,7 @@ const NODES = [
   },
   {
     name: 'Supply Chain & Global Macro',
+    title: 'Supply Chain & Global Macro',
     url: 'http://localhost:4003/api/macro',
     nodeType: 'macro',
     category: 'macro',
@@ -60,25 +63,28 @@ async function populateNodes() {
   
   for (const node of NODES) {
     try {
-      const created = await prisma.alphaNode.create({
-        data: {
-          name: node.name,
-          nodeType: node.nodeType,
-          category: node.category,
-          port: node.port,
-          endpointUrl: node.url,
-          description: node.description,
-          price: node.price,
-          qualityScore: node.qualityScore,
-          latencyMs: 0,
-          assetCoverage: JSON.stringify(['WETH', 'USDC', 'DAI']),
-          status: 'active',
-          lastUpdated: new Date(),
-          icon: 'activity',
-          isPurchased: false,
-          whitelisted: false,
-        },
-      });
+            const created = await prisma.alphaNode.create({
+              data: {
+                title: node.title,
+                nodeType: node.nodeType,
+                category: node.category,
+                endpointUrl: node.url,
+                description: node.description,
+                price: node.price,
+                latencyMs: 0,
+                status: 'active',
+                lastUpdated: new Date(),
+                icon: 'activity',
+                isPurchased: false,
+                whitelisted: false,
+                // Optional fields matching schema
+                granularity: undefined,
+                historicalWinRate: 0.0,
+                more_context: undefined,
+                ratings: 0,
+                lastPurchaseTime: undefined,
+              },
+            });
       console.log(`✅ Created node: ${node.name} (Quality: ${node.qualityScore}, Price: $${node.price})`);
     } catch (err) {
       console.error(`❌ Error creating node ${node.name}:`, err.message);

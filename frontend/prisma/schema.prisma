@@ -87,14 +87,75 @@ model DataLog {
   node      AlphaNode @relation(fields: [nodeId], references: [id])
   data      String
   fetchedAt DateTime @default(now())
-    logRating LogRating?
-    tradeDecisions TradeDecision[]
+  logRating LogRating?
+  tradeDecisions TradeDecision[]
 }
 
 /// Example seed data for the three demo nodes:
-/// 1. Microstructure Node: name = "Market Microstructure & Execution", nodeType = "microstructure", endpointUrl = "http://localhost:4001/api/microstructure", port = 4001
-/// 2. Sentiment Node: name = "Alternative Intelligence & Sentiment", nodeType = "sentiment", endpointUrl = "http://localhost:4002/api/sentiment", port = 4002
-/// 3. Macro Node: name = "Supply Chain & Global Macro", nodeType = "macro", endpointUrl = "http://localhost:4003/api/macro", port = 4003
+/// Seed nodes:
+/// {
+///   title: "Market Microstructure & Execution",
+///   nodeType: "microstructure",
+///   category: "market",
+///   description: "Monitors order flow imbalances, market depth anomalies, and optimal execution paths. Detects frontrunning and MEV patterns.",
+///   price: 0.25,
+///   status: "active",
+///   isPurchased: false,
+///   whitelisted: false,
+///   endpointUrl: "http://localhost:4001/api/microstructure",
+///   port: 4001,
+///   icon: "activity",
+///   ratings: 0,
+///   latencyMs: 0,
+///   assetCoverage: "[\"WETH\",\"USDC\",\"DAI\"]",
+///   granularity: null,
+///   historicalWinRate: 0.0,
+///   lastUpdated: now(),
+///   lastPurchaseTime: null,
+///   more_context: null
+/// }
+/// {
+///   title: "Alternative Intelligence & Sentiment",
+///   nodeType: "sentiment",
+///   category: "sentiment",
+///   description: "Real-time sentiment analysis from social media, news outlets, and on-chain whale wallets. Capturing collective psychology.",
+///   price: 0.35,
+///   status: "active",
+///   isPurchased: false,
+///   whitelisted: false,
+///   endpointUrl: "http://localhost:4002/api/sentiment",
+///   port: 4002,
+///   icon: "activity",
+///   ratings: 0,
+///   latencyMs: 0,
+///   assetCoverage: "[\"WETH\",\"USDC\",\"DAI\"]",
+///   granularity: null,
+///   historicalWinRate: 0.0,
+///   lastUpdated: now(),
+///   lastPurchaseTime: null,
+///   more_context: null
+/// }
+/// {
+///   title: "Supply Chain & Global Macro",
+///   nodeType: "macro",
+///   category: "macro",
+///   description: "Monitors large-scale economic and physical world data that impacts long-term asset valuations.",
+///   price: 0.65,
+///   status: "active",
+///   isPurchased: false,
+///   whitelisted: false,
+///   endpointUrl: "http://localhost:4003/api/macro",
+///   port: 4003,
+///   icon: "activity",
+///   ratings: 0,
+///   latencyMs: 0,
+///   assetCoverage: "[\"WETH\",\"USDC\",\"DAI\"]",
+///   granularity: null,
+///   historicalWinRate: 0.0,
+///   lastUpdated: now(),
+///   lastPurchaseTime: null,
+///   more_context: null
+/// }
 
 // --------------------------------------------------------
 // 3. EQUITY HISTORY (Populates: "Cumulative Returns" Chart)

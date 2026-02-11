@@ -17,7 +17,7 @@ export default async function NodeDetailsPage({ params }: { params: Promise<{ id
       dataLogs: {
         orderBy: { fetchedAt: "desc" },
         take: 50,
-        include: { userRating: true },
+        include: { logRating: true },
       },
     },
   });
@@ -27,12 +27,12 @@ export default async function NodeDetailsPage({ params }: { params: Promise<{ id
   // Prepare ratings history for chart
   const ratings = (node.dataLogs || [])
     .map((log: any): { time: string; rating: number } | null => {
-      // Only use normalized or userRating, ignore history_rating
+      // Only use normalized or logRating, ignore history_rating
       let rating: number | undefined = undefined;
       if (typeof log.normalized === "number") {
         rating = Math.round(log.normalized * 100);
-      } else if (log.userRating && typeof log.userRating.rating === "number") {
-        rating = log.userRating.rating;
+      } else if (log.logRating && typeof log.logRating.rating === "number") {
+        rating = log.logRating.rating;
       }
       if (rating === undefined) return null;
       return {

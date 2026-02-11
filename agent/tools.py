@@ -10,18 +10,13 @@ from openai import OpenAI
 
 class AlphaStrategist:
     def __init__(self, api_key=None):
-        self.api_key = (
-            api_key
-            or os.getenv("GITHUB_TOKEN")
-            or os.getenv("GITHUB_MODELS_API_KEY")
-        )
-        if not self.api_key:
-            raise ValueError(
-                "❌ No GitHub Models API key found. Set GITHUB_TOKEN or GITHUB_MODELS_API_KEY in your environment."
-            )
+        self.token = api_key or os.getenv("GITHUB_TOKEN")
+        if not self.token:
+            raise ValueError("❌ GITHUB_TOKEN not found in environment.")
+        # Use the correct GitHub Models inference endpoint
         self.client = OpenAI(
-            base_url="https://api.github.com/openai/deployments/github-llm",
-            api_key=self.api_key,
+            base_url="https://models.inference.ai.azure.com",
+            api_key=self.token,
         )
         self.model_name = "gpt-4o"
 
@@ -33,10 +28,9 @@ class AlphaStrategist:
         human_intel = memory.get('human_intel', "No external human context provided.")
         formatted_signals = json.dumps(node_signals, indent=2)
         prompt = f"""
-        You are the Brain of LinkX, an autonomous trading agent. 
-        Your goal is to execute profitable trades while strictly adhering to high-level mandates.
+        You are an autonomous trading agent for LinkX. Your goal is to make profitable trades while following high-level mandates and safety guidelines.
 
-        --- 1. HIGH-PRIORITY HUMAN INTELLIGENCE (FROM CHAT) ---
+        --- 1. HUMAN CONTEXT ---
         CONTEXT: {human_intel}
 
         --- 2. TECHNICAL NODE SIGNALS ---
@@ -45,23 +39,20 @@ class AlphaStrategist:
         --- 3. MARKET ENVIRONMENT ---
         Current Data: {market_data}
 
-        --- CRITICAL OPERATIONAL RULES ---
-        1. SOURCE OF TRUTH: If "HUMAN INTELLIGENCE" provides a specific bias or market outlook, 
-           treat it as the primary Source of Truth. 
-        2. MIND DIVERSION: If technical signals (Sentiment, Macro, Microstructure) suggest a 
-           different move than the Human Context, you MUST divert your mind and prioritize 
-           the Human Intelligence.
-        3. FALLBACK: If no clear Human Intelligence is provided, use a weighted consensus 
-           of the technical node signals based on their quality scores.
+                --- DECISION RULES ---
+                1. If human context provides a specific bias or market outlook, prioritize it in your decision making.
+                2. If technical signals and human context disagree, use the human context as the main factor, but explain your reasoning.
+                3. If no clear human context is provided, use a weighted consensus of the technical node signals based on their quality scores.
+                4. Always follow ethical and safety guidelines in your reasoning and output.
 
-        --- OUTPUT FORMAT ---
-        You must return ONLY a JSON object with this structure:
-        {{
-            "bias": "LONG" | "SHORT" | "NEUTRAL",
-            "confidence": 0.0 to 1.0,
-            "reasoning": "A concise explanation of why you chose this move, mentioning if you diverted focus based on human intel."
-        }}
-        """
+                --- OUTPUT FORMAT ---
+                Return ONLY a JSON object with this structure:
+                {{
+                        "bias": "LONG" | "SHORT" | "NEUTRAL",
+                        "confidence": 0.0 to 1.0,
+                        "reasoning": "A concise explanation of why you chose this move, mentioning if you prioritized human context."
+                }}
+                """
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,

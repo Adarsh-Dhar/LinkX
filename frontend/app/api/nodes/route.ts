@@ -40,7 +40,7 @@ export async function GET(req: Request) {
         whitelisted: true,
         historicalWinRate: true,
         lastPurchaseTime: true,
-        // providerAddress: true, // Removed: not in schema
+        // ...existing code...
         endpointUrl: true,
         port: true,
       },
@@ -61,8 +61,8 @@ export async function POST(req: Request) {
       where: { id: nodeId },
       select: {
         id: true,
-        name: true,
-        // provider: true,
+        title: true,
+        nodeType: true,
         isPurchased: true,
         price: true,
       },
