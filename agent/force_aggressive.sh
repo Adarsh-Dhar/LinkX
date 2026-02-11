@@ -3,7 +3,7 @@
 # Lowers confidence threshold to 0.1 (10%) to execute on weak signals
 # Clears any directional bias to allow AI discretion
 
-curl -X POST http://localhost:8000/agent/control/override \
+curl -X POST http://localhost:8080/agent/control/override \
      -H "Content-Type: application/json" \
      -d '{"risk": 0.1, "bias": "NONE"}'
 

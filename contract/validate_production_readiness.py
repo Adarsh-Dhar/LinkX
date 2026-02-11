@@ -208,7 +208,7 @@ async def test_override_system():
         # Test 3: Verify API endpoint exists
         try:
             response = requests.post(
-                "http://localhost:8000/agent/control/override",
+                "http://localhost:8080/agent/control/override",
                 json={"risk": 0.3, "bias": "LONG"},
                 timeout=2
             )
@@ -221,7 +221,7 @@ async def test_override_system():
                 print(f"⚠️  WARNING: Override API returned {response.status_code}")
                 print(f"   Agent may not be running: python agent/main.py")
         except requests.exceptions.ConnectionError:
-            print(f"⚠️  WARNING: Cannot connect to http://localhost:8000")
+            print(f"⚠️  WARNING: Cannot connect to http://localhost:8080")
             print(f"   Agent API not running, but override system is structurally correct")
         
         return True

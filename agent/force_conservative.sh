@@ -3,7 +3,7 @@
 # High confidence threshold (0.75) for institutional-grade setups only
 # No bias override - AI analyzes both directions but requires strong conviction
 
-curl -X POST http://localhost:8000/agent/control/override \
+curl -X POST http://localhost:8080/agent/control/override \
      -H "Content-Type: application/json" \
      -d '{"risk": 0.75, "bias": "NONE"}'
 

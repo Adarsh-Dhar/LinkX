@@ -3,7 +3,7 @@
 # Sets bias to NEUTRAL to prevent any trade execution
 # Agent continues monitoring and logging but takes no positions
 
-curl -X POST http://localhost:8000/agent/control/override \
+curl -X POST http://localhost:8080/agent/control/override \
      -H "Content-Type: application/json" \
      -d '{"bias": "NEUTRAL"}'
 

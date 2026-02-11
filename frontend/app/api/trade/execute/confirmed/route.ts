@@ -2,7 +2,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const response = await fetch('http://localhost:8000/trade/execute/confirmed', {
+    const response = await fetch('http://localhost:8080/trade/execute/confirmed', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

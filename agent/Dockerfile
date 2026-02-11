@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose the API port (so the Frontend can talk to it)
-EXPOSE 8000
+EXPOSE 8080
 
 # Default command: Run the API server
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"]

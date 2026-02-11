@@ -45,7 +45,7 @@ export default function SimulationView({ autoUpdate = true }: SimulationViewProp
 
   // Allow overriding the agent API host; default to the Next.js rewrite at /api
   const API_BASE = process.env.NEXT_PUBLIC_AGENT_API ?? "/api"
-  const WS_BASE = process.env.NEXT_PUBLIC_AGENT_WS ?? "ws://localhost:8000"
+  const WS_BASE = process.env.NEXT_PUBLIC_AGENT_WS ?? "ws://localhost:8080"
 
   // Fetch all simulation data
   const fetchSimulationData = async () => {

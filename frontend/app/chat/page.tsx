@@ -253,7 +253,7 @@ export default function ChatPage() {
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: "agent",
-        content: `⚠️ Agent API unavailable. Please ensure the agent is running on port 8000.\n\nTo start the agent:\n  cd agent\n  uvicorn api:app --reload --port 8000\n\nMock response: ${generateAgentResponse(userInput)}`,
+        content: `⚠️ Agent API unavailable. Please ensure the agent is running on port 8080.\n\nTo start the agent:\n  cd agent\n  uvicorn api:app --reload --port 8080\n\nMock response: ${generateAgentResponse(userInput)}`,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, agentMsg])

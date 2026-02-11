@@ -5,7 +5,7 @@
 echo "📊 QUERYING CURRENT AGENT CONFIGURATION..."
 echo ""
 
-curl -X POST http://localhost:8000/agent/control/override \
+curl -X POST http://localhost:8080/agent/control/override \
      -H "Content-Type: application/json" \
      -d '{}'
 

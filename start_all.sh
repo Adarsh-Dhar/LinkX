@@ -19,7 +19,7 @@ pkill -f "node.*server"
 pkill -f "node.*provider.js"
 pkill -f "node.*registry.js"
 pkill -f "next-server"
-lsof -ti:8000 | xargs kill -9 2>/dev/null
+lsof -ti:8080 | xargs kill -9 2>/dev/null
 lsof -ti:3050 | xargs kill -9 2>/dev/null
 lsof -ti:3999 | xargs kill -9 2>/dev/null
 # DO NOT kill ports 4000-4047, these are managed by Docker Compose
@@ -71,7 +71,7 @@ npx prisma db seed
 
 # 6. Start Backend API (agent/api.py)
 echo "🔌 Starting Backend API (agent/api.py) if not already running..."
-if ! lsof -i:8000 | grep LISTEN; then
+if ! lsof -i:8080 | grep LISTEN; then
         # Ensure venv exists and activate from agent dir
         if [ ! -d "$SCRIPT_DIR/agent/venv" ]; then python3 -m venv "$SCRIPT_DIR/agent/venv"; fi
         source "$SCRIPT_DIR/agent/venv/bin/activate"
@@ -79,12 +79,12 @@ if ! lsof -i:8000 | grep LISTEN; then
         export DATABASE_URL="file:$DB_PATH"
         export PYTHONUNBUFFERED=1
         cd "$SCRIPT_DIR"
-        uvicorn agent.api:app --host 0.0.0.0 --port 8000 --reload &
+        uvicorn agent.api:app --host 0.0.0.0 --port 8080 --reload &
         AGENT_API_PID=$!
         echo "   ✅ Backend API started (PID: $AGENT_API_PID)"
         sleep 5
 else
-        echo "   ⚠️  Backend API already running on port 8000. Skipping start."
+        echo "   ⚠️  Backend API already running on port 8080. Skipping start."
 fi
 
 

@@ -4,7 +4,7 @@
 # - 0.15 confidence threshold (15% minimum)
 # - No directional bias (AI uses market signals)
 
-curl -X POST http://localhost:8000/agent/control/override \
+curl -X POST http://localhost:8080/agent/control/override \
      -H "Content-Type: application/json" \
      -d '{"risk": 0.15, "bias": "NONE"}'
 

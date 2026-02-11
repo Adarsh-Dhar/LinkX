@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
     // 3. Route based on intent action (risk/bias overrides)
     if (intent.action === "SET_RISK" || intent.action === "SET_BIAS") {
-      const overrideResponse = await fetch("http://127.0.0.1:8000/agent/control/override", {
+      const overrideResponse = await fetch("http://127.0.0.1:8080/agent/control/override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     }
 
     // 4. Otherwise, forward to chat endpoint
-    const response = await fetch("http://127.0.0.1:8000/chat", {
+    const response = await fetch("http://127.0.0.1:8080/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

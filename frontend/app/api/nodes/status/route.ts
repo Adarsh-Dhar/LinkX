@@ -1,6 +1,6 @@
 export async function GET() {
   try {
-    const response = await fetch('http://localhost:8000/nodes/status', {
+    const response = await fetch('http://localhost:8080/nodes/status', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

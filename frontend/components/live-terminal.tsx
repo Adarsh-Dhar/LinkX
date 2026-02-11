@@ -18,7 +18,7 @@ export default function LiveTerminal() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch("http://localhost:8000/system/logs"); // Adjust port if needed
+        const res = await fetch("http://localhost:8080/system/logs"); // Adjust port if needed
         if (res.ok) {
           const newLogs = await res.json();
           setLogs(newLogs);

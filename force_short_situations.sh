@@ -12,7 +12,7 @@ cat <<EOF > "$OVERRIDE_FILE"
 {
   "external_context": "URGENT: Critical security vulnerability reported in major Tezos-bridge. Massive liquidation event expected in the next 10 minutes. Sell volume is spiking.",
   "priority": "HIGH",
-  "bias_override": "SHORT"
+  "forced_bias": "SHORT"
 }
 EOF
 

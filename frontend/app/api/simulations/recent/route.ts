@@ -3,7 +3,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = url.searchParams.get('limit') || '5';
     
-    const response = await fetch(`http://localhost:8000/simulations/recent?limit=${limit}`, {
+    const response = await fetch(`http://localhost:8080/simulations/recent?limit=${limit}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

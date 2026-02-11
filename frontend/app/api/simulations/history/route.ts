@@ -1,6 +1,6 @@
 export async function GET() {
   try {
-    const response = await fetch('http://localhost:8000/simulations/history', {
+    const response = await fetch('http://localhost:8080/simulations/history', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
