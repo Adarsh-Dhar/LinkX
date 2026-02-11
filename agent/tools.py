@@ -46,14 +46,16 @@ class AlphaStrategist:
         --- SYNTHESIS PROTOCOL ---
         1. STRATEGIC WEIGHTING: If Qualitative Intelligence is available, assign it a higher weighting (0.8) compared to Technical Signals (0.2) in your final decision.
         2. If short_term_memory is empty or no node_signals are available or the nodes are irrelevant, you MUST perform Technical Analysis (TA) of the market_snapshot.
-        3. Look at price_change_5m and recent_volatility to determine a trend. If price_change_5m is strongly positive and volatility is high, bias LONG. If strongly negative, bias SHORT. If flat, bias NEUTRAL.
-        4. Even without external intel, assign a confidence score between 0 and 0.50 based on price momentum alone (higher for strong moves, lower for flat).
-        5. FORMAT: Return ONLY valid JSON.
+        3. If no purchased signals are available in short_term_memory, you MUST use the market_snapshot and technical_trend to determine a bias.
+        4. Look at price_change_5m, recent_volatility, and technical_trend to determine a trend. If technical_trend is BULLISH, bias LONG. If BEARISH, bias SHORT. If NEUTRAL, bias NEUTRAL.
+        5. Assign a confidence between 0.10 and 0.50 based purely on price momentum and volatility.
+        6. Your JSON response MUST use these exact keys: 'execution_bias' (must be LONG, SHORT, or NEUTRAL), 'risk_confidence' (float 0-1), and 'reasoning' (string).
+        7. FORMAT: Return ONLY valid JSON.
 
         OUTPUT FORMAT:
         {{
-            "bias": "LONG" | "SHORT" | "NEUTRAL",
-            "confidence": 0.0 to 1.0,
+            "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
+            "risk_confidence": 0.0 to 1.0,
             "reasoning": "Explain the weighting or technical logic used to reach this bias."
         }}
         """

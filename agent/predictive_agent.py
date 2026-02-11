@@ -97,21 +97,21 @@ class PredictiveAgent:
             return
 
         # Calculate trend: simple momentum over last 10 prices
+        # Add a simple trend indicator
         trend = "NEUTRAL"
-        if len(df[price_col]) >= 10:
-            price_now = float(df[price_col].iloc[-1])
-            price_10ago = float(df[price_col].iloc[-10])
-            if price_now > price_10ago:
-                trend = "BULLISH"
-            elif price_now < price_10ago:
-                trend = "BEARISH"
+        price_now = float(df[price_col].iloc[-1])
+        price_10ago = float(df[price_col].iloc[-10]) if len(df[price_col]) >= 10 else price_now
+        if price_now > price_10ago:
+            trend = "BULLISH"
+        elif price_now < price_10ago:
+            trend = "BEARISH"
 
         market_snapshot = {
-            "current_price": float(df[price_col].iloc[-1]),
-            "price_change_5m": float(df[price_col].iloc[-1] - df[price_col].iloc[-5]),
+            "current_price": price_now,
+            "price_change_5m": float(price_now - df[price_col].iloc[-5]),
             "recent_volatility": float(df[price_col].tail(10).std()),
             "timestamp": df['timestamp'].iloc[-1] if "timestamp" in df.columns else datetime.utcnow().isoformat(),
-            "trend": trend
+            "technical_trend": trend
         }
 
         # 4. FETCH FREE METADATA (Discovery Layer - no payment required)
@@ -272,19 +272,28 @@ class PredictiveAgent:
             print(f"   🧭 [Priority Override] Forcing {decision['execution_bias']} bias before execution")
 
         # 8. EXECUTION: Only move if confidence meets dynamic threshold (or forced)
-        if decision.get('risk_confidence', 0) >= self.risk_threshold and decision.get('execution_bias') != "NEUTRAL":
+        # 1. Extract values with fallbacks for different naming conventions
+        actual_bias = decision.get('execution_bias') or decision.get('bias', 'NEUTRAL')
+        actual_confidence = decision.get('risk_confidence') or decision.get('confidence', 0.0)
+
+        # 2. Update the logs so you can see what is happening
+        print(f"   🎯 [Debug] Bias: {actual_bias} | Confidence: {actual_confidence}")
+
+        # 3. Use these consolidated values for the threshold check
+        if actual_confidence >= self.risk_threshold and actual_bias != "NEUTRAL":
+            print(f"   🚀 [Execution] Conditions met. Executing {actual_bias}...")
             await self.execute_move(decision, intel)
         else:
-            print(f"   🛡️  [Risk Management] Decision confidence ({decision.get('risk_confidence', 0):.2f}) below {self.risk_threshold:.2f} threshold. Holding.")
+            print(f"   🛡️ [Risk Management] Skipping execution: bias={actual_bias}, confidence={actual_confidence:.2f} < threshold={self.risk_threshold}")
 
         # Log risk skip if confidence too low
-        if decision.get('risk_confidence', 0) < self.risk_threshold:
+        if actual_confidence < self.risk_threshold:
             await self.log_activity({
                 "type": "risk_skip",
                 "title": "Risk Management - Execution Skipped",
-                "description": f"Decision confidence ({decision.get('risk_confidence', 0):.2f}) below threshold",
+                "description": f"Decision confidence ({actual_confidence:.2f}) below threshold",
                 "riskAction": "SKIP",
-                "riskReason": f"Low confidence: {decision.get('risk_confidence', 0):.2f} < 0.15"
+                "riskReason": f"Low confidence: {actual_confidence:.2f} < {self.risk_threshold:.2f}"
             })
         # Log cycle end
         await self.log_activity({
