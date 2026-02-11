@@ -13,6 +13,7 @@ class PredictiveAgent:
         """
         Check for override_state.json and inject external_context if present.
         If found, inject into self.short_term_memory['human_intel'] with fresh timestamp.
+        Supports both 'bias_override' and 'forced_bias' for backward compatibility.
         """
         import json
         if os.path.exists('override_state.json'):
@@ -24,6 +25,10 @@ class PredictiveAgent:
                         'timestamp': time.time(),
                         'priority': override.get('priority', 'NORMAL')
                     }
+                # Support both naming conventions for forced bias
+                self.forced_bias = override.get('bias_override') or override.get('forced_bias')
+                if self.forced_bias:
+                    print(f"   🎯 [Override] Forced Bias detected: {self.forced_bias}")
                 return override
         return None
     def __init__(self, pipeline):

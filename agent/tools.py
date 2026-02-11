@@ -67,6 +67,9 @@ REQUIRED JSON FORMAT:
     "reasoning": "string"
 }}
 
+IMPORTANT RULES:
+QUALITATIVE INTELLIGENCE (Human Intel) ALWAYS overrides TECHNICAL SIGNALS. If human intel reports a vulnerability, exploit, or crash, you MUST move to SHORT regardless of the current price trend or technical signals.
+
 Context:
 INTEL: {human_intel}
 SIGNALS: {formatted_signals}
