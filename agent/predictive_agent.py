@@ -11,7 +11,6 @@ from .tools import AlphaStrategist
 class PredictiveAgent:
     def check_for_overrides(self):
         """Checks for a JSON file to inject human intel or force a bias."""
-        # ABSOLUTE PATH FIX: Find the folder where THIS file lives
         import json
         current_dir = os.path.dirname(os.path.abspath(__file__))
         override_path = os.path.join(current_dir, "override_state.json")
@@ -19,17 +18,23 @@ class PredictiveAgent:
             try:
                 with open(override_path, "r") as f:
                     data = json.load(f)
-                    # Support both naming conventions for safety
+                    # Check for forced trade bias (checking both naming variations)
                     self.forced_bias = data.get('forced_bias') or data.get('bias_override')
+                    # Inject situation context into the memory used by tools.py
                     ctx = data.get('external_context')
                     if ctx:
                         self.short_term_memory['human_intel'] = ctx
                     if self.forced_bias:
                         self.forced_bias = self.forced_bias.upper()
-                        print(f"   🎯 [OVERRIDE DETECTED] Bias: {self.forced_bias}")
+                        print(f"   🎯 [OVERRIDE DETECTED] Forced Bias: {self.forced_bias}")
+                        # Force confidence to 1.0 to bypass all AI hesitation
+                        self.forced_confidence = 1.0
             except Exception as e:
-                print(f"   ⚠️ [Override Error] {e}")
-        return None
+                print(f"   ⚠️ [Override Error] Failed to read file: {e}")
+        else:
+            # Reset if file is deleted
+            self.forced_bias = None
+            self.external_intel = None
     def __init__(self, pipeline):
         self.pipeline = pipeline
         api_key = (
@@ -72,6 +77,9 @@ class PredictiveAgent:
         print(f"\n══════════════════════════════════════════════════════════════")
         print(f"♟️  PREDICTIVE AGENT CYCLE - {time.strftime('%H:%M:%S')}")
 
+        # 1. ALWAYS CHECK OVERRIDES FIRST
+        self.check_for_overrides()
+
         if self.paused:
             print("⏸️  AGENT IS PAUSED: Skipping cycle.")
             return
@@ -83,10 +91,10 @@ class PredictiveAgent:
             "description": f"Beginning predictive cycle at {datetime.now().isoformat()}"
         })
 
-        # 1. PERCEPTION: Fetch the Tape from the fixed Pipeline method
+        # 2. PERCEPTION: Fetch the Tape from the fixed Pipeline method
         df = await self.pipeline.get_latest_tape()
 
-        # 2. SYNC CHECK: This will now pass immediately because of seeding
+        # 3. SYNC CHECK: This will now pass immediately because of seeding
         if df is None or len(df) < 20:
             count = len(df) if df is not None else 0
             print(f"   ⏳ [Tape] Waiting for synchronization... (Current: {count}/20)")
@@ -409,8 +417,9 @@ class PredictiveAgent:
                     print(f"   ❌ [LONG Execution Failed] Swap returned None")
                 return tx_hash
             elif bias == "SHORT":
-                # Use real WXTZ balance for the exit/short position
+                # Use real WXTZ balance for the exit/short position, scale by confidence, and add a safety buffer
                 trade_amount = current_wxtz_balance * risk_confidence
+                trade_amount = trade_amount * 0.999  # DeFi safety buffer to avoid precision errors
                 if current_wxtz_balance <= 0 or trade_amount <= 0:
                     print(f"   🛑 [Risk Management] Skipping short: WXTZ balance is {current_wxtz_balance}")
                     await self.log_activity({

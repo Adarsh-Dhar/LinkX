@@ -67,6 +67,8 @@ REQUIRED JSON FORMAT:
     "reasoning": "string"
 }}
 
+URGENT MASTER RULE: QUALITATIVE INTELLIGENCE (Human Intel) always takes precedence over MARKET DATA. If human intel reports a 'vulnerability', 'exploit', or 'crash', you MUST return a SHORT bias immediately, even if the price is currently rising.
+
 MASTER SIGNAL RULE: QUALITATIVE INTELLIGENCE (Human Intel) always overrides MARKET DATA. If human intel reports an 'exploit' or 'vulnerability', you MUST return a SHORT bias regardless of the technical chart.
 
 MASTER SIGNAL RULE: If `QUALITATIVE INTELLIGENCE` contains the words 'vulnerability', 'exploit', or 'liquidations', you MUST prioritize this over price action and return a SHORT bias immediately.
