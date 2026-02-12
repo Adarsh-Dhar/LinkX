@@ -20,7 +20,6 @@ def _load_vvsrouter_abi():
     try:
         with open(VVSROUTER_ABI_PATH, 'r') as f:
             content = f.read()
-        # Extract the JSON array from the TypeScript export
         import re, json
         match = re.search(r'VVSRouter_ABI\s*=\s*(\[.*\])', content, re.DOTALL)
         if match:
@@ -32,7 +31,6 @@ def _load_vvsrouter_abi():
 
 ROUTER_ABI = _load_vvsrouter_abi()
 
-
 load_dotenv()
 
 # --- 1. ALPHA STRATEGIST (THE BRAIN) ---
@@ -42,35 +40,53 @@ class AlphaStrategist:
         self.token = api_key or os.getenv("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("❌ GITHUB_TOKEN not found in environment.")
-        
-        # Using GitHub Models inference endpoint
         self.client = OpenAI(
             base_url="https://models.inference.ai.azure.com",
             api_key=self.token,
         )
         self.model_name = "gpt-4o-mini"
 
-    async def get_strategy(self, market_data, node_signals, memory):
-        """Generates a trading strategy using LLM reasoning."""
-        human_intel = memory.get('human_intel', "No external human context provided.")
-        formatted_signals = json.dumps(node_signals, indent=2)
+    async def assess_data_needs(self, market_snapshot, node_catalog):
+        catalog_str = json.dumps(node_catalog, indent=2)
+        scout_prompt = f"""
+        You are a Data Procurement Officer.
+        MARKET STATUS: {json.dumps(market_snapshot, indent=2)}
+        AVAILABLE DATA PROVIDERS: {catalog_str}
+        TASK:
+        1. Analyze market volatility and trend.
+        2. Select 0-2 nodes from the catalog that could explain the current movement.
+        3. If the market is flat/boring, return empty list (Save Money).
+        4. If high volatility, prefer Macro/Sentiment nodes.
+        Respond STRICTLY in JSON:
+        {{
+            "nodes_to_buy": ["Exact Node Name"],
+            "reasoning": "Brief reason for expense."
+        }}
+        """
+        try:
+            response = await self._generate_content(scout_prompt)
+            return json.loads(response)
+        except Exception as e:
+            print(f"   ⚠️ Scout Error: {e}")
+            return {"nodes_to_buy": []}
 
-        # Updated system prompt for Azure OpenAI Content Filter safety and node/DB context
+    async def get_strategy(self, market_data, memory):
+        user_message = f"""
+        MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}
+        SHORT TERM MEMORY: {json.dumps(memory, indent=2)}
+        """
         system_prompt = """
 You are the 'AlphaStrategist', an advanced AI Portfolio Manager for a decentralized hedge fund.
-
 INPUT CONTEXT:
 1. MARKET DATA: Recent price action and trends.
 2. NODE INTELLIGENCE: Status of data providers (e.g., 'Sentiment Node', 'Macro Node'). Trust data from recently updated nodes more.
 3. PERFORMANCE HISTORY: Your recent win/loss record. If you are on a losing streak, REDUCE your confidence and trade size.
 4. QUALITATIVE INTEL: External alerts.
-
 MANDATORY RULES:
 - **MASTER SIGNAL:** If `human_intel` suggests "downside risks", "liquidity exits", or "protocol alerts", you MUST bias towards SHORT. This overrides bullish technicals.
 - **PROBABILISTIC OUTPUT:** Never return 1.0 confidence. The maximum is 0.99. 
 - **RISK MANAGEMENT:** If `agent_performance` shows recent losses, be conservative.
 - **SAFETY:** Do not use words like 'attack', 'kill', or 'destroy'. Use 'volatility', 'correction', and 'defensive positioning'.
-
 Respond STRICTLY in JSON format with:
 {
   "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
@@ -78,205 +94,25 @@ Respond STRICTLY in JSON format with:
   "reasoning": "<concise explanation citing specific nodes or history>"
 }
 """
-
-        prompt = f"""
-{system_prompt}
-
-INTEL: {human_intel}
-SUGGESTED_BIAS: {memory.get('suggested_bias', 'None')}
-SIGNALS: {formatted_signals}
-MARKET: {market_data}
-"""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-            )
-            raw_text = response.choices[0].message.content.strip()
-
-            # Robust Extraction: Find anything between the first { and last }
-            import re
-            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-            if not json_match:
-                raise ValueError(f"No JSON found in response: {raw_text}")
-
-            json_str = json_match.group()
-            # ONLY replace if the AI uses single quotes instead of doubles
-            if "'" in json_str and '"' not in json_str:
-                json_str = json_str.replace("'", '"')
-            # Fix invalid format specifiers in the AI output (remove type hints)
-            import re
-            json_str = re.sub(r'"(LONG|SHORT|NEUTRAL),\\s*"risk_confidence": float \(0.0 to 1.0\),\\s*"reasoning": "string"', '"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": "No reason provided"', json_str)
-            # Remove any type hints or format specifiers
-            json_str = re.sub(r': float \(0.0 to 1.0\)', '', json_str)
-            json_str = re.sub(r': "string"', '', json_str)
-
-            strategy = json.loads(json_str)
-
-            # Map the response to your predictive_agent's expected keys
-            return {
-                'execution_bias': strategy.get('execution_bias', 'NEUTRAL'),
-                'risk_confidence': float(strategy.get('risk_confidence', 0.0)),
-                'reasoning': strategy.get('reasoning', 'No reason provided'),
-                'verdict': 'TRADE' if float(strategy.get('risk_confidence', 0)) > 0.05 else 'HOLD'
-            }
-
+            response = await self._generate_content(user_message, system_override=system_prompt)
+            return json.loads(response)
         except Exception as e:
-            print(f"❌ Error in Strategist Reasoning: {e}")
-            return {'execution_bias': 'NEUTRAL', 'risk_confidence': 0.0, 'reasoning': str(e), 'verdict': 'HOLD'}
+            print(f"   ⚠️ Strategist Error: {e}")
+            return {"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": "Error in reasoning engine."}
 
-# --- 2. TRADE ANALYZER ---
-
-class TradeAnalyzer:
-    def analyze_win_rate(self, history):
-        if not history:
-            return 0.0
-        wins = [t for t in history if t.get('profit', 0) > 0]
-        return len(wins) / len(history)
-
-# --- 3. UNIVERSAL DECORATOR & TOOLS ---
-
-class UniversalTool:
-    def __init__(self, func):
-        self.func = func
-        self.name = func.__name__
-        
-    def invoke(self, args):
-        return self.func(**args) if isinstance(args, dict) else self.func(args)
-        
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
-
-def tool(func):
-    return UniversalTool(func)
-
-# --- 4. ON-CHAIN EXECUTION TOOLS (ETHERLINK) ---
-
-VVS_ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
-WXTZ_ADDRESS    = os.getenv("WXTZ_ADDRESS")
-USDC_CONTRACT   = os.getenv("USDC_CONTRACT")
-RPC_URL         = os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
-
-# Export for other modules
-__all__ = [
-    'VVS_ROUTER_ADDR',
-    'WXTZ_ADDRESS',
-    'USDC_CONTRACT',
-    'RPC_URL',
-    'ROUTER_ABI',
-    'resolve_address',
-    'execute_vvs_swap',
-    'get_portfolio_value',
-    'estimate_swap_output',
-    'get_token_balance',
-    'get_trading_signals',
-]
-
-def resolve_address(token):
-    if not token:
-        return None
-    token_lower = token.lower()
-    if token_lower == "usdc": return Web3.to_checksum_address(USDC_CONTRACT)
-    if token_lower == "wxtz": return Web3.to_checksum_address(WXTZ_ADDRESS)
-    if token_lower in ["xtz", "tez", "native"]: return "xtz"
-    if token_lower.startswith("0x"): return Web3.to_checksum_address(token)
-    return None
-
-@tool
-def execute_vvs_swap(token_in: str, token_out: str, amount_in: float, max_slippage: float = 1.0):
-    """Executes a real swap on Etherlink DEX."""
-    print(f"\n🔄 EXECUTE SWAP: {amount_in} {token_in} -> {token_out}")
-    try:
-        w3 = Web3(Web3.HTTPProvider(RPC_URL))
-        private_key = os.getenv("WALLET_PRIVATE_KEY")
-        if not private_key: return {"error": "Missing Private Key"}
-        
-        account = w3.eth.account.from_key(private_key)
-        my_addr = account.address
-        router_addr = Web3.to_checksum_address(VVS_ROUTER_ADDR)
-        
-        addr_in = resolve_address(token_in)
-        addr_out = resolve_address(token_out)
-        
-        if not addr_in or not addr_out:
-            return {"error": f"Unknown token: {token_in} or {token_out}"}
-
-        is_native_in = (addr_in == "xtz")
-        is_native_out = (addr_out == "xtz")
-        
-        path_in = Web3.to_checksum_address(WXTZ_ADDRESS) if is_native_in else addr_in
-        path_out = Web3.to_checksum_address(WXTZ_ADDRESS) if is_native_out else addr_out
-        path = [path_in, path_out]
-        
-        if is_native_in:
-            amount_in_wei = w3.to_wei(amount_in, 'ether')
-        else:
-            erc20 = w3.eth.contract(address=path_in, abi=[
-                {"constant":True,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"},
-                {"constant":False,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"}
-            ])
-            amount_in_wei = int(amount_in * (10**erc20.functions.decimals().call()))
-            
-            print(f"   🔐 Checking Approval for {token_in}...")
-            tx = erc20.functions.approve(router_addr, amount_in_wei).build_transaction({
-                'from': my_addr, 
-                'nonce': w3.eth.get_transaction_count(my_addr),
-                'gasPrice': int(w3.eth.gas_price * 1.1)
-            })
-            signed = w3.eth.account.sign_transaction(tx, private_key)
-            w3.eth.send_raw_transaction(signed.raw_transaction)
-            time.sleep(2)
-
-        router = w3.eth.contract(address=router_addr, abi=[
-            {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"},
-            {"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactETHForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"payable","type":"function"},
-            {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForETH","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"},
-            {"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapExactTokensForTokens","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"nonpayable","type":"function"}
-        ])
-
-        amounts = router.functions.getAmountsOut(amount_in_wei, path).call()
-        min_out = int(amounts[-1] * (1 - max_slippage/100))
-        deadline = int(time.time()) + 600
-        
-        if is_native_in:
-            func = router.functions.swapExactETHForTokens(min_out, path, my_addr, deadline)
-            tx_params = {'from': my_addr, 'value': amount_in_wei}
-        elif is_native_out:
-            func = router.functions.swapExactTokensForETH(amount_in_wei, min_out, path, my_addr, deadline)
-            tx_params = {'from': my_addr}
-        else:
-            func = router.functions.swapExactTokensForTokens(amount_in_wei, min_out, path, my_addr, deadline)
-            tx_params = {'from': my_addr}
-
-        tx = func.build_transaction({
-            **tx_params,
-            'nonce': w3.eth.get_transaction_count(my_addr),
-            'gas': 300000,
-            'gasPrice': int(w3.eth.gas_price * 1.1)
-        })
-        
-        signed = w3.eth.account.sign_transaction(tx, private_key)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        return {"status": "success", "tx_hash": tx_hash.hex()}
-
-    except Exception as e:
-        return {"error": str(e)}
-
-# --- STUBS FOR IMPORTS ---
-
-@tool
-def get_portfolio_value():
-    return {"portfolio_value": 0}
-
-@tool
-def estimate_swap_output(token_in, token_out, amount_in):
-    return {"estimated_output": 0}
-
-@tool
-def get_token_balance(token_address):
-    return {"balance": "0.0"}
-
-@tool
-def get_trading_signals():
-    return []
+    async def _generate_content(self, content, system_override=None):
+        messages = [
+            {"role": "system", "content": system_override or "You are a helpful assistant."},
+            {"role": "user", "content": content}
+        ]
+        completion = await self.client.chat.completions.create(
+            model="gpt-4o", 
+            messages=messages,
+            max_tokens=500,
+            temperature=0.3
+        )
+        text = completion.choices[0].message.content
+        if "```json" in text:
+            text = text.replace("```json", "").replace("```", "")
+        return text.strip()
