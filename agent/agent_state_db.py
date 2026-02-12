@@ -40,11 +40,11 @@ class AgentStateDB:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            # Fetch active nodes with metadata
+            # Fetch active nodes with correct columns
             cursor.execute("""
-                SELECT name, category, reliabilityScore, description
+                SELECT title, category, historicalWinRate, description
                 FROM AlphaNode
-                WHERE status = 'ACTIVE'
+                WHERE status = 'active'
             """)
             nodes = cursor.fetchall()
             conn.close()
@@ -52,9 +52,9 @@ class AgentStateDB:
             catalog = []
             for node in nodes:
                 catalog.append({
-                    "name": node['name'],
+                    "name": node['title'],
                     "specialty": node['category'],
-                    "reputation": f"{node['reliabilityScore']:.1f}/5.0",
+                    "reputation": f"{node['historicalWinRate']:.1f}/1.0",
                     "description": node['description'] or f"Provides {node['category']} analysis."
                 })
             return catalog

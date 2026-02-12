@@ -106,7 +106,7 @@ Respond STRICTLY in JSON format with:
             {"role": "system", "content": system_override or "You are a helpful assistant."},
             {"role": "user", "content": content}
         ]
-        completion = await self.client.chat.completions.create(
+        completion = self.client.chat.completions.create(
             model="gpt-4o", 
             messages=messages,
             max_tokens=500,

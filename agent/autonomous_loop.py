@@ -9,10 +9,6 @@ from agent.data_consumer import fetch_node_data
 from agent.trading_engine import TradingEngine
 from agent.wallet_manager import get_daily_spend, can_spend
 
-# ...existing code...
-
-
-
 import asyncio
 from agent.predictive_agent import PredictiveAgent
 
@@ -33,7 +29,17 @@ def run_autonomous_loop(agent, interval_sec=10):
             from agent.data_pipeline import DataPipeline
             pipeline = DataPipeline(agent.market)
             agent.pipeline = pipeline
-        agent.current_predictive_instance = PredictiveAgent(pipeline)
+        wallet = getattr(agent, 'wallet', None)
+        node_connector = getattr(agent, 'node_connector', None)
+        # Use pipeline as market_analyst (not agent.market)
+        market_analyst = pipeline
+        trading_engine = getattr(agent, 'trader', None)
+        strategist = getattr(agent, 'strategist', None)
+        if strategist is None:
+            from agent.tools import AlphaStrategist
+            strategist = AlphaStrategist()
+            agent.strategist = strategist
+        agent.current_predictive_instance = PredictiveAgent(wallet, node_connector, market_analyst, trading_engine, strategist)
 
     predictive_instance = agent.current_predictive_instance
 
@@ -49,7 +55,7 @@ def run_autonomous_loop(agent, interval_sec=10):
                 time.sleep(5)
                 continue
 
-            print(f"[AlphaLoop] Checking state: Paused={predictive_instance.paused}")
+            print(f"[AlphaLoop] Running predictive agent cycle...")
             loop.run_until_complete(predictive_instance.run_cycle())
             print(f"[AlphaLoop] Cycle complete. Sleeping...")
 
@@ -63,5 +69,3 @@ def run_autonomous_loop(agent, interval_sec=10):
 def start_background_loop(agent):
     t = threading.Thread(target=run_autonomous_loop, args=(agent,), daemon=True)
     t.start()
-
-# ...existing code...

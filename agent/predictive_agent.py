@@ -4,7 +4,7 @@ import json
 import asyncio
 import pandas as pd
 from datetime import datetime
-from agent_state_db import AgentStateDB
+from .agent_state_db import AgentStateDB
 
 class PredictiveAgent:
     def __init__(self, wallet_manager, node_connector, market_analyst, trading_engine, strategist):
@@ -44,11 +44,13 @@ class PredictiveAgent:
         print(f"\n" + "═"*60)
         print(f"♟️  PREDICTIVE AGENT CYCLE - {datetime.now().strftime('%H:%M:%S')}")
         self.check_for_overrides()
-        price_data = await self.analyst.get_historical_prices(limit=60)
-        df = pd.DataFrame(price_data)
+        df = await self.analyst.get_latest_tape()
+        if df is None or df.empty:
+            print("   ❌ [PredictiveAgent] No price data available.")
+            return
         initial_snapshot = {
-            "current_price": float(df['close'].iloc[-1]),
-            "price_change": float(df['close'].iloc[-1] - df['close'].iloc[-5]),
+            "current_price": float(df['close'].iloc[-1]) if 'close' in df.columns else float(df['price'].iloc[-1]),
+            "price_change": float((df['close'].iloc[-1] - df['close'].iloc[-5]) if 'close' in df.columns else (df['price'].iloc[-1] - df['price'].iloc[-5])),
             "agent_performance": self.state_db.get_performance_context(),
             "suggested_bias": self.forced_bias if self.forced_bias else "NONE"
         }
