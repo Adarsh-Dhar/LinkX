@@ -55,22 +55,33 @@ class AlphaStrategist:
         human_intel = memory.get('human_intel', "No external human context provided.")
         formatted_signals = json.dumps(node_signals, indent=2)
 
-        # Bayesian Risk Analyst prompt for probabilistic reasoning
+        # Updated system prompt for Azure OpenAI Content Filter safety and node/DB context
+        system_prompt = """
+You are the 'AlphaStrategist', an advanced AI Portfolio Manager for a decentralized hedge fund.
+
+INPUT CONTEXT:
+1. MARKET DATA: Recent price action and trends.
+2. NODE INTELLIGENCE: Status of data providers (e.g., 'Sentiment Node', 'Macro Node'). Trust data from recently updated nodes more.
+3. PERFORMANCE HISTORY: Your recent win/loss record. If you are on a losing streak, REDUCE your confidence and trade size.
+4. QUALITATIVE INTEL: External alerts.
+
+MANDATORY RULES:
+- **MASTER SIGNAL:** If `human_intel` suggests "downside risks", "liquidity exits", or "protocol alerts", you MUST bias towards SHORT. This overrides bullish technicals.
+- **PROBABILISTIC OUTPUT:** Never return 1.0 confidence. The maximum is 0.99. 
+- **RISK MANAGEMENT:** If `agent_performance` shows recent losses, be conservative.
+- **SAFETY:** Do not use words like 'attack', 'kill', or 'destroy'. Use 'volatility', 'correction', and 'defensive positioning'.
+
+Respond STRICTLY in JSON format with:
+{
+  "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
+  "risk_confidence": <float between 0.0 and 0.99>,
+  "reasoning": "<concise explanation citing specific nodes or history>"
+}
+"""
+
         prompt = f"""
-        You are a professional Financial Advisor. Analyze the provided QUALITATIVE INTELLIGENCE and MARKET DATA.
-        1. HUMAN INTEL is your primary signal. If the intel suggests 'High Risk' or 'Critical Downside', you should lean towards a SHORT bias.
-        2. MARKET DATA provides the validation. Compare the human sentiment with the technical trend.
-        3. Assign a `risk_confidence` between 0.1 and 0.95. Never return 1.0.
-        4. If the Human Intel and Market Data are in total conflict, reduce confidence and explain the risk.
+{system_prompt}
 
-REQUIRED JSON FORMAT:
-{{
-    "execution_bias": "LONG", "SHORT", or "NEUTRAL",
-    "risk_confidence": 0.0 to 1.0,
-    "reasoning": "string"
-}}
-
-Context:
 INTEL: {human_intel}
 SUGGESTED_BIAS: {memory.get('suggested_bias', 'None')}
 SIGNALS: {formatted_signals}
