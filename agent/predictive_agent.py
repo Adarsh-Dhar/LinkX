@@ -11,24 +11,24 @@ from .tools import AlphaStrategist
 class PredictiveAgent:
     def check_for_overrides(self):
         """Checks for a JSON file to inject human intel or force a bias."""
-        # Ensure we look in the directory WHERE THIS SCRIPT IS, not the root
+        # ABSOLUTE PATH FIX: Find the folder where THIS file lives
         import json
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        override_path = os.path.join(base_dir, "override_state.json")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        override_path = os.path.join(current_dir, "override_state.json")
         if os.path.exists(override_path):
             try:
                 with open(override_path, "r") as f:
-                    override_data = json.load(f)
-                    # Check for bias overrides
-                    self.forced_bias = override_data.get('forced_bias') or override_data.get('bias_override')
-                    # Ensure intel is injected into memory
-                    self.external_intel = override_data.get('external_context')
-                    if self.external_intel:
-                        # Sync with what tools.py expects (usually 'human_intel')
-                        self.short_term_memory['human_intel'] = self.external_intel
+                    data = json.load(f)
+                    # Check for forced trade bias
+                    self.forced_bias = data.get('forced_bias') or data.get('bias_override')
+                    # Inject situational context into memory
+                    ctx = data.get('external_context')
+                    if ctx:
+                        # Sync with what tools.py expects
+                        self.short_term_memory['human_intel'] = ctx
                     if self.forced_bias:
                         self.forced_bias = self.forced_bias.upper()
-                        print(f"   🎯 [OVERRIDE ACTIVE] Bias: {self.forced_bias}")
+                        print(f"   🎯 [OVERRIDE DETECTED] Bias: {self.forced_bias}")
             except Exception as e:
                 print(f"   ⚠️ [Override Error] {e}")
         return None

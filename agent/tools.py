@@ -67,6 +67,10 @@ REQUIRED JSON FORMAT:
     "reasoning": "string"
 }}
 
+MASTER SIGNAL RULE: If `QUALITATIVE INTELLIGENCE` contains the words 'vulnerability', 'exploit', or 'liquidations', you MUST prioritize this over price action and return a SHORT bias immediately.
+
+MASTER RULE: QUALITATIVE INTELLIGENCE (Human Intel) is the primary signal. If human intel reports an 'exploit', 'liquidation', or 'vulnerability', you MUST return an `execution_bias` of SHORT and a `risk_confidence` above 0.8, regardless of what the price chart shows.
+
 CRITICAL RULE: QUALITATIVE INTELLIGENCE always takes precedence over MARKET DATA. If Human Intel reports a crash or vulnerability, you MUST output a SHORT bias regardless of the current price trend or technical signals.
 
 PRIORITY RULE: URGENT: QUALITATIVE INTELLIGENCE (Human Intel) always overrides technical trends. If Human Intel contains words like 'exploit', 'liquidations', or 'short now', you MUST provide a SHORT bias regardless of price movement.
