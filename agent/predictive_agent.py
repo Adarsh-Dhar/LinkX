@@ -19,6 +19,7 @@ class PredictiveAgent:
         self.last_trade_confidence = 0.0
         self.risk_threshold = 0.05
         self.forced_bias = None
+        self.data_cache = {} # Stores: { "NodeName": {"data": "...", "timestamp": 12345} }
 
     def check_for_overrides(self):
         """Checks for overrides using ABSOLUTE paths."""
@@ -60,12 +61,18 @@ class PredictiveAgent:
         if node_catalog:
             procurement = await self.strategist.assess_data_needs(initial_snapshot, node_catalog)
             nodes_to_buy = procurement.get('nodes_to_buy', [])
-            if nodes_to_buy:
-                print(f"   💳 [Procurement] Buying data from: {nodes_to_buy}")
-                for node in nodes_to_buy:
-                    purchased_intel[node] = f"Simulated report from {node}: CONFIRMED TREND"
-                    self.state_db.update_node_score(node, 0.1)
-            else:
+            for node in nodes_to_buy:
+                cache_entry = self.data_cache.get(node)
+                if cache_entry and (time.time() - cache_entry['timestamp'] < 300):
+                    print(f"   ♻️  [Cache] Reusing fresh data from {node}")
+                    purchased_intel[node] = cache_entry['data']
+                else:
+                    print(f"   💳 [Procurement] Buying NEW data from {node}")
+                    new_data = f"Paid report from {node}: Trend confirmed at {datetime.now()}"
+                    self.data_cache[node] = {"data": new_data, "timestamp": time.time()}
+                    self.state_db.record_node_purchase(node)
+                    purchased_intel[node] = new_data
+            if not nodes_to_buy:
                 print("   💰 [Procurement] No paid data needed.")
         full_context = {**initial_snapshot, "purchased_intelligence": purchased_intel}
         decision = await self.strategist.get_strategy(full_context, self.short_term_memory)

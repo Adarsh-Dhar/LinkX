@@ -35,16 +35,15 @@ class AgentStateDB:
             return f"DB Error (Performance): {str(e)}"
 
     def get_active_nodes_catalog(self):
-        """Fetches a catalog of active nodes for the Scout to analyze."""
+        """Fetches a catalog of active nodes for the Scout to analyze, including lastPurchaseTime."""
         try:
             conn = self._get_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            # Fetch active nodes with correct columns
+            # Fetch lastPurchaseTime so the AI knows if it's recently updated
             cursor.execute("""
-                SELECT title, category, historicalWinRate, description
-                FROM AlphaNode
-                WHERE status = 'active'
+                SELECT name, category, reliabilityScore, description, lastPurchaseTime
+                FROM AlphaNode WHERE status = 'ACTIVE'
             """)
             nodes = cursor.fetchall()
             conn.close()
@@ -52,15 +51,25 @@ class AgentStateDB:
             catalog = []
             for node in nodes:
                 catalog.append({
-                    "name": node['title'],
+                    "name": node['name'],
                     "specialty": node['category'],
-                    "reputation": f"{node['historicalWinRate']:.1f}/1.0",
-                    "description": node['description'] or f"Provides {node['category']} analysis."
+                    "description": node['description'],
+                    "last_bought_at": node['lastPurchaseTime'] # <--- CRITICAL FOR AI
                 })
             return catalog
         except Exception as e:
-            print(f"DB Error (Nodes): {e}")
             return []
+
+    def record_node_purchase(self, node_name):
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            now = datetime.utcnow().isoformat()
+            cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE name = ?", (now, node_name))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
 
     def update_node_score(self, node_name, score_delta):
         """Updates node reliability based on utility."""

@@ -47,21 +47,30 @@ class AlphaStrategist:
         self.model_name = "gpt-4o-mini"
 
     async def assess_data_needs(self, market_snapshot, node_catalog):
-        catalog_str = json.dumps(node_catalog, indent=2)
+        # Add a preprocessing step to calculate 'Seconds Since Last Buy' for the AI
+        from datetime import datetime
+        processed_catalog = []
+        for n in node_catalog:
+            seconds_ago = 999999
+            if n.get('last_bought_at'):
+                try:
+                    dt = datetime.fromisoformat(n['last_bought_at'].replace('Z', ''))
+                    seconds_ago = (datetime.utcnow() - dt).total_seconds()
+                except: pass
+            n['seconds_since_last_buy'] = int(seconds_ago)
+            processed_catalog.append(n)
+
         scout_prompt = f"""
-        You are a Data Procurement Officer.
-        MARKET STATUS: {json.dumps(market_snapshot, indent=2)}
-        AVAILABLE DATA PROVIDERS: {catalog_str}
-        TASK:
-        1. Analyze market volatility and trend.
-        2. Select 0-2 nodes from the catalog that could explain the current movement.
-        3. If the market is flat/boring, return empty list (Save Money).
-        4. If high volatility, prefer Macro/Sentiment nodes.
-        Respond STRICTLY in JSON:
-        {{
-            "nodes_to_buy": ["Exact Node Name"],
-            "reasoning": "Brief reason for expense."
-        }}
+        You are a Hedge Fund Data Strategist. 
+        MARKET: {json.dumps(market_snapshot)}
+        NODES: {json.dumps(processed_catalog)}
+
+        STRATEGY RULES:
+        1. REUSE DATA: Premium node data is valid for 300 seconds (5 mins). 
+        2. DO NOT BUY if 'seconds_since_last_buy' < 300. Use existing memory instead.
+        3. BE SELECTIVE: Only buy if the market movement is confusing and free technicals aren't enough.
+        
+        Respond in JSON: {{"nodes_to_buy": [], "reasoning": "..."}}
         """
         try:
             response = await self._generate_content(scout_prompt)
