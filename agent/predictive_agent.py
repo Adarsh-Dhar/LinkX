@@ -19,12 +19,10 @@ class PredictiveAgent:
             try:
                 with open(override_path, "r") as f:
                     data = json.load(f)
-                    # Check for forced trade bias
+                    # Support both naming conventions for safety
                     self.forced_bias = data.get('forced_bias') or data.get('bias_override')
-                    # Inject situational context into memory
                     ctx = data.get('external_context')
                     if ctx:
-                        # Sync with what tools.py expects
                         self.short_term_memory['human_intel'] = ctx
                     if self.forced_bias:
                         self.forced_bias = self.forced_bias.upper()

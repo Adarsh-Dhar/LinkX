@@ -1,5 +1,6 @@
 {
-  "external_context": "CRITICAL: Major security vulnerability reported. Liquidations spiking. SELL EVERYTHING.",
+  "external_context": "CRITICAL: Major exploit detected. Security breach in progress. SHORT IMMEDIATELY.",
   "priority": "HIGH",
-  "forced_bias": "SHORT"
+  "forced_bias": "SHORT",
+  "bias_override": "SHORT"
 }
