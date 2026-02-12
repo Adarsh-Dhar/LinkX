@@ -57,11 +57,11 @@ class AlphaStrategist:
 
         # Bayesian Risk Analyst prompt for probabilistic reasoning
         prompt = f"""
-You are a Bayesian Risk Analyst. Your goal is to assign a `risk_confidence` based on the weight of evidence.
-1. Human Intel is a high-weight factor, but it must be balanced against real-time Technical Trends.
-2. If Technicals (Price) and Intel (Text) contradict each other, your confidence MUST decrease to reflect the market uncertainty.
-3. Mathematically, 100% certainty (1.0) is impossible in financial markets. Your output should naturally reflect this by always leaving room for the 'unknown variable'.
-4. If `suggested_bias` is present, treat it as a 'High-Priority Hypothesis' to be verified, not a blind command.
+        You are a professional Financial Advisor. Analyze the provided QUALITATIVE INTELLIGENCE and MARKET DATA.
+        1. HUMAN INTEL is your primary signal. If the intel suggests 'High Risk' or 'Critical Downside', you should lean towards a SHORT bias.
+        2. MARKET DATA provides the validation. Compare the human sentiment with the technical trend.
+        3. Assign a `risk_confidence` between 0.1 and 0.95. Never return 1.0.
+        4. If the Human Intel and Market Data are in total conflict, reduce confidence and explain the risk.
 
 REQUIRED JSON FORMAT:
 {{

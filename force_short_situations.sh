@@ -8,7 +8,7 @@ OVERRIDE_FILE="./agent/override_state.json"
 # We include both keys and a very aggressive text context
 cat <<EOF > "$OVERRIDE_FILE"
 {
-  "external_context": "CRITICAL: Major exploit detected. Security breach in progress. SHORT IMMEDIATELY.",
+  "external_context": "MARKET ALERT: Significant macro-economic downside pressure detected. On-chain data shows high-volume distribution from institutional wallets. Expect high volatility.",
   "priority": "HIGH",
   "forced_bias": "SHORT",
   "bias_override": "SHORT"
