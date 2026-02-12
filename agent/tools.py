@@ -55,39 +55,24 @@ class AlphaStrategist:
         human_intel = memory.get('human_intel', "No external human context provided.")
         formatted_signals = json.dumps(node_signals, indent=2)
 
-        # Optimized prompt to prevent AI from adding extra quotes
+        # Bayesian Risk Analyst prompt for probabilistic reasoning
         prompt = f"""
-Analyze the following market data. Formulate a strategy.
-Return ONLY a raw JSON object. Do not use Markdown. Do not use backticks.
+You are a Bayesian Risk Analyst. Your goal is to assign a `risk_confidence` based on the weight of evidence.
+1. Human Intel is a high-weight factor, but it must be balanced against real-time Technical Trends.
+2. If Technicals (Price) and Intel (Text) contradict each other, your confidence MUST decrease to reflect the market uncertainty.
+3. Mathematically, 100% certainty (1.0) is impossible in financial markets. Your output should naturally reflect this by always leaving room for the 'unknown variable'.
+4. If `suggested_bias` is present, treat it as a 'High-Priority Hypothesis' to be verified, not a blind command.
 
 REQUIRED JSON FORMAT:
 {{
     "execution_bias": "LONG", "SHORT", or "NEUTRAL",
-    "risk_confidence": float (0.0 to 1.0),
+    "risk_confidence": 0.0 to 1.0,
     "reasoning": "string"
 }}
 
-URGENT MASTER RULE: QUALITATIVE INTELLIGENCE (Human Intel) always takes precedence over MARKET DATA. If human intel reports a 'vulnerability', 'exploit', or 'crash', you MUST return a SHORT bias immediately, even if the price is currently rising.
-
-MASTER SIGNAL RULE: QUALITATIVE INTELLIGENCE (Human Intel) always overrides MARKET DATA. If human intel reports an 'exploit' or 'vulnerability', you MUST return a SHORT bias regardless of the technical chart.
-
-MASTER SIGNAL RULE: If `QUALITATIVE INTELLIGENCE` contains the words 'vulnerability', 'exploit', or 'liquidations', you MUST prioritize this over price action and return a SHORT bias immediately.
-
-MASTER RULE: QUALITATIVE INTELLIGENCE (Human Intel) is the primary signal. If human intel reports an 'exploit', 'liquidation', or 'vulnerability', you MUST return an `execution_bias` of SHORT and a `risk_confidence` above 0.8, regardless of what the price chart shows.
-
-CRITICAL RULE: QUALITATIVE INTELLIGENCE always takes precedence over MARKET DATA. If Human Intel reports a crash or vulnerability, you MUST output a SHORT bias regardless of the current price trend or technical signals.
-
-PRIORITY RULE: URGENT: QUALITATIVE INTELLIGENCE (Human Intel) always overrides technical trends. If Human Intel contains words like 'exploit', 'liquidations', or 'short now', you MUST provide a SHORT bias regardless of price movement.
-
-CRITICAL INSTRUCTION: If QUALITATIVE INTELLIGENCE contains a warning (vulnerability, crash, sell volume spike), you MUST prioritize this over technical trends. A 'SHORT' bias is mandatory if the intel is bearish, regardless of the price chart.
-
-IMPORTANT RULES:
-QUALITATIVE INTELLIGENCE (Human Intel) ALWAYS overrides TECHNICAL SIGNALS. If human intel reports a vulnerability, exploit, or crash, you MUST move to SHORT regardless of the current price trend or technical signals.
-
-MANDATORY: If `human_intel` contains phrases like 'vulnerability', 'dumping', 'security exploit', 'liquidations', or 'short now', you MUST prioritize this as a SHORT bias regardless of technical indicators.
-
 Context:
 INTEL: {human_intel}
+SUGGESTED_BIAS: {memory.get('suggested_bias', 'None')}
 SIGNALS: {formatted_signals}
 MARKET: {market_data}
 """
@@ -109,6 +94,12 @@ MARKET: {market_data}
             # ONLY replace if the AI uses single quotes instead of doubles
             if "'" in json_str and '"' not in json_str:
                 json_str = json_str.replace("'", '"')
+            # Fix invalid format specifiers in the AI output (remove type hints)
+            import re
+            json_str = re.sub(r'"(LONG|SHORT|NEUTRAL),\\s*"risk_confidence": float \(0.0 to 1.0\),\\s*"reasoning": "string"', '"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": "No reason provided"', json_str)
+            # Remove any type hints or format specifiers
+            json_str = re.sub(r': float \(0.0 to 1.0\)', '', json_str)
+            json_str = re.sub(r': "string"', '', json_str)
 
             strategy = json.loads(json_str)
 

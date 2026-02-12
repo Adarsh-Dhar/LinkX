@@ -14,6 +14,7 @@ echo "------------------------------------------------"
 
 # 1. Cleanup
 echo "🧹 Cleaning up..."
+rm -f agent/override_state.json  # Remove any persistent override file
 pkill -f "python3.*agent"
 pkill -f "node.*server"
 pkill -f "node.*provider.js"

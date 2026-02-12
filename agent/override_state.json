@@ -1,6 +1,0 @@
-{
-  "external_context": "CRITICAL: Major exploit detected. Security breach in progress. SHORT IMMEDIATELY.",
-  "priority": "HIGH",
-  "forced_bias": "SHORT",
-  "bias_override": "SHORT"
-}

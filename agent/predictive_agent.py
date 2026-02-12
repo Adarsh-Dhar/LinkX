@@ -10,30 +10,28 @@ from .tools import AlphaStrategist
 
 class PredictiveAgent:
     def check_for_overrides(self):
-        """Checks for a JSON file to inject human intel or force a bias."""
+        """Checks for a JSON file to inject human intel or soft directional bias."""
         import json
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        override_path = os.path.join(current_dir, "override_state.json")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        override_path = os.path.join(base_dir, "override_state.json")
         if os.path.exists(override_path):
             try:
                 with open(override_path, "r") as f:
                     data = json.load(f)
-                    # Check for forced trade bias (checking both naming variations)
-                    self.forced_bias = data.get('forced_bias') or data.get('bias_override')
-                    # Inject situation context into the memory used by tools.py
-                    ctx = data.get('external_context')
-                    if ctx:
-                        self.short_term_memory['human_intel'] = ctx
-                    if self.forced_bias:
-                        self.forced_bias = self.forced_bias.upper()
-                        print(f"   🎯 [OVERRIDE DETECTED] Forced Bias: {self.forced_bias}")
-                        # Force confidence to 1.0 to bypass all AI hesitation
-                        self.forced_confidence = 1.0
+                    # We no longer "force" the trade here. 
+                    # We extract the 'intent' to pass to the AI.
+                    self.situational_intent = data.get('forced_bias') or data.get('bias_override')
+                    self.external_intel = data.get('external_context')
+                    if self.situational_intent:
+                        # Sync with memory so the Strategist sees the 'Human Desire'
+                        self.short_term_memory['human_intel'] = self.external_intel
+                        self.short_term_memory['suggested_bias'] = self.situational_intent
+                        print(f"   🧠 [Situational Awareness] AI focused on: {self.situational_intent}")
             except Exception as e:
-                print(f"   ⚠️ [Override Error] Failed to read file: {e}")
+                print(f"   ⚠️ [Context Error] {e}")
         else:
             # Reset if file is deleted
-            self.forced_bias = None
+            self.situational_intent = None
             self.external_intel = None
     def __init__(self, pipeline):
         self.pipeline = pipeline
@@ -340,45 +338,22 @@ class PredictiveAgent:
         bias = decision.get('execution_bias', 'NEUTRAL')
         risk_confidence = decision.get('risk_confidence', 0)
 
-        # Check for forced action (prioritize instance variable over env)
-        force_action = os.getenv("FORCE_ACTION", "").strip().upper()
-        active_override = self.forced_bias or force_action
-        forced = False
-
-        if active_override:
-            if active_override in ["BUY", "LONG"]:
-                bias = "LONG"
-                forced = True
-            elif active_override in ["SELL", "SHORT"]:
-                bias = "SHORT"
-                forced = True
-            elif active_override in ["HOLD", "NEUTRAL"]:
-                bias = "NEUTRAL"
-                forced = True
-            if forced:
-                risk_confidence = 1.0
-                override_source = "Instance Override" if self.forced_bias else "ENV Override"
-                print(f"   🧭 [{override_source}] Forcing {bias} in execute_move")
-
-        # Apply dynamic risk threshold instead of hardcoded 0.15
-        if (bias == "NEUTRAL" or risk_confidence < self.risk_threshold) and not forced:
+        # Apply dynamic risk threshold
+        if bias == "NEUTRAL" or risk_confidence < self.risk_threshold:
             print(f"   🛡️ [Risk Management] Skipping execution: bias={bias}, confidence={risk_confidence:.2f} < threshold={self.risk_threshold:.2f}")
             return
 
-        print(f"   🚀 [EXECUTION] Action: {bias} | Confidence: {risk_confidence:.2f} | Threshold: {self.risk_threshold:.2f}")
+        print(f"   🚀 [Dynamic Trade] Confidence: {risk_confidence:.2f} | Size: {risk_confidence}")
         print(f"   💭 [Basis] {(decision.get('reasoning') or decision.get('thought', 'No reasoning provided'))[:80]}...")
 
         try:
-            # Initialize trading engine with shared wallet
             wallet = WalletManager()
             engine = TradingEngine(wallet=wallet)
 
-            # Fetch real balances for USDC and WXTZ
             current_usdc_balance = wallet.get_balance('USDC') if hasattr(wallet, 'get_balance') else 0.0
             current_wxtz_balance = wallet.get_balance('WXTZ') if hasattr(wallet, 'get_balance') else 0.0
 
             if bias == "LONG":
-                # Use 10% of real USDC balance scaled by AI confidence
                 trade_amount = current_usdc_balance * 0.1 * risk_confidence
                 if current_usdc_balance <= 0 or trade_amount <= 0:
                     print(f"   🛑 [Risk Management] Skipping trade: USDC balance is {current_usdc_balance}")
@@ -401,14 +376,12 @@ class PredictiveAgent:
                         "tradeAmount": float(trade_amount),
                         "tokenIn": "USDC",
                         "tokenOut": "WXTZ",
-                        "forceAction": active_override or None,
                         "humanOverride": {
                             "risk_threshold": self.risk_threshold,
-                            "forced_bias": self.forced_bias
+                            "forced_bias": self.situational_intent
                         }
                     }
                 })
-                # Execute long position: USDC -> WXTZ
                 tx_hash = engine.execute_swap("USDC", "WXTZ", trade_amount)
                 if tx_hash:
                     print(f"   ✅ [LONG Execution] Swapped {trade_amount:.4f} USDC -> WXTZ")
@@ -417,9 +390,11 @@ class PredictiveAgent:
                     print(f"   ❌ [LONG Execution Failed] Swap returned None")
                 return tx_hash
             elif bias == "SHORT":
-                # Use real WXTZ balance for the exit/short position, scale by confidence, and add a safety buffer
-                trade_amount = current_wxtz_balance * risk_confidence
-                trade_amount = trade_amount * 0.999  # DeFi safety buffer to avoid precision errors
+                trade_amount = current_wxtz_balance * risk_confidence * 0.99
+                # Minimum trade floor to avoid liquidity errors
+                if trade_amount < 0.1:
+                    print(f"   ⚠️  Trade size ({trade_amount:.4f} WXTZ) too small for liquidity pool. Skipping.")
+                    return None
                 if current_wxtz_balance <= 0 or trade_amount <= 0:
                     print(f"   🛑 [Risk Management] Skipping short: WXTZ balance is {current_wxtz_balance}")
                     await self.log_activity({
@@ -441,10 +416,9 @@ class PredictiveAgent:
                         "tradeAmount": float(trade_amount),
                         "tokenIn": "WXTZ",
                         "tokenOut": "USDC",
-                        "forceAction": active_override or None,
                         "humanOverride": {
                             "risk_threshold": self.risk_threshold,
-                            "forced_bias": self.forced_bias
+                            "forced_bias": self.situational_intent
                         }
                     }
                 })
