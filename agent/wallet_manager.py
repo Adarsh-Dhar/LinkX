@@ -56,6 +56,14 @@ class WalletManager:
         self.private_key = private_key or os.getenv("WALLET_PRIVATE_KEY")
         self.rpc_url = rpc_url or os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
         self.simulation_mode = os.getenv("SIMULATION_MODE", "false").lower() == "true"
+        # Map token addresses from environment
+        usdc_addr = os.getenv("USDC_ADDRESS") or os.getenv("USDC_CONTRACT")
+        wxtz_addr = os.getenv("WXTZ_ADDRESS")
+        self.tokens = {}
+        if usdc_addr:
+            self.tokens[usdc_addr.lower()] = "USDC"
+        if wxtz_addr:
+            self.tokens[wxtz_addr.lower()] = "WXTZ"
         
         if self.simulation_mode:
             print("⚠️  [WalletManager] SIMULATION_MODE enabled - using mock transactions")
