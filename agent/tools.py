@@ -6,7 +6,8 @@ import os
 import time
 import re
 from datetime import datetime
-from openai import OpenAI
+
+from openai import AsyncOpenAI
 
 from web3 import Web3
 from dotenv import load_dotenv
@@ -40,11 +41,12 @@ class AlphaStrategist:
         self.token = api_key or os.getenv("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("❌ GITHUB_TOKEN not found in environment.")
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             base_url="https://models.inference.ai.azure.com",
             api_key=self.token,
         )
-        self.model_name = "gpt-4o-mini"
+        self.model_name = "gpt-4o"
+        self.system_prompt = "You are a world-class trading strategist. Analyze the provided market data and recommend the optimal trading action."
 
     async def assess_data_needs(self, market_snapshot, node_catalog):
         # Pre-process: Calculate 'Seconds Since Last Buy' for the AI
@@ -64,10 +66,12 @@ class AlphaStrategist:
         MARKET: {json.dumps(market_snapshot)}
         CATALOG: {json.dumps(node_catalog)}
 
-        STRATEGY:
-        1. VALIDITY: Data is valid for 300 seconds (5m). REUSE it if 'seconds_since_last_buy' < 300.
-        2. baseline: If you have NO node data, you MUST buy at least one to understand the market.
-        3. thirft: If technicals are neutral and you have fresh data, buy nothing.
+        REASONING RULES:
+        1. MANDATORY BASELINE: If 'purchased_intelligence' is empty, you MUST buy at least one node (Sentiment or Macro) immediately to establish a market baseline. 
+        2. DO NOT STAY BLIND: You are currently blind. A professional trader never trades without data. Spend the budget now.
+        3. VALIDITY: Data is valid for 300 seconds (5m). REUSE it if 'seconds_since_last_buy' < 300.
+        4. baseline: If you have NO node data, you MUST buy at least one to understand the market.
+        5. thrift: If technicals are neutral and you have fresh data, buy nothing.
         
         Respond in JSON: {{"nodes_to_buy": ["Exact Node Name"], "reasoning": "..."}}
         """
@@ -79,56 +83,32 @@ class AlphaStrategist:
             return {"nodes_to_buy": []}
 
     async def get_strategy(self, market_data, memory):
-        user_message = f"""
-        MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}
-        SHORT TERM MEMORY: {json.dumps(memory, indent=2)}
-        """
-        system_prompt = """
-You are the 'AlphaStrategist', an advanced AI Portfolio Manager for a decentralized hedge fund.
-INPUT CONTEXT:
-1. MARKET DATA: Recent price action and trends.
-2. NODE INTELLIGENCE: Status of data providers (e.g., 'Sentiment Node', 'Macro Node'). Trust data from recently updated nodes more.
-3. PERFORMANCE HISTORY: Your recent win/loss record. If you are on a losing streak, REDUCE your confidence and trade size.
-4. QUALITATIVE INTEL: External alerts.
-
-MANDATORY RULES:
-    - RESEARCH MANDATE: If 'purchased_intelligence' is empty, you are BLIND. You MUST use the Scout phase to buy at least one node report (Sentiment or Macro) if it has been more than 300s since the last buy.
-    - AGGRESSION: If technical price action is trending but you have no node data, set bias to NEUTRAL (0.1) and trigger a node purchase.
-
-DECISION RULES:
-1. SEEK EDGE: Do not default to 0.60. If technicals are bullish but you have no node data, set confidence to 0.1 (Wait for data).
-    2. INVEST IN INFO: If you have no node data and the technical trend is changing, you MUST buy data to confirm.
-    3. CONFIRMATION: If purchased intelligence confirms technicals, increase confidence to 0.85+.
-4. NEVER stay at exactly 0.50 unless there is literally zero data. As a trader, you must find an edge.
-5. **MASTER SIGNAL:** If `human_intel` suggests "downside risks", "liquidity exits", or "protocol alerts", you MUST bias towards SHORT. This overrides bullish technicals.
-6. **PROBABILISTIC OUTPUT:** Never return 1.0 confidence. The maximum is 0.99.
-7. **RISK MANAGEMENT:** If `agent_performance` shows recent losses, be conservative.
-8. **SAFETY:** Do not use words like 'attack', 'kill', or 'destroy'. Use 'volatility', 'correction', and 'defensive positioning'.
-
-Respond STRICTLY in JSON format with:
-{
-    "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
-    "risk_confidence": <float between 0.0 and 0.99>,
-    "reasoning": "<concise explanation citing specific nodes or history>"
-}
-"""
+        user_message = f"MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}"
         try:
-            response = await self._generate_content(user_message, system_override=system_prompt)
+            response = await self._generate_content(user_message, system_override=self.system_prompt)
             return json.loads(response)
         except Exception as e:
             print(f"   ⚠️ Strategist Error: {e}")
-            return {"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": "Error in reasoning engine."}
+            try:
+                print(f"   ⚠️ Raw strategist response: {response}")
+            except Exception:
+                pass
+            return {"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": "Fallback due to error."}
 
     async def _generate_content(self, content, system_override=None):
         messages = [
             {"role": "system", "content": system_override or "You are a helpful assistant."},
             {"role": "user", "content": content}
         ]
-        completion = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages
+        completion = await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.2
         )
-        # Clean response string to remove markdown code blocks
         text = completion.choices[0].message.content
-        clean_text = text.replace("```json", "").replace("```", "").strip()
-        return clean_text
+        # FIX: Robustly extract JSON even if there is markdown or leading text
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json_match.group(0)
+        return text.strip()

@@ -101,7 +101,7 @@ export default function AlphaMarketplace() {
 
   // 3. Filter Logic
   const filteredNodes = nodes.filter(n => {
-    const title = n.title || n.name || "";
+    const title = n.title || "";
     const category = n.category || "";
     return (
       title.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,7 +143,7 @@ export default function AlphaMarketplace() {
             {filteredNodes.map((node) => (
               <AlphaProductCard key={node.id} product={{
                 id: node.id,
-                name: node.title || node.name,
+                title: node.title,
                 description: node.description,
                 price: node.price?.toString() || "0",
                 category: node.category,

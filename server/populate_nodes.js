@@ -15,8 +15,8 @@ envContent.split('\n').forEach(line => {
   }
 });
 
-// Force the correct database URL
-process.env.DATABASE_URL = 'file:/Users/adarsh/Documents/alpha-consumer/agent/agent_state.db';
+// Force the correct database URL to match Prisma migrations
+process.env.DATABASE_URL = 'file:/Users/adarsh/Documents/alpha-consumer/frontend/prisma/dev.db';
 
 const { PrismaClient } = require('@prisma/client');
 
@@ -29,10 +29,15 @@ const NODES = [
     url: 'http://localhost:4001/api/microstructure',
     nodeType: 'microstructure',
     category: 'market',
-    port: 4001,
     description: 'Monitors order flow imbalances, market depth anomalies, and optimal execution paths. Detects frontrunning and MEV patterns.',
-    qualityScore: 88,
     price: 0.25,
+    icon: 'activity',
+    ratings: 0,
+    latencyMs: 0,
+    assetCoverage: '["WETH","USDC","DAI"]',
+    granularity: null,
+    historicalWinRate: 0.0,
+    more_context: null,
   },
   {
     name: 'Alternative Intelligence & Sentiment',
@@ -40,10 +45,15 @@ const NODES = [
     url: 'http://localhost:4002/api/sentiment',
     nodeType: 'sentiment',
     category: 'sentiment',
-    port: 4002,
     description: 'Real-time sentiment analysis from social media, news outlets, and on-chain whale wallets. Capturing collective psychology.',
-    qualityScore: 85,
     price: 0.35,
+    icon: 'activity',
+    ratings: 0,
+    latencyMs: 0,
+    assetCoverage: '["WETH","USDC","DAI"]',
+    granularity: null,
+    historicalWinRate: 0.0,
+    more_context: null,
   },
   {
     name: 'Supply Chain & Global Macro',
@@ -51,10 +61,15 @@ const NODES = [
     url: 'http://localhost:4003/api/macro',
     nodeType: 'macro',
     category: 'macro',
-    port: 4003,
     description: 'Monitors large-scale economic and physical world data that impacts long-term asset valuations.',
-    qualityScore: 92,
     price: 0.65,
+    icon: 'activity',
+    ratings: 0,
+    latencyMs: 0,
+    assetCoverage: '["WETH","USDC","DAI"]',
+    granularity: null,
+    historicalWinRate: 0.0,
+    more_context: null,
   },
 ];
 
@@ -71,18 +86,21 @@ async function populateNodes() {
                 endpointUrl: node.url,
                 description: node.description,
                 price: node.price,
-                latencyMs: 0,
+                icon: node.icon,
+                ratings: node.ratings,
+                latencyMs: node.latencyMs,
+                historicalWinRate: node.historicalWinRate,
+                more_context: node.more_context,
                 status: 'active',
-                lastUpdated: new Date(),
-                icon: 'activity',
                 isPurchased: false,
                 whitelisted: false,
-                // Optional fields matching schema
-                granularity: undefined,
-                historicalWinRate: 0.0,
-                more_context: undefined,
-                ratings: 0,
-                lastPurchaseTime: undefined,
+                registrationStatus: 'pending',
+                apiVersion: '1.0',
+                healthStatus: 'unknown',
+                lastUpdated: new Date(),
+                updatedAt: new Date(),
+                createdAt: new Date(),
+                // providerAddress, registeredAt, healthCheckUrl, lastHealthCheck, lastPurchaseTime are left null
               },
             });
       console.log(`✅ Created node: ${node.name} (Quality: ${node.qualityScore}, Price: $${node.price})`);

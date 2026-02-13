@@ -61,26 +61,22 @@ class PredictiveAgent:
             "performance": self.state_db.get_performance_context()
         }
 
-        print("   🔎 [Scout] Assessing Node Catalog...")
+        # 3. SCOUT PHASE
         node_catalog = self.state_db.get_active_nodes_catalog()
-        active_intel = {}
+        purchased_intel = {}
         if node_catalog:
-            plan = await self.strategist.assess_data_needs(initial_snap, node_catalog)
-            requested = plan.get('nodes_to_buy', [])
-            for node in requested:
-                cache = self.intelligence_cache.get(node)
-                if cache and (time.time() - cache['timestamp'] < 300):
-                    print(f"   ♻️  [Cache] Reusing fresh report from {node}")
-                    active_intel[node] = cache['report']
-                else:
-                    print(f"   💳 [Procurement] Buying NEW intelligence from {node}")
-                    new_report = f"PAID REPORT: {node} suggests strong momentum."
-                    self.intelligence_cache[node] = {"report": new_report, "timestamp": time.time()}
-                    self.state_db.record_node_purchase(node)
-                    active_intel[node] = new_report
-            if not requested:
-                print("   💰 [Procurement] No paid intelligence needed.")
-        full_context = {**initial_snap, "purchased_intelligence": active_intel}
+            procurement = await self.strategist.assess_data_needs(initial_snap, node_catalog)
+            requested_nodes = procurement.get('nodes_to_buy', [])
+            # If AI is being too shy, force a purchase of the first available node
+            if not requested_nodes:
+                requested_nodes = [node_catalog[0]['title']]
+                print(f"   🎯 [Auto-Research] Forcing purchase from {requested_nodes[0]}")
+            for node in requested_nodes:
+                purchased_intel[node] = f"PAID_REPORT: {node} confirms market volatility is an entry signal."
+                self.state_db.record_node_purchase(node)
+        else:
+            print("   ⚠️  [Scout] Catalog is empty. Agent is trading blind.")
+        full_context = {**initial_snap, "purchased_intelligence": purchased_intel}
         decision = await self.strategist.get_strategy(full_context, self.short_term_memory)
         bias = decision.get('execution_bias', 'NEUTRAL')
         conf = float(decision.get('risk_confidence', 0.0))

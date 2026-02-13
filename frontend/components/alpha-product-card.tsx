@@ -12,7 +12,7 @@ import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 
 interface Product {
   id: string;
-  name: string;
+  title: string;
   description: string;
   price: string;
   category?: string;
@@ -74,7 +74,7 @@ export default function AlphaProductCard({ product }: { product: Product }) {
 
       const requirements = facilitator.generatePaymentRequirements({
         payTo: PROVIDER_ADDRESS,
-        description: `Access to ${product.name}`,
+        description: `Access to ${product.title}`,
         maxAmountRequired: valueInWei, 
       });
 
@@ -113,7 +113,7 @@ export default function AlphaProductCard({ product }: { product: Product }) {
       if (!res.ok) throw new Error(data.error || "Server verification failed");
 
       setPurchased(true);
-      toast.success(`Unlocked: ${product.name}`);
+      toast.success(`Unlocked: ${product.title}`);
 
     } catch (error: any) {
       console.error("Purchase Error:", error);
@@ -134,11 +134,11 @@ export default function AlphaProductCard({ product }: { product: Product }) {
       onClick={handleCardClick}
       tabIndex={0}
       role="button"
-      aria-label={`View details for ${product.name}`}
+      aria-label={`View details for ${product.title}`}
     >
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">{product.name} {purchased && <CheckCircle className="h-5 w-5 text-green-500" />}</h3>
+          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">{product.title} {purchased && <CheckCircle className="h-5 w-5 text-green-500" />}</h3>
           {product.provider && <p className="text-xs text-muted-foreground mt-1">{product.provider}</p>}
         </div>
         {isLocked ? <Lock className="text-accent" size={20} /> : <Unlock className="text-secondary" size={20} />}

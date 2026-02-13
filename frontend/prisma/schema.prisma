@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url = env("DATABASE_URL")
 }
 
 
@@ -58,6 +58,13 @@ model Trade {
 
 model AlphaNode {
   id            String   @id @default(uuid())
+  registrationStatus String @default("pending")
+  providerAddress    String?
+  apiVersion        String? @default("1.0")
+  registeredAt      DateTime?
+  healthCheckUrl    String?
+  lastHealthCheck   DateTime?
+  healthStatus      String   @default("unknown")
   title         String
   nodeType      String
   category      String
@@ -68,16 +75,19 @@ model AlphaNode {
   isPurchased   Boolean  @default(false)
   whitelisted   Boolean  @default(false)
   endpointUrl   String   @unique
-  port          Int
+  // port field removed for Prisma compatibility
   icon          String?
   ratings       Int      @default(0)
   latencyMs     Int?
   assetCoverage String?
   granularity   String?
   historicalWinRate Float @default(0.0)
+  reliabilityScore   Float @default(1.0)
   dataLogs      DataLog[]
   lastUpdated   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   lastPurchaseTime DateTime?
+  createdAt     DateTime @default(now())
   trades         Trade[] @relation("TradeAlphaNodes")
 }
 

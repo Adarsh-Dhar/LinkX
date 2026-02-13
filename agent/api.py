@@ -40,7 +40,7 @@ if GITHUB_TOKEN:
         base_url="https://models.inference.ai.azure.com",
         api_key=GITHUB_TOKEN
     )
-# GitHub Models provides free gpt-4o-mini with 8,192 token context window.
+# GitHub Models provides free gpt-4o with 8,192 token context window.
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent
@@ -96,7 +96,7 @@ Return ONLY JSON.
         return {"action": "IGNORE", "error": "GitHub Models client not configured"}
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}

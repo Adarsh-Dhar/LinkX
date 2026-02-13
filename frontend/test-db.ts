@@ -9,9 +9,9 @@ async function test() {
     const count = await prisma.alphaNode.count()
     console.log(`✅ Database connected. Nodes in DB: ${count}`)
     
-    const nodes = await prisma.alphaNode.findMany({ select: { name: true, price: true, port: true } })
+    const nodes = await prisma.alphaNode.findMany({ select: { title: true, price: true, port: true } })
     console.log('📊 Nodes:')
-    nodes.forEach(n => console.log(`  - ${n.name} ($${n.price} USDC, Port ${n.port})`))
+    nodes.forEach(n => console.log(`  - ${n.title} ($${n.price} USDC, Port ${n.port})`))
   } catch (e) {
     console.error('❌ Error:', e)
   } finally {
