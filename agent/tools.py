@@ -51,7 +51,12 @@ class AlphaStrategist:
             "Analyze the provided market data and recommend the optimal trading action. "
             "ALWAYS respond in JSON with two fields: 'execution_bias' (LONG, SHORT, or NEUTRAL) and 'risk_confidence' (a float between 0.0 and 1.0). "
             "Also include a 'reasoning' field with your analysis. "
-            "If you are uncertain, set execution_bias to NEUTRAL and risk_confidence to 0.0."
+            "CONFIDENCE CALCULATION: You must calculate confidence based on the strength of the Technical Trend. "
+            "If technicals are bullish (+5.0 price change), use 0.65. If strongly bullish (+20.0), use 0.82. "
+            "If 'purchased_intelligence' is provided and agrees with technicals, you MUST raise confidence to 0.90+. "
+            "NEVER repeat the same confidence number every cycle; vary it based on the exact price change decimals. "
+            "If you are uncertain, set execution_bias to NEUTRAL and risk_confidence to 0.0. "
+            "RULES: 4. PATIENCE: If you are currently in a position (LONG/SHORT), do not suggest a reversal (FLIP) unless the technical change is greater than 10.0 points. Small fluctuations should be handled as NEUTRAL or HOLD to save on slippage costs."
         )
 
     async def assess_data_needs(self, market_snapshot, node_catalog):
@@ -73,12 +78,13 @@ class AlphaStrategist:
         CATALOG: {json.dumps(node_catalog)}
 
         REASONING RULES:
-        1. MANDATORY BASELINE: If 'purchased_intelligence' is empty, you MUST buy at least one node (Sentiment or Macro) immediately to establish a market baseline. 
-        2. DO NOT STAY BLIND: You are currently blind. A professional trader never trades without data. Spend the budget now.
-        3. VALIDITY: Data is valid for 300 seconds (5m). REUSE it if 'seconds_since_last_buy' < 300.
-        4. baseline: If you have NO node data, you MUST buy at least one to understand the market.
-        5. thrift: If technicals are neutral and you have fresh data, buy nothing.
-        
+        1. NO BLIND TRADES: You are an institutional trader. You are currently 'Blind' (intelligence is empty).
+        2. RESEARCH REQUIREMENT: If the price has moved more than 2.0 points, you MUST buy the most relevant node report (Sentiment or Macro) to confirm the move.
+        3. DO NOT SAVE MONEY: Your priority is trade accuracy, not research cost. Spend the budget to break the Neutral loop.
+        4. VALIDITY: Data is valid for 300 seconds (5m). REUSE it if 'seconds_since_last_buy' < 300.
+        5. baseline: If you have NO node data, you MUST buy at least one to understand the market.
+        6. thrift: If technicals are neutral and you have fresh data, buy nothing.
+
         Respond in JSON: {{"nodes_to_buy": ["Exact Node Name"], "reasoning": "..."}}
         """
         try:
@@ -152,7 +158,7 @@ class AlphaStrategist:
             response.raise_for_status()
             data = response.json()
             text = data["choices"][0]["message"]["content"]
-        # FIX: Robustly extract JSON even if there is markdown or leading text
+        # Robustly extract JSON even if there is markdown or leading text
         import re
         json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
