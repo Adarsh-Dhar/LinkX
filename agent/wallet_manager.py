@@ -59,11 +59,11 @@ class WalletManager:
         # Map token addresses from environment
         usdc_addr = os.getenv("USDC_ADDRESS") or os.getenv("USDC_CONTRACT")
         wxtz_addr = os.getenv("WXTZ_ADDRESS")
-        self.tokens = {}
-        if usdc_addr:
-            self.tokens[usdc_addr.lower()] = "USDC"
-        if wxtz_addr:
-            self.tokens[wxtz_addr.lower()] = "WXTZ"
+        # Update this dictionary to match your Shadownet addresses:
+        self.tokens = {
+            "0x9D8166D4B4ac353B0269655E55cB137000ba8624": "WXTZ",
+            "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888": "USDC"
+        }
         
         if self.simulation_mode:
             print("⚠️  [WalletManager] SIMULATION_MODE enabled - using mock transactions")

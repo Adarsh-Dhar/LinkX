@@ -93,9 +93,14 @@ class PredictiveAgent:
             print(f"   📈 [Scale In] Conviction increased ({self.last_trade_confidence:.2f} -> {conf:.2f})")
             should_trade = True
         if should_trade and bias != "NEUTRAL":
-            await self.execute_move(bias, conf)
-            self.current_position = bias
-            self.last_trade_confidence = conf
+            print(f"   🚀 [Executing] Attempting {bias} swap...")
+            success = await self.execute_move(bias, conf)
+            if success:
+                self.current_position = bias
+                self.last_trade_confidence = conf
+                print(f"   ✅ [Position Updated] Agent is now {bias}")
+            else:
+                print(f"   ❌ [Position Error] Trade failed. Position remains {self.current_position}")
         else:
             print(f"   ⏳ [Hold] Maintaining {self.current_position} position.")
 
@@ -108,14 +113,19 @@ class PredictiveAgent:
             bal = float(await self.wallet.get_token_balance(usdc_addr))
             size = bal * confidence * 0.99
             if size > min_long:
-                await self.trading.execute_vvs_swap("USDC", "WXTZ", size)
+                result = await self.trading.execute_vvs_swap("USDC", "WXTZ", size)
+                return True if result else False
             else:
                 print(f"   🚫 [Trade Refused] LONG size {size:.2f} below minimum floor {min_long}")
+                return False
         elif action == "SHORT":
             wxtz_addr = os.getenv("WXTZ_ADDRESS")
             bal = float(await self.wallet.get_token_balance(wxtz_addr))
             size = bal * confidence * 0.99
             if size > min_short:
-                await self.trading.execute_vvs_swap("WXTZ", "USDC", size)
+                result = await self.trading.execute_vvs_swap("WXTZ", "USDC", size)
+                return True if result else False
             else:
+                print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short}")
+                return False
                 print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short}")

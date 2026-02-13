@@ -91,6 +91,10 @@ INPUT CONTEXT:
 3. PERFORMANCE HISTORY: Your recent win/loss record. If you are on a losing streak, REDUCE your confidence and trade size.
 4. QUALITATIVE INTEL: External alerts.
 
+MANDATORY RULES:
+    - RESEARCH MANDATE: If 'purchased_intelligence' is empty, you are BLIND. You MUST use the Scout phase to buy at least one node report (Sentiment or Macro) if it has been more than 300s since the last buy.
+    - AGGRESSION: If technical price action is trending but you have no node data, set bias to NEUTRAL (0.1) and trigger a node purchase.
+
 DECISION RULES:
 1. SEEK EDGE: Do not default to 0.60. If technicals are bullish but you have no node data, set confidence to 0.1 (Wait for data).
     2. INVEST IN INFO: If you have no node data and the technical trend is changing, you MUST buy data to confirm.
@@ -124,9 +128,7 @@ Respond STRICTLY in JSON format with:
             model=self.model_name,
             messages=messages
         )
-        # Remove any leading/trailing ```json or ``` tags
-        result = completion.choices[0].message.content
-        if result.strip().startswith('```json'):
-            result = result.strip()[7:]
-        result = result.strip().strip('`').strip()
-        return result
+        # Clean response string to remove markdown code blocks
+        text = completion.choices[0].message.content
+        clean_text = text.replace("```json", "").replace("```", "").strip()
+        return clean_text
