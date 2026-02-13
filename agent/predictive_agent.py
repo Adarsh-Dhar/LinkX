@@ -101,12 +101,14 @@ class PredictiveAgent:
 
     async def execute_move(self, action, confidence):
         if action == "LONG":
-            bal = float(await self.wallet.get_token_balance(os.getenv("USDC_ADDRESS")))
+            usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
+            bal = float(await self.wallet.get_token_balance(usdc_addr))
             size = bal * confidence * 0.99
             if size > 5:
                 await self.trading.execute_vvs_swap("USDC", "WXTZ", size)
         elif action == "SHORT":
-            bal = float(await self.wallet.get_token_balance(os.getenv("WXTZ_ADDRESS")))
+            wxtz_addr = os.getenv("WXTZ_ADDRESS")
+            bal = float(await self.wallet.get_token_balance(wxtz_addr))
             size = bal * confidence * 0.99
             if size > 0.1:
                 await self.trading.execute_vvs_swap("WXTZ", "USDC", size)

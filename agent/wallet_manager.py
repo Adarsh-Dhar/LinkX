@@ -74,8 +74,15 @@ class WalletManager:
                 raise
 
     def get_balance(self, token_address=None):
+        # If no token_address, default to USDC_CONTRACT from env
         if not token_address:
-            return self.w3.eth.get_balance(self.address)
+            token_address = os.getenv("USDC_CONTRACT")
+        # If still None, fallback to WXTZ_ADDRESS
+        if not token_address:
+            token_address = os.getenv("WXTZ_ADDRESS")
+        if not token_address:
+            print(f"⚠️ [WalletManager] Unknown token: None")
+            return 0.0
         # For ERC20, call balanceOf
         erc20 = self.w3.eth.contract(address=token_address, abi=self._erc20_abi())
         return erc20.functions.balanceOf(self.address).call()
@@ -230,3 +237,7 @@ class WalletManager:
             {"constant":True,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"},
             {"constant":False,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"}
         ]
+
+    async def get_token_balance(self, token_address=None):
+        # Async wrapper for compatibility with PredictiveAgent
+        return self.get_balance(token_address)

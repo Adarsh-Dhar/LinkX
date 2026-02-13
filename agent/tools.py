@@ -85,7 +85,7 @@ class AlphaStrategist:
         MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}
         SHORT TERM MEMORY: {json.dumps(memory, indent=2)}
         """
-                system_prompt = """
+        system_prompt = """
 You are the 'AlphaStrategist', an advanced AI Portfolio Manager for a decentralized hedge fund.
 INPUT CONTEXT:
 1. MARKET DATA: Recent price action and trends.
