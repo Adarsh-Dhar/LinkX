@@ -47,31 +47,29 @@ class AlphaStrategist:
         self.model_name = "gpt-4o-mini"
 
     async def assess_data_needs(self, market_snapshot, node_catalog):
-        # Add a preprocessing step to calculate 'Seconds Since Last Buy' for the AI
+        # Pre-process: Calculate 'Seconds Since Last Buy' for the AI
         from datetime import datetime
-        processed_catalog = []
+        import json
         for n in node_catalog:
-            seconds_ago = 999999
+            sec_ago = 999999
             if n.get('last_bought_at'):
                 try:
                     dt = datetime.fromisoformat(n['last_bought_at'].replace('Z', ''))
-                    seconds_ago = (datetime.utcnow() - dt).total_seconds()
+                    sec_ago = (datetime.utcnow() - dt).total_seconds()
                 except: pass
-            n['seconds_since_last_buy'] = int(seconds_ago)
-            processed_catalog.append(n)
+            n['seconds_since_last_buy'] = int(sec_ago)
 
         scout_prompt = f"""
-        You are a Hedge Fund Data Strategist.
+        You are a Data Procurement Officer.
         MARKET: {json.dumps(market_snapshot)}
-        NODES: {json.dumps(processed_catalog)}
+        CATALOG: {json.dumps(node_catalog)}
 
-        STRATEGY RULES:
-        1. INFORMATION IS LEVERAGE: Do not wait for a crisis to buy data. If the technical chart shows ANY trend (even slight), buy a node report to see if you can front-run a bigger move.
-        2. VALIDATE MOMENTUM: If price change is > 1.0, buy data from 'Alternative Intelligence & Sentiment' to check social volume.
-        3. RISK PROTECTION: If price change is < -1.0, buy 'Supply Chain & Global Macro' to see if there is systemic risk.
-        4. THRIFT: Only skip buying if 'seconds_since_last_buy' < 300.
-
-        Respond in JSON: {{"nodes_to_buy": [], "reasoning": "..."}}
+        STRATEGY:
+        1. VALIDITY: Data is valid for 300 seconds (5m). REUSE it if 'seconds_since_last_buy' < 300.
+        2. baseline: If you have NO node data, you MUST buy at least one to understand the market.
+        3. thirft: If technicals are neutral and you have fresh data, buy nothing.
+        
+        Respond in JSON: {{"nodes_to_buy": ["Exact Node Name"], "reasoning": "..."}}
         """
         try:
             response = await self._generate_content(scout_prompt)
@@ -126,4 +124,9 @@ Respond STRICTLY in JSON format with:
             model=self.model_name,
             messages=messages
         )
-        return completion.choices[0].message.content
+        # Remove any leading/trailing ```json or ``` tags
+        result = completion.choices[0].message.content
+        if result.strip().startswith('```json'):
+            result = result.strip()[7:]
+        result = result.strip().strip('`').strip()
+        return result

@@ -15,7 +15,7 @@ class PredictiveAgent:
         self.strategist = strategist
         self.state_db = AgentStateDB()
         self.short_term_memory = {}
-        self.data_cache = {} # Stores: { "NodeName": {"data": "...", "timestamp": 12345} }
+        self.intelligence_cache = {} # { "NodeName": {"report": "...", "timestamp": 123.4} }
         self.current_position = "NEUTRAL"
         self.last_trade_confidence = 0.0
         self.risk_threshold = 0.05
@@ -63,24 +63,24 @@ class PredictiveAgent:
 
         print("   🔎 [Scout] Assessing Node Catalog...")
         node_catalog = self.state_db.get_active_nodes_catalog()
-        purchased_intel = {}
+        active_intel = {}
         if node_catalog:
-            procurement = await self.strategist.assess_data_needs(initial_snap, node_catalog)
-            nodes_to_buy = procurement.get('nodes_to_buy', [])
-            for node in nodes_to_buy:
-                cache_entry = self.data_cache.get(node)
-                if cache_entry and (time.time() - cache_entry['timestamp'] < 300):
-                    print(f"   ♻️  [Cache] Reusing fresh data from {node}")
-                    purchased_intel[node] = cache_entry['data']
+            plan = await self.strategist.assess_data_needs(initial_snap, node_catalog)
+            requested = plan.get('nodes_to_buy', [])
+            for node in requested:
+                cache = self.intelligence_cache.get(node)
+                if cache and (time.time() - cache['timestamp'] < 300):
+                    print(f"   ♻️  [Cache] Reusing fresh report from {node}")
+                    active_intel[node] = cache['report']
                 else:
-                    print(f"   💳 [Procurement] Buying NEW data from {node}")
-                    new_data = f"Paid report from {node}: Trend confirmed at {datetime.now()}"
-                    self.data_cache[node] = {"data": new_data, "timestamp": time.time()}
+                    print(f"   💳 [Procurement] Buying NEW intelligence from {node}")
+                    new_report = f"PAID REPORT: {node} suggests strong momentum."
+                    self.intelligence_cache[node] = {"report": new_report, "timestamp": time.time()}
                     self.state_db.record_node_purchase(node)
-                    purchased_intel[node] = new_data
-            if not nodes_to_buy:
-                print("   💰 [Procurement] No paid data needed.")
-        full_context = {**initial_snap, "purchased_intelligence": purchased_intel}
+                    active_intel[node] = new_report
+            if not requested:
+                print("   💰 [Procurement] No paid intelligence needed.")
+        full_context = {**initial_snap, "purchased_intelligence": active_intel}
         decision = await self.strategist.get_strategy(full_context, self.short_term_memory)
         bias = decision.get('execution_bias', 'NEUTRAL')
         conf = float(decision.get('risk_confidence', 0.0))
@@ -100,15 +100,22 @@ class PredictiveAgent:
             print(f"   ⏳ [Hold] Maintaining {self.current_position} position.")
 
     async def execute_move(self, action, confidence):
+        # Minimum floor check: refuse to trade if balance * confidence is too small for DEX liquidity
+        min_long = 5
+        min_short = 0.1
         if action == "LONG":
             usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
             bal = float(await self.wallet.get_token_balance(usdc_addr))
             size = bal * confidence * 0.99
-            if size > 5:
+            if size > min_long:
                 await self.trading.execute_vvs_swap("USDC", "WXTZ", size)
+            else:
+                print(f"   🚫 [Trade Refused] LONG size {size:.2f} below minimum floor {min_long}")
         elif action == "SHORT":
             wxtz_addr = os.getenv("WXTZ_ADDRESS")
             bal = float(await self.wallet.get_token_balance(wxtz_addr))
             size = bal * confidence * 0.99
-            if size > 0.1:
+            if size > min_short:
                 await self.trading.execute_vvs_swap("WXTZ", "USDC", size)
+            else:
+                print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short}")
