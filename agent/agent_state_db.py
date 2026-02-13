@@ -3,9 +3,9 @@ import os
 from datetime import datetime
 
 class AgentStateDB:
-    def __init__(self, db_path="../frontend/prisma/dev.db"):
+    def __init__(self, db_path="dev.db"):
         # Absolute path fix for Docker/Local compatibility
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.db_path = os.path.join(base_dir, db_path)
 
     def _get_connection(self):

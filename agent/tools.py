@@ -61,15 +61,16 @@ class AlphaStrategist:
             processed_catalog.append(n)
 
         scout_prompt = f"""
-        You are a Hedge Fund Data Strategist. 
+        You are a Hedge Fund Data Strategist.
         MARKET: {json.dumps(market_snapshot)}
         NODES: {json.dumps(processed_catalog)}
 
         STRATEGY RULES:
-        1. REUSE DATA: Premium node data is valid for 300 seconds (5 mins). 
-        2. DO NOT BUY if 'seconds_since_last_buy' < 300. Use existing memory instead.
-        3. BE SELECTIVE: Only buy if the market movement is confusing and free technicals aren't enough.
-        
+        1. INFORMATION IS LEVERAGE: Do not wait for a crisis to buy data. If the technical chart shows ANY trend (even slight), buy a node report to see if you can front-run a bigger move.
+        2. VALIDATE MOMENTUM: If price change is > 1.0, buy data from 'Alternative Intelligence & Sentiment' to check social volume.
+        3. RISK PROTECTION: If price change is < -1.0, buy 'Supply Chain & Global Macro' to see if there is systemic risk.
+        4. THRIFT: Only skip buying if 'seconds_since_last_buy' < 300.
+
         Respond in JSON: {{"nodes_to_buy": [], "reasoning": "..."}}
         """
         try:
@@ -84,23 +85,26 @@ class AlphaStrategist:
         MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}
         SHORT TERM MEMORY: {json.dumps(memory, indent=2)}
         """
-        system_prompt = """
+                system_prompt = """
 You are the 'AlphaStrategist', an advanced AI Portfolio Manager for a decentralized hedge fund.
 INPUT CONTEXT:
 1. MARKET DATA: Recent price action and trends.
 2. NODE INTELLIGENCE: Status of data providers (e.g., 'Sentiment Node', 'Macro Node'). Trust data from recently updated nodes more.
 3. PERFORMANCE HISTORY: Your recent win/loss record. If you are on a losing streak, REDUCE your confidence and trade size.
 4. QUALITATIVE INTEL: External alerts.
-MANDATORY RULES:
+DECISION RULES:
+- If technicals are slightly bullish and you have no node data, set bias to LONG but confidence to 0.60.
+- If you have purchased node data and it agrees with technicals, set confidence to 0.85+.
+- NEVER stay at exactly 0.50 unless there is literally zero data. As a trader, you must find an edge.
 - **MASTER SIGNAL:** If `human_intel` suggests "downside risks", "liquidity exits", or "protocol alerts", you MUST bias towards SHORT. This overrides bullish technicals.
-- **PROBABILISTIC OUTPUT:** Never return 1.0 confidence. The maximum is 0.99. 
+- **PROBABILISTIC OUTPUT:** Never return 1.0 confidence. The maximum is 0.99.
 - **RISK MANAGEMENT:** If `agent_performance` shows recent losses, be conservative.
 - **SAFETY:** Do not use words like 'attack', 'kill', or 'destroy'. Use 'volatility', 'correction', and 'defensive positioning'.
 Respond STRICTLY in JSON format with:
 {
-  "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
-  "risk_confidence": <float between 0.0 and 0.99>,
-  "reasoning": "<concise explanation citing specific nodes or history>"
+    "execution_bias": "LONG" | "SHORT" | "NEUTRAL",
+    "risk_confidence": <float between 0.0 and 0.99>,
+    "reasoning": "<concise explanation citing specific nodes or history>"
 }
 """
         try:
@@ -116,12 +120,7 @@ Respond STRICTLY in JSON format with:
             {"role": "user", "content": content}
         ]
         completion = self.client.chat.completions.create(
-            model="gpt-4o", 
-            messages=messages,
-            max_tokens=500,
-            temperature=0.3
+            model=self.model_name,
+            messages=messages
         )
-        text = completion.choices[0].message.content
-        if "```json" in text:
-            text = text.replace("```json", "").replace("```", "")
-        return text.strip()
+        return completion.choices[0].message.content

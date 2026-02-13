@@ -15,6 +15,7 @@ class PredictiveAgent:
         self.strategist = strategist
         self.state_db = AgentStateDB()
         self.short_term_memory = {}
+        self.data_cache = {} # Stores: { "NodeName": {"data": "...", "timestamp": 12345} }
         self.current_position = "NEUTRAL"
         self.last_trade_confidence = 0.0
         self.risk_threshold = 0.05
@@ -49,17 +50,22 @@ class PredictiveAgent:
         if df is None or df.empty:
             print("   ❌ [PredictiveAgent] No price data available.")
             return
-        initial_snapshot = {
-            "current_price": float(df['close'].iloc[-1]) if 'close' in df.columns else float(df['price'].iloc[-1]),
-            "price_change": float((df['close'].iloc[-1] - df['close'].iloc[-5]) if 'close' in df.columns else (df['price'].iloc[-1] - df['price'].iloc[-5])),
-            "agent_performance": self.state_db.get_performance_context(),
-            "suggested_bias": self.forced_bias if self.forced_bias else "NONE"
+        # Handle both 'close' and 'price' columns
+        if 'close' in df.columns:
+            price_col = 'close'
+        else:
+            price_col = 'price'
+        initial_snap = {
+            "price": float(df[price_col].iloc[-1]),
+            "change": float(df[price_col].iloc[-1] - df[price_col].iloc[-5]),
+            "performance": self.state_db.get_performance_context()
         }
+
         print("   🔎 [Scout] Assessing Node Catalog...")
         node_catalog = self.state_db.get_active_nodes_catalog()
         purchased_intel = {}
         if node_catalog:
-            procurement = await self.strategist.assess_data_needs(initial_snapshot, node_catalog)
+            procurement = await self.strategist.assess_data_needs(initial_snap, node_catalog)
             nodes_to_buy = procurement.get('nodes_to_buy', [])
             for node in nodes_to_buy:
                 cache_entry = self.data_cache.get(node)
@@ -74,7 +80,7 @@ class PredictiveAgent:
                     purchased_intel[node] = new_data
             if not nodes_to_buy:
                 print("   💰 [Procurement] No paid data needed.")
-        full_context = {**initial_snapshot, "purchased_intelligence": purchased_intel}
+        full_context = {**initial_snap, "purchased_intelligence": purchased_intel}
         decision = await self.strategist.get_strategy(full_context, self.short_term_memory)
         bias = decision.get('execution_bias', 'NEUTRAL')
         conf = float(decision.get('risk_confidence', 0.0))
