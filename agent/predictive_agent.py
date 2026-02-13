@@ -104,24 +104,41 @@ class PredictiveAgent:
         # Minimum floor check: refuse to trade if balance * confidence is too small for DEX liquidity
         min_long = 5
         min_short = 0.1
+        if not self.trading or not hasattr(self.trading, "execute_swap") or not callable(getattr(self.trading, "execute_swap", None)):
+            print("   ❌ [TradingEngine Error] Trading engine or execute_swap method is not properly initialized.")
+            return False
+        if not asyncio.iscoroutinefunction(self.trading.execute_swap):
+            print("   ❌ [TradingEngine Error] execute_swap is not async. Please define it as 'async def execute_swap(...)'.")
+            return False
         if action == "LONG":
             usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
+            if not usdc_addr:
+                print("   ❌ [Trade Error] USDC address not set in environment.")
+                return False
             bal = float(await self.wallet.get_token_balance(usdc_addr))
+            if bal == 0.0:
+                print(f"   ⚠️ [Trade Refused] Wallet USDC balance is zero. Cannot execute LONG.")
+                return False
             size = bal * confidence * 0.99
             if size > min_long:
-                result = await self.trading.execute_vvs_swap("USDC", "WXTZ", size)
+                result = await self.trading.execute_swap("USDC", "WXTZ", size)
                 return True if result else False
             else:
-                print(f"   🚫 [Trade Refused] LONG size {size:.2f} below minimum floor {min_long}")
+                print(f"   🚫 [Trade Refused] LONG size {size:.2f} below minimum floor {min_long} (USDC balance: {bal:.2f})")
                 return False
         elif action == "SHORT":
             wxtz_addr = os.getenv("WXTZ_ADDRESS")
+            if not wxtz_addr:
+                print("   ❌ [Trade Error] WXTZ address not set in environment.")
+                return False
             bal = float(await self.wallet.get_token_balance(wxtz_addr))
+            if bal == 0.0:
+                print(f"   ⚠️ [Trade Refused] Wallet WXTZ balance is zero. Cannot execute SHORT.")
+                return False
             size = bal * confidence * 0.99
             if size > min_short:
-                result = await self.trading.execute_vvs_swap("WXTZ", "USDC", size)
+                result = await self.trading.execute_swap("WXTZ", "USDC", size)
                 return True if result else False
             else:
-                print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short}")
+                print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short} (WXTZ balance: {bal:.2f})")
                 return False
-                print(f"   🚫 [Trade Refused] SHORT size {size:.2f} below minimum floor {min_short}")

@@ -32,15 +32,13 @@ import sys
 
 # --- GitHub Models Client Setup ---
 import os
-from openai import OpenAI
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+import httpx
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
 client = None
-if GITHUB_TOKEN:
-    client = OpenAI(
-        base_url="https://models.inference.ai.azure.com",
-        api_key=GITHUB_TOKEN
-    )
-# GitHub Models provides free gpt-4o with 8,192 token context window.
+if GROQ_API_KEY:
+    # Groq API uses OpenAI-compatible endpoint
+    GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent

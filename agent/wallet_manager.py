@@ -179,20 +179,21 @@ class WalletManager:
             return None
 
     def get_balance(self, token='USDC'):
-        """Get current token balance for the wallet."""
+        """Get current token balance for the wallet. Accepts symbol or address."""
         # In simulation mode, return mock balances
         if self.simulation_mode:
-            if token == 'USDC':
+            if token in ['USDC', self.tokens.get(os.getenv("USDC_CONTRACT")), os.getenv("USDC_CONTRACT")]:
                 return 1000.0  # Mock 1000 USDC
+            elif token in ['WXTZ', self.tokens.get(os.getenv("WXTZ_ADDRESS")), os.getenv("WXTZ_ADDRESS")]:
+                return 1000.0  # Mock 1000 WXTZ
             elif token in ['CRO', 'TCRO', 'native']:
                 return 100.0   # Mock 100 CRO
             else:
                 return 0.0
-        
         try:
-            if token == 'USDC':
-                # Get USDC balance
-                usdc_address = os.getenv("USDC_CONTRACT")
+            # Accept both symbol and address
+            if token == 'USDC' or token == os.getenv("USDC_CONTRACT") or token == os.getenv("USDC_ADDRESS"):
+                usdc_address = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
                 if not usdc_address:
                     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract", ".env")
                     try:
@@ -205,13 +206,12 @@ class WalletManager:
                         pass
                 if not usdc_address:
                     usdc_address = "0xD2BE74974d5A50C2C131C9A0E9751c9449dc9888"
-                
                 erc20 = self.w3.eth.contract(address=usdc_address, abi=self._erc20_abi())
                 balance_wei = erc20.functions.balanceOf(self.address).call()
                 decimals = erc20.functions.decimals().call()
                 balance = balance_wei / (10 ** decimals)
                 return float(balance)
-            elif token == 'WXTZ':
+            elif token == 'WXTZ' or token == os.getenv("WXTZ_ADDRESS"):
                 wxtz_address = os.getenv("WXTZ_ADDRESS")
                 if not wxtz_address:
                     return 0.0
@@ -221,9 +221,15 @@ class WalletManager:
                 balance = balance_wei / (10 ** decimals)
                 return float(balance)
             elif token in ['CRO', 'TCRO', 'native']:
-                # Get native token balance
                 balance_wei = self.w3.eth.get_balance(self.address)
                 balance = self.w3.from_wei(balance_wei, 'ether')
+                return float(balance)
+            # If token is an address, try to fetch balance as ERC20
+            elif isinstance(token, str) and token.startswith('0x') and len(token) == 42:
+                erc20 = self.w3.eth.contract(address=token, abi=self._erc20_abi())
+                balance_wei = erc20.functions.balanceOf(self.address).call()
+                decimals = erc20.functions.decimals().call()
+                balance = balance_wei / (10 ** decimals)
                 return float(balance)
             else:
                 print(f"   ⚠️ [WalletManager] Unknown token: {token}")
@@ -246,6 +252,6 @@ class WalletManager:
             {"constant":False,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"}
         ]
 
-    async def get_token_balance(self, token_address=None):
-        # Async wrapper for compatibility with PredictiveAgent
-        return self.get_balance(token_address)
+    async def get_token_balance(self, token=None):
+        # Accepts symbol or address
+        return self.get_balance(token)

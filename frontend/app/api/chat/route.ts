@@ -19,14 +19,14 @@ Possible actions:
 Return ONLY valid JSON.`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o",
+        model: "llama3-70b-8192",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: message }
@@ -84,8 +84,8 @@ export async function POST(req: Request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          risk: intent.action === "SET_RISK" ? intent.risk : undefined,
-          bias: intent.action === "SET_BIAS" ? intent.bias : undefined
+          risk: intent.action === "SET_RISK" ? intent.params?.risk : undefined,
+          bias: intent.action === "SET_BIAS" ? intent.params?.bias : undefined
         })
       });
       const overrideData = await overrideResponse.json();

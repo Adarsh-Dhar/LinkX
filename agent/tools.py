@@ -7,7 +7,7 @@ import time
 import re
 from datetime import datetime
 
-from openai import AsyncOpenAI
+import httpx
 
 from web3 import Web3
 from dotenv import load_dotenv
@@ -32,21 +32,27 @@ def _load_vvsrouter_abi():
 
 ROUTER_ABI = _load_vvsrouter_abi()
 
+# Load VVS_ROUTER_ADDR from environment and export as Python variable
+VVS_ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
+
 load_dotenv()
 
 # --- 1. ALPHA STRATEGIST (THE BRAIN) ---
 
 class AlphaStrategist:
     def __init__(self, api_key=None):
-        self.token = api_key or os.getenv("GITHUB_TOKEN")
-        if not self.token:
-            raise ValueError("❌ GITHUB_TOKEN not found in environment.")
-        self.client = AsyncOpenAI(
-            base_url="https://models.inference.ai.azure.com",
-            api_key=self.token,
+        self.groq_api_key = api_key or os.getenv("GROQ_API_KEY")
+        if not self.groq_api_key:
+            raise ValueError("❌ GROQ_API_KEY not found in environment.")
+        self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.model_name = "llama-3.3-70b-versatile"
+        self.system_prompt = (
+            "You are a world-class trading strategist. "
+            "Analyze the provided market data and recommend the optimal trading action. "
+            "ALWAYS respond in JSON with two fields: 'execution_bias' (LONG, SHORT, or NEUTRAL) and 'risk_confidence' (a float between 0.0 and 1.0). "
+            "Also include a 'reasoning' field with your analysis. "
+            "If you are uncertain, set execution_bias to NEUTRAL and risk_confidence to 0.0."
         )
-        self.model_name = "gpt-4o"
-        self.system_prompt = "You are a world-class trading strategist. Analyze the provided market data and recommend the optimal trading action."
 
     async def assess_data_needs(self, market_snapshot, node_catalog):
         # Pre-process: Calculate 'Seconds Since Last Buy' for the AI
@@ -83,10 +89,42 @@ class AlphaStrategist:
             return {"nodes_to_buy": []}
 
     async def get_strategy(self, market_data, memory):
+        import re  # only re is needed here, json is already imported at top
         user_message = f"MARKET SNAPSHOT: {json.dumps(market_data, indent=2)}"
         try:
             response = await self._generate_content(user_message, system_override=self.system_prompt)
-            return json.loads(response)
+            # Try to parse JSON from the response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            # If not JSON, try to extract key info from the text
+            print(f"   ⚠️ Strategist: No JSON found in LLM response. Attempting to parse key info.")
+            # Simple heuristic: look for LONG/SHORT/NEUTRAL in text
+            bias = "NEUTRAL"
+            if "long" in response.lower():
+                bias = "LONG"
+            elif "short" in response.lower():
+                bias = "SHORT"
+
+            # Try to extract risk/confidence if bias is not NEUTRAL
+            risk = None
+            if bias != "NEUTRAL":
+                # Look for a number in the first 2 sentences
+                sentences = response.split('.')
+                first_two = '.'.join(sentences[:2])
+                numbers = [float(n) for n in re.findall(r'\b\d+\.?\d*\b', first_two)]
+                for n in numbers:
+                    if 0.0 < n <= 1.0:
+                        risk = n
+                        break
+                    elif 1.0 < n <= 10.0:
+                        # If LLM gives 1-10 scale, normalize to 0-1
+                        risk = n / 10.0
+                        break
+            if risk is not None:
+                return {"execution_bias": bias, "risk_confidence": risk, "reasoning": response.strip()}
+            else:
+                return {"execution_bias": "NEUTRAL", "risk_confidence": 0.0, "reasoning": response.strip() + " (No valid confidence found, defaulting to NEUTRAL)"}
         except Exception as e:
             print(f"   ⚠️ Strategist Error: {e}")
             try:
@@ -100,15 +138,40 @@ class AlphaStrategist:
             {"role": "system", "content": system_override or "You are a helpful assistant."},
             {"role": "user", "content": content}
         ]
-        completion = await self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.2
-        )
-        text = completion.choices[0].message.content
+        headers = {
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": 0.2
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.groq_url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            text = data["choices"][0]["message"]["content"]
         # FIX: Robustly extract JSON even if there is markdown or leading text
         import re
         json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
             return json_match.group(0)
         return text.strip()
+
+# --- Token address resolver ---
+def resolve_address(token):
+    token = token.upper()
+    # Try environment variables first
+    env_map = {
+        "USDC": os.getenv("USDC_CONTRACT"),
+        "WXTZ": os.getenv("WXTZ_ADDRESS"),
+        "USDC_CONTRACT": os.getenv("USDC_CONTRACT"),
+        "WXTZ_ADDRESS": os.getenv("WXTZ_ADDRESS"),
+    }
+    if token in env_map and env_map[token]:
+        return env_map[token]
+    # If already an address, return as is
+    if token.startswith("0x") and len(token) == 42:
+        return token
+    raise ValueError(f"Unknown token/address: {token}")

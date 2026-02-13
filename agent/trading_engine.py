@@ -28,20 +28,19 @@ class TradingEngine:
             pass
         return tx_params
 
-
-    def execute_swap(self, token_in, token_out, amount_in, max_slippage=5.0):
+    async def execute_swap(self, token_in, token_out, amount_in, max_slippage=5.0):
         try:
             print(f"[TradingEngine] Swapping {amount_in} {token_in} to {token_out}...")
             import os
-            
             # Production mode: Use real DEX
             from agent.tools import VVS_ROUTER_ADDR, ROUTER_ABI, resolve_address
             from web3 import Web3
-            
+
             vvs_available = VVS_ROUTER_ADDR and VVS_ROUTER_ADDR.strip() != ""
-            
+
             # Production swap execution with VVS Router
             w3 = self.wallet.w3
+            # Synchronous Web3.py calls
             nonce = w3.eth.get_transaction_count(self.wallet.address)
             router_addr = Web3.to_checksum_address(VVS_ROUTER_ADDR) if vvs_available else None
             token_in_addr = resolve_address(token_in)
@@ -80,7 +79,7 @@ class TradingEngine:
                 erc20 = w3.eth.contract(address=token_in_addr, abi=erc20_abi)
                 decimals = erc20.functions.decimals().call()
                 amount_in_wei = int(float(amount_in) * (10 ** decimals))
-                
+
                 # CRITICAL: Check if we have enough balance
                 balance = erc20.functions.balanceOf(self.wallet.address).call()
                 print(f"   💰 Balance: {balance / (10 ** decimals):.2f} {token_in}")
@@ -97,7 +96,7 @@ class TradingEngine:
                     # Calculate minimum output with slippage protection
                     amount_out_min = int(expected_out * (1 - max_slippage / 100))
                     print(f"   📊 Expected: {expected_out}, Min (with {max_slippage}% slippage): {amount_out_min}")
-                    
+
                     # Verify minimum output is reasonable
                     if amount_out_min <= 0:
                         print(f"   ❌ Calculated amountOutMin is too low. Pool may have insufficient liquidity.")
