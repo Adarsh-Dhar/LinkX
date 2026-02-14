@@ -3,11 +3,65 @@ import os
 from datetime import datetime
 
 class AgentStateDB:
+    def record_node_purchase(self, node_title, amount):
+        """Logs a premium data purchase to the database."""
+        import json
+        from uuid import uuid4
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            now = datetime.utcnow().isoformat()
+            # 1. Update the last purchase timestamp on the node itself
+            cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE title = ?", (now, node_title))
+            # 2. Log the event to activity table for the frontend Data Stream
+            cursor.execute("""
+                INSERT INTO AgentActivity (id, type, title, description, nodePrice, timestamp, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                str(uuid4()),
+                "node_purchase",
+                f"Purchased {node_title}",
+                f"Bought {node_title} intelligence",
+                amount,
+                now,
+                json.dumps({"node": node_title, "cost": amount})
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"   ❌ [DB Error] Failed to log node purchase: {e}")
+
+    def record_trade_decision(self, bias, amount, confidence, reasoning):
+        """Logs a swap execution to the database."""
+        import json
+        from uuid import uuid4
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            now = datetime.utcnow().isoformat()
+            cursor.execute("""
+                INSERT INTO AgentActivity (id, type, title, description, tradeBias, tradeConfidence, nodePrice, timestamp, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                str(uuid4()),
+                "trade_decision",
+                f"{bias} {amount:.2f} USDC",
+                f"{bias} {amount:.2f} USDC at {confidence:.2f} confidence",
+                bias,
+                confidence,
+                amount,
+                now,
+                json.dumps({"reasoning": reasoning})
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"   ❌ [DB Error] Failed to log trade: {e}")
     def __init__(self, db_path="prisma/dev.db"):
         # This correctly points to the subfolder where Prisma stores the SQLite file
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.db_path = os.path.join(project_root, "frontend/prisma/dev.db")
-            print(f"   📂 [DB Connection] Looking for DB at: {self.db_path}")
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.db_path = os.path.join(project_root, "frontend/prisma/dev.db")
+        print(f"   📂 [DB Connection] Looking for DB at: {self.db_path}")
 
     def _get_connection(self):
         return sqlite3.connect(self.db_path)
@@ -59,28 +113,3 @@ class AgentStateDB:
             print(f"   ❌ [DB Error] {e}")
             return []
 
-    def record_node_purchase(self, node_title):
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            now = datetime.utcnow().isoformat()
-            cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE title = ?", (now, node_title))
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
-
-    def update_node_score(self, node_title, score_delta):
-        """Updates node reliability based on utility."""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE AlphaNode 
-                SET reliabilityScore = reliabilityScore + ? 
-                WHERE title = ?
-            """, (score_delta, node_title))
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass

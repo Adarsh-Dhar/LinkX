@@ -82,7 +82,7 @@ class PredictiveAgent:
                     else:
                         print(f"   💳 [Procurement] Buying NEW intelligence from {node}")
                         purchased_intel[node] = f"PAID_REPORT: {node} confirms trend validity."
-                        self.state_db.record_node_purchase(node)
+                        self.state_db.record_node_purchase(node, 1.0)  # 1.0 is a demo cost
                         self.short_term_memory[f"last_buy_{node}"] = time.time()
                         print(f"      💸 Paid research fees to {node}")
             else:
@@ -110,6 +110,8 @@ class PredictiveAgent:
                 if success:
                     self.current_position = bias
                     self.last_trade_confidence = conf
+                    # Log to DB for the 'Decision Log' section
+                    self.state_db.record_trade_decision(bias, float(0), conf, decision.get('reasoning'))
                     print(f"   ✅ [Position Updated] Agent is now {bias}")
                 else:
                     print(f"   ❌ [Position Error] Trade failed. Position remains {self.current_position}")
