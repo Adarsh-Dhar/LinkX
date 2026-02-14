@@ -1,26 +1,53 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Zap, Wifi, Wallet } from "lucide-react"
 import { useWallet } from "@/hooks/use-wallet"
+
+function useProcessStatus(processName: string) {
+  const [online, setOnline] = useState(false)
+  useEffect(() => {
+    async function check() {
+      try {
+        const res = await fetch(`/api/status/${processName}`)
+        const data = await res.json()
+        setOnline(data.online)
+      } catch {
+        setOnline(false)
+      }
+    }
+    check()
+    const interval = setInterval(check, 5000)
+    return () => clearInterval(interval)
+  }, [processName])
+  return online
+}
 
 export default function TopBar() {
   const { isConnected, isConnecting, shortAddress, balance, usdcBalance, connect, disconnect } =
     useWallet()
+  const agentOnline = useProcessStatus("agent")
+  const serverOnline = useProcessStatus("server")
 
   return (
     <div className="h-16 glass border-b border-border/30 px-6 flex items-center justify-between">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500 glow-secondary animate-pulse"></div>
+          <div className={`w-3 h-3 rounded-full ${agentOnline ? "bg-green-500" : "bg-red-500"} glow-secondary animate-pulse`}></div>
           <span className="text-sm text-muted-foreground">
-            Agent Status: <span className="text-foreground font-semibold">ONLINE</span>
+            Agent Status: <span className="text-foreground font-semibold">{agentOnline ? "ONLINE" : "OFFLINE"}</span>
           </span>
         </div>
-
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${serverOnline ? "bg-green-500" : "bg-red-500"} glow-secondary animate-pulse`}></div>
+          <span className="text-sm text-muted-foreground">
+            Server Status: <span className="text-foreground font-semibold">{serverOnline ? "ONLINE" : "OFFLINE"}</span>
+          </span>
+        </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <Wifi size={16} className="text-secondary" />
           <span className="text-sm">
-            Network: <span className="text-foreground font-semibold">Cronos</span>
+            Network: <span className="text-foreground font-semibold">Etherlink</span>
           </span>
         </div>
       </div>

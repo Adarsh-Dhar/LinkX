@@ -64,7 +64,9 @@ async def lifespan(app: FastAPI):
         print(f"❌ [API] Error: {e}")
     yield
 
+from agent.api_status import router as status_router
 app = FastAPI(lifespan=lifespan)
+app.include_router(status_router)
 agent_instance = None
 
 # --- INTENT PARSER USING GITHUB MODELS ---
@@ -300,4 +302,23 @@ async def cost_accuracy_graph(
     return {"graph": graph}
 
 @app.get("/")
-def root(): return {"status": "Online"}
+@app.get("/status")
+def status():
+    global agent_instance
+    # Default to offline and unknown
+    is_running = False
+    network = "unknown"
+    # Check if agent_instance is initialized and has a wallet
+    if agent_instance and hasattr(agent_instance, 'wallet') and getattr(agent_instance, 'wallet', None) is not None:
+        # Check if wallet is actually connected (has address and rpc_url)
+        wallet = getattr(agent_instance, 'wallet')
+        if hasattr(wallet, 'address') and wallet.address and hasattr(wallet, 'rpc_url') and wallet.rpc_url:
+            is_running = True
+            rpc_url = wallet.rpc_url
+            if 'cronos' in rpc_url.lower():
+                network = 'cronos'
+            elif 'etherlink' in rpc_url.lower():
+                network = 'etherlink'
+            else:
+                network = rpc_url
+    return {"status": "online" if is_running else "offline", "network": network}

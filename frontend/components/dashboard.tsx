@@ -46,18 +46,15 @@ export default function Dashboard() {
       try {
         // Sync portfolio to save latest balances
         await syncPortfolio();
-
         // Fetch dashboard stats and chart data
         const [statsRes, chartRes] = await Promise.all([
           fetch("/api/dashboard/stats"),
           fetch("/api/dashboard/chart"),
         ]);
-
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData);
         }
-
         if (chartRes.ok) {
           const chartData = await chartRes.json();
           setChartData(chartData);
@@ -68,14 +65,13 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
-
     // Initial Fetch
     fetchDashboardData();
-
     // Poll every 1 minute for live updates
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
-  }, [syncPortfolio]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6">

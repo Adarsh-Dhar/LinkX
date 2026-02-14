@@ -1,4 +1,3 @@
-
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
@@ -22,7 +21,6 @@ async function main() {
       isPurchased: false,
       whitelisted: true,
       endpointUrl: "http://localhost:4001/api/microstructure",
-      port: 4001,
       icon: "activity",
       ratings: 98,
       latencyMs: 5,
@@ -38,7 +36,6 @@ async function main() {
       isPurchased: false,
       whitelisted: true,
       endpointUrl: "http://localhost:4002/api/sentiment",
-      port: 4002,
       icon: "zap",
       ratings: 85,
       latencyMs: 75,
@@ -54,7 +51,6 @@ async function main() {
       isPurchased: false,
       whitelisted: true,
       endpointUrl: "http://localhost:4003/api/macro",
-      port: 4003,
       icon: "globe",
       ratings: 92,
       latencyMs: 150,

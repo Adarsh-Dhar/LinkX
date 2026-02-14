@@ -1,10 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Play, Square } from "lucide-react"
 
 export default function AgentCard() {
-  const [isRunning, setIsRunning] = useState(true)
+  const [isRunning, setIsRunning] = useState(false)
+  const [network, setNetwork] = useState("unknown")
+  const [rawStatus, setRawStatus] = useState<{ status: string, network: string } | null>(null)
+
+  useEffect(() => {
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/agent-status");
+        const data = await res.json();
+        setIsRunning(data.status === "online" || data.status === "running");
+        setNetwork(data.network || "unknown");
+        setRawStatus(data);
+      } catch {
+        setIsRunning(false);
+        setNetwork("unknown");
+        setRawStatus(null);
+      }
+    }
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="glass glow-accent p-6 rounded-lg border border-border/30">
@@ -16,7 +37,9 @@ export default function AgentCard() {
       <div className="space-y-4">
         <div className="bg-black/40 p-4 rounded-lg border border-secondary/30">
           <p className="text-sm font-mono text-secondary mb-3">VVS_WHALE_WATCHER_BOT</p>
-          <p className="text-xs text-muted-foreground mb-4">Status: {isRunning ? "Running" : "Stopped"}</p>
+          <p className="text-xs text-muted-foreground mb-1">Status: {isRunning ? "Online" : "Offline"}</p>
+          <p className="text-xs text-muted-foreground mb-4">Network: {network}</p>
+          <pre className="text-xs text-muted-foreground bg-black/20 p-2 rounded mt-2">{rawStatus ? JSON.stringify(rawStatus, null, 2) : "No status"}</pre>
           <button
             onClick={() => setIsRunning(!isRunning)}
             className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
