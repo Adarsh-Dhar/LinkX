@@ -33,12 +33,15 @@ import sys
 # --- GitHub Models Client Setup ---
 import os
 import httpx
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GITHUB_MODELS_API_KEY = os.getenv("GITHUB_MODELS_API_KEY")
+GITHUB_MODELS_ENDPOINT = os.getenv("GITHUB_MODELS_ENDPOINT")
 
 client = None
-if GROQ_API_KEY:
-    # Groq API uses OpenAI-compatible endpoint
-    GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+if GITHUB_MODELS_API_KEY and GITHUB_MODELS_ENDPOINT:
+    import openai
+    openai.api_key = GITHUB_MODELS_API_KEY
+    openai.base_url = GITHUB_MODELS_ENDPOINT
+    client = openai
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.main import IntelligentAgent
@@ -94,7 +97,7 @@ Return ONLY JSON.
         return {"action": "IGNORE", "error": "GitHub Models client not configured"}
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
