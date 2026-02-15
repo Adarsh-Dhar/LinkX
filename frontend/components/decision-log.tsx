@@ -1,14 +1,15 @@
 import { Key } from "react";
 
 export default function DecisionLog({ log } : { log: any[] }) {
+  const safeLog = Array.isArray(log) ? log : [];
   return (
     <div>
       <h3 className="font-bold mb-2">Decision Log</h3>
       <div className="h-40 overflow-y-auto text-xs">
-        {log.length === 0 ? (
+        {safeLog.length === 0 ? (
           <div className="text-gray-400">No decisions yet.</div>
         ) : (
-          log.map((entry: { context: string; decidedAt: string | number | Date; }, i: Key | null | undefined) => {
+          safeLog.map((entry: { context: string; decidedAt: string | number | Date; }, i: Key | null | undefined) => {
             let details = { action: "N/A", amount: "N/A" };
             try {
               if (entry.context && typeof entry.context === 'string' && entry.context.startsWith('{')) {

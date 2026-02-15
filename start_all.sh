@@ -42,7 +42,7 @@ echo "📒 Starting Registry/Discovery Service..."
 # 2. Start Demo Provider Microservices (Unified)
 echo "📡 Starting Demo Node Providers..."
 if [ -f "$SCRIPT_DIR/server/start_demo_providers.js" ]; then
-        node "$SCRIPT_DIR/server/start_demo_providers.js" &
+    node "$SCRIPT_DIR/server/start_demo_providers.js" &
         DEMO_PROVIDERS_PID=$!
         echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID)"
 else

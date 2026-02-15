@@ -173,20 +173,42 @@ class PredictiveAgent:
             wxtz_addr = os.getenv("WXTZ_ADDRESS")
             usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
 
+            # 1. Verify addresses are actually loaded
+            if not wxtz_addr or not usdc_addr:
+                print(f"   ❌ [DEBUG] Env Error: WXTZ={wxtz_addr}, USDC={usdc_addr}")
+                return False
+
             if action == "LONG":
                 # LONG: Swap WXTZ -> USDC
                 token_in, token_out = "WXTZ", "USDC"
                 addr_in = wxtz_addr
-                bal = float(await self.wallet.get_token_balance(addr_in))
-                amount_in = bal * confidence * 0.99
+                if not addr_in:
+                    print("   ❌ [Trade Error] WXTZ_ADDRESS not set in environment. Cannot execute LONG.")
+                    return False
             elif action == "SHORT":
                 # SHORT: Swap USDC -> WXTZ
                 token_in, token_out = "USDC", "WXTZ"
                 addr_in = usdc_addr
-                bal = float(await self.wallet.get_token_balance(addr_in))
-                amount_in = bal * confidence * 0.99
+                if not addr_in:
+                    print("   ❌ [Trade Error] USDC_ADDRESS not set in environment. Cannot execute SHORT.")
+                    return False
+            else:
+                print(f"   ❌ [Trade Error] Unknown action: {action}")
+                return False
 
-            # ...existing swap execution code...
+            # 2. Print balance before attempting
+            bal = float(await self.wallet.get_token_balance(addr_in))
+            print(f"   🔍 [DEBUG] Balance of {token_in}: {bal}")
+            if bal <= 0:
+                print(f"   ❌ [Trade Error] No {token_in} balance to go {action}")
+                return False
+            amount_in = bal * confidence * 0.99
+
+            # 3. Capture the swap result
+            result = await self.trading.execute_swap(token_in, token_out, amount_in)
+            if not result:
+                print(f"   ❌ [DEBUG] Blockchain Execution Failed. Check Gas (XTZ) or Router Allowance.")
+                return False
 
             # Log structured data for the frontend
             self.state_db.record_trade_decision({
@@ -194,4 +216,6 @@ class PredictiveAgent:
                 "amount": f"{amount_in:.2f} {token_in}",
                 "ticker": f"{token_in}/{token_out}"
             })
+            return True  # Explicitly return True so the caller knows it worked
+            return False
             # ...rest of function...
