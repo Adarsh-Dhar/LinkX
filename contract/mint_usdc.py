@@ -2,11 +2,16 @@
 """
 Mint USDC tokens to the specified wallet using the bridge (owner) account.
 """
+
 import os
 from web3 import Web3
 from dotenv import load_dotenv
+import pathlib
 
-load_dotenv()
+# Always load .env from project root
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
+dotenv_path = PROJECT_ROOT / ".env"
+load_dotenv(dotenv_path=dotenv_path)
 
 RPC_URL = os.getenv("RPC_URL")
 PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
@@ -19,7 +24,13 @@ USDC_ABI = [
 ]
 
 def main():
+    import pathlib
     print("🪙 Minting USDC tokens...")
+    print(f"[DEBUG] CWD: {os.getcwd()}")
+    print(f"[DEBUG] .env exists: {pathlib.Path('.env').resolve()} => {pathlib.Path('.env').exists()}")
+    print(f"[DEBUG] RPC_URL: {RPC_URL}")
+    print(f"[DEBUG] WALLET_PRIVATE_KEY: {PRIVATE_KEY[:6]}...{PRIVATE_KEY[-4:] if PRIVATE_KEY else ''}")
+    print(f"[DEBUG] USDC_CONTRACT: {USDC_ADDR}")
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
         print("❌ Failed to connect to RPC")

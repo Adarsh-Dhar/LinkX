@@ -3,91 +3,78 @@ import os
 from datetime import datetime
 
 class AgentStateDB:
-    def record_node_purchase(self, node_title, amount):
-        """Logs a premium data purchase to the database."""
+    def record_node_purchase(self, node_title, cost=1.0):
+        """Logs node purchase for the 'Data Stream'."""
         import json
         from uuid import uuid4
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            now = datetime.utcnow().isoformat()
-            # 1. Update the last purchase timestamp on the node itself
-            cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE title = ?", (now, node_title))
-            # 2. Log the event to activity table for the frontend Data Stream
-            cursor.execute("""
-                INSERT INTO AgentActivity (id, type, title, description, nodePrice, timestamp, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(uuid4()),
-                "node_purchase",
-                f"Purchased {node_title}",
-                f"Bought {node_title} intelligence",
-                amount,
-                now,
-                json.dumps({"node": node_title, "cost": amount})
-            ))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"   ❌ [DB Error] Failed to log node purchase: {e}")
+        import time
+        for attempt in range(3):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                now = datetime.utcnow().isoformat()
+                cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE title = ?", (now, node_title))
+                # Insert into AgentActivity with required fields only, including id
+                cursor.execute("""
+                    INSERT INTO AgentActivity (id, type, title, description, nodePrice, timestamp, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    str(uuid4()),
+                    "node_purchase",
+                    f"Purchased {node_title}",
+                    f"Bought {node_title} intelligence",
+                    cost,
+                    now,
+                    json.dumps({"node": node_title, "cost": cost})
+                ))
+                conn.commit()
+                conn.close()
+                break
+            except sqlite3.OperationalError as e:
+                if 'database is locked' in str(e) and attempt < 2:
+                    print(f"   ⚠️ [DB Locked] Retrying node purchase log...")
+                    time.sleep(0.2)
+                    continue
+                print(f"   ❌ [DB Error] {e}")
+                break
+            except Exception as e:
+                print(f"   ❌ [DB Error] {e}")
+                break
 
-    def record_trade_decision(self, bias, amount, confidence, reasoning):
-        """Logs a swap execution to the database."""
-        import json
-        from uuid import uuid4
+    def record_trade_decision(self, context, decided_at=None):
+        """Logs a trade decision for the 'Decision Log'.
+        Only inserts into columns that exist in the schema: context, decidedAt.
+        """
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            now = datetime.utcnow().isoformat()
+            now = decided_at or datetime.utcnow().isoformat()
             cursor.execute("""
-                INSERT INTO AgentActivity (id, type, title, description, tradeBias, tradeConfidence, nodePrice, timestamp, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(uuid4()),
-                "trade_decision",
-                f"{bias} {amount:.2f} USDC",
-                f"{bias} {amount:.2f} USDC at {confidence:.2f} confidence",
-                bias,
-                confidence,
-                amount,
-                now,
-                json.dumps({"reasoning": reasoning})
-            ))
+                INSERT INTO TradeDecision (context, decidedAt)
+                VALUES (?, ?)
+            """, (context, now))
             conn.commit()
             conn.close()
-        except Exception as e:
-            print(f"   ❌ [DB Error] Failed to log trade: {e}")
-    def __init__(self, db_path="prisma/dev.db"):
-        # This correctly points to the subfolder where Prisma stores the SQLite file
+        except Exception as e: print(f"   ❌ [DB Error] {e}")
+    def __init__(self, db_path="agent/agent_state.db"):
+        # Match the path used in your start_all.sh/Prisma logs
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.db_path = os.path.join(project_root, "frontend/prisma/dev.db")
-        print(f"   📂 [DB Connection] Looking for DB at: {self.db_path}")
+        self.db_path = os.path.join(project_root, db_path)
+        print(f"   📂 [DB Connection] Standardized Path: {self.db_path}")
 
     def _get_connection(self):
         return sqlite3.connect(self.db_path)
 
     def get_performance_context(self):
-        """Fetches recent trade outcomes to inform risk appetite."""
+        """Ensures the agent sees its history to break out of NEUTRAL loop."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            # Fetch last 10 trades from TradeDecision table
-            cursor.execute("""
-                SELECT type, status, pnl 
-                FROM TradeDecision 
-                ORDER BY createdAt DESC 
-                LIMIT 10
-            """)
+            cursor.execute("SELECT type, status FROM TradeDecision ORDER BY createdAt DESC LIMIT 5")
             trades = cursor.fetchall()
             conn.close()
-
-            if not trades:
-                return "No recent trade history. Starting fresh."
-
-            wins = len([t for t in trades if t[1] == 'WIN' or (t[2] and t[2] > 0)])
-            return f"Recent Performance: {wins}/{len(trades)} wins. Last 3 trades: {[t[0] for t in trades[:3]]}"
-        except Exception as e:
-            return f"DB Error (Performance): {str(e)}"
+            return f"Agent has executed {len(trades)} trades in current session."
+        except: return "Session Initialized."
 
     def get_active_nodes_catalog(self):
         try:

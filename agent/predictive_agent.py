@@ -110,8 +110,26 @@ class PredictiveAgent:
                 if success:
                     self.current_position = bias
                     self.last_trade_confidence = conf
-                    # Log to DB for the 'Decision Log' section
-                    self.state_db.record_trade_decision(bias, float(0), conf, decision.get('reasoning'))
+                    # NEW: Log to DB so it shows in 'Decision Log'
+                    trade_size = 0  # Default fallback
+                    if bias == "LONG":
+                        usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
+                        if usdc_addr:
+                            try:
+                                trade_size = float(await self.wallet.get_token_balance(usdc_addr)) * conf * 0.99
+                            except Exception:
+                                trade_size = 0
+                    elif bias == "SHORT":
+                        wxtz_addr = os.getenv("WXTZ_ADDRESS")
+                        if wxtz_addr:
+                            try:
+                                trade_size = float(await self.wallet.get_token_balance(wxtz_addr)) * conf * 0.99
+                            except Exception:
+                                trade_size = 0
+                    self.state_db.record_trade_decision(
+                        context=decision.get('reasoning', "Strategy execution.")
+                    )
+                    print(f"   ✅ [Decision Log] Trade recorded successfully.")
                     print(f"   ✅ [Position Updated] Agent is now {bias}")
                 else:
                     print(f"   ❌ [Position Error] Trade failed. Position remains {self.current_position}")

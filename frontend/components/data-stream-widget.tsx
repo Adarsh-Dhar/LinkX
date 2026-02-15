@@ -30,7 +30,15 @@ export function DataStreamWidget() {
         ) : (
           data.map((entry, i) => (
             <div key={i} className="mb-1">
-              <span className="text-blue-600">[{entry.fetchedAt}]</span> <b>{entry.nodeName}</b>: {entry.normalized ?? entry.data}
+              <span className="text-muted-foreground text-xs">
+                {entry.fetchedAt ? new Date(entry.fetchedAt).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                }) : ''}
+              </span> <b>{entry.nodeName}</b>: {entry.normalized ?? entry.data}
             </div>
           ))
         )}

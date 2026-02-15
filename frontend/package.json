@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "@crypto.com/facilitator-client": "^1.0.4",
     "@prisma/client": "5.15.0",

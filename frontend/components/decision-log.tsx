@@ -30,7 +30,15 @@ export function DecisionLog() {
         ) : (
           log.map((entry, i) => (
             <div key={i} className="mb-1">
-              <span className="text-green-600">[{entry.decidedAt}]</span> <b>{entry.action}</b> on <b>{entry.token}</b> (Signal: {entry.signal}, Reason: {entry.reason})
+              <span className="text-muted-foreground text-xs">
+                {entry.decidedAt ? new Date(entry.decidedAt).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                }) : ''}
+              </span> <b>{entry.action}</b> on <b>{entry.token}</b> (Signal: {entry.signal}, Reason: {entry.reason})
             </div>
           ))
         )}
