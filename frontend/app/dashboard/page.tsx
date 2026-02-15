@@ -2,7 +2,7 @@
 import Dashboard from "@/components/dashboard";
 import { TradingView } from "@/components/trading-view";
 import { DataStreamWidget } from "@/components/data-stream-widget";
-import DecisionLog from "@/components/decision-log";
+import {DecisionLog} from "@/components/decision-log";
 import { ROICalculator } from "@/components/roi-calculator";
 
 export default function DashboardPage() {

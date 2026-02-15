@@ -1,40 +1,67 @@
-import { Key } from "react";
+"use client";
 
-export default function DecisionLog({ log }: { log: any[] }) {
-  const safeLog = Array.isArray(log) ? log : [];
+import { useEffect, useState } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export function DecisionLog() {
+  const [decisions, setDecisions] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDecisions = async () => {
+      try {
+        const res = await fetch("/api/agent/decision-log");
+        const data = await res.json();
+        // The API returns { decisionLog: [...] }
+        setDecisions(Array.isArray(data.decisionLog) ? data.decisionLog : []);
+      } catch (e) {
+        console.error("Failed to fetch decisions", e);
+        setDecisions([]);
+      }
+    };
+    fetchDecisions();
+    const interval = setInterval(fetchDecisions, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="rounded-md border">
-      <h3 className="font-bold mb-2">Decision Log</h3>
-      <div className="h-40 overflow-y-auto text-xs">
-        {safeLog.length === 0 ? (
-          <div className="text-gray-400">No decisions yet.</div>
-        ) : (
-          safeLog.map((entry: { context: string; decidedAt: string | number | Date }, i: Key | null | undefined) => {
-            let details = { action: "N/A", amount: "N/A" };
-            try {
-              if (entry.context && typeof entry.context === 'string' && entry.context.startsWith('{')) {
-                const parsed = JSON.parse(entry.context);
-                details = { ...details, ...parsed };
-              }
-            } catch (e) {}
-            return (
-              <div key={i} className="mb-1 flex gap-2">
-                <span className="font-bold uppercase">{details.action}</span>
-                <span>{details.amount}</span>
-                <span className="text-muted-foreground text-xs">
-                  {entry.decidedAt ? new Date(entry.decidedAt).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  }) : ''}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Action</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead className="text-right">Date and Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {decisions.length === 0 ? (
+            <TableRow><TableCell colSpan={3} className="text-center">No decisions yet.</TableCell></TableRow>
+          ) : (
+            decisions.map((d) => {
+              let details = { action: "ANALYSIS", amount: "N/A" };
+              try {
+                // Parse the JSON object created by the Python agent
+                if (d.context?.startsWith("{")) {
+                    const parsed = JSON.parse(d.context);
+                    details.action = parsed.action || "ANALYSIS";
+                    details.amount = parsed.amount || "N/A";
+                } else {
+                    details.amount = d.context;
+                }
+              } catch (e) {}
+              return (
+                <TableRow key={d.id}>
+                  <TableCell className="font-bold uppercase text-primary">{details.action}</TableCell>
+                  <TableCell>{details.amount}</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-xs">
+                    {new Date(d.decidedAt).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
