@@ -212,10 +212,10 @@ model LogRating {
 // --------------------------------------------------------
 model TradeDecision {
   id          String   @id @default(uuid())
-  tradeId     String
-  trade       Trade    @relation(fields: [tradeId], references: [id])
-  dataLogId   String
-  dataLog     DataLog  @relation(fields: [dataLogId], references: [id])
+    tradeId     String?
+    trade       Trade?    @relation(fields: [tradeId], references: [id])
+    dataLogId   String?
+    dataLog     DataLog?  @relation(fields: [dataLogId], references: [id])
   context     String?  // Optional: Human or external context that influenced decision
   decidedAt   DateTime @default(now())
 }

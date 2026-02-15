@@ -41,21 +41,28 @@ class AgentStateDB:
                 print(f"   ❌ [DB Error] {e}")
                 break
 
-    def record_trade_decision(self, context, decided_at=None):
+    def record_trade_decision(self, context, trade_id=None, data_log_id=None, decided_at=None):
         """Logs a trade decision for the 'Decision Log'.
-        Only inserts into columns that exist in the schema: context, decidedAt.
+        Inserts all columns required by the Prisma schema, setting unused to NULL.
         """
+        from uuid import uuid4
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             now = decided_at or datetime.utcnow().isoformat()
-            cursor.execute("""
-                INSERT INTO TradeDecision (context, decidedAt)
-                VALUES (?, ?)
-            """, (context, now))
+            # Insert all columns, set unused to None/NULL
+            cursor.execute(
+                """
+                INSERT INTO TradeDecision (
+                    id, tradeId, dataLogId, context, decidedAt
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (str(uuid4()), trade_id, data_log_id, context, now)
+            )
             conn.commit()
             conn.close()
-        except Exception as e: print(f"   ❌ [DB Error] {e}")
+        except Exception as e:
+            print(f"   ❌ [DB Error] {e}")
     def __init__(self, db_path="agent/agent_state.db"):
         # Match the path used in your start_all.sh/Prisma logs
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -126,23 +126,31 @@ class PredictiveAgent:
                                 trade_size = float(await self.wallet.get_token_balance(wxtz_addr)) * conf * 0.99
                             except Exception:
                                 trade_size = 0
+                    # If a trade was executed, try to log the tradeId if available
+                    trade_id = None
+                    if hasattr(self.trading, 'last_trade_id'):
+                        trade_id = getattr(self.trading, 'last_trade_id', None)
                     self.state_db.record_trade_decision(
-                        context=decision.get('reasoning', "Strategy execution.")
+                        context=decision.get('reasoning', "Strategy execution."),
+                        trade_id=trade_id
                     )
                     print(f"   ✅ [Decision Log] Trade recorded successfully.")
                     print(f"   ✅ [Position Updated] Agent is now {bias}")
                 else:
                     print(f"   ❌ [Position Error] Trade failed. Position remains {self.current_position}")
             else:
-                # NEW: Exit logic to truly reach NEUTRAL state
-                print(f"   🛑 [Exit] Trend weakened. Closing current {self.current_position} position.")
-                success = await self.execute_move("NEUTRAL", 0.0)
+                # NEW: Smart Exit logic scales out based on AI confidence
+                print(f"   🛑 [Exit] Trend weakened. Scaling out of {self.current_position} (Conviction: {conf:.2f}).")
+                # Pass the actual AI 'conf' instead of a hardcoded 0.0
+                success = await self.execute_move("NEUTRAL", conf)
                 if success:
-                    self.current_position = "NEUTRAL"
-                    self.last_trade_confidence = 0.0
-                    print(f"   ✅ [Position Updated] Agent is now NEUTRAL (no open position)")
+                    # If AI is highly confident about neutralizing (>80%), fully reset the state
+                    if conf > 0.80:
+                        self.current_position = "NEUTRAL"
+                    self.last_trade_confidence = conf
+                    print(f"   ✅ [Position Updated] Agent scaled out. Current stance: {self.current_position}")
                 else:
-                    print(f"   ❌ [Exit Error] Failed to close position. Still {self.current_position}")
+                    print(f"   ❌ [Exit Error] Failed to scale out position.")
         else:
             print(f"   ⏳ [Hold] Maintaining {self.current_position} position.")
 
@@ -180,29 +188,32 @@ class PredictiveAgent:
             result = await self.trading.execute_swap("WXTZ", "USDC", size)
             return True if result else False
         elif action == "NEUTRAL":
-            # Exit logic: Close any open position by swapping all to USDC
+            # Cap at 0.99 to prevent the "Insufficient Balance" floating point crash
+            safe_conf = min(confidence, 0.99)
+            # Ensure it scales out at least 25% if the AI returns a surprisingly low conviction
+            scale_factor = max(safe_conf, 0.25)
+            print(f"   ⚖️ [Exit] Dynamically neutralizing {scale_factor * 100:.1f}% of active position.")
             if self.current_position == "LONG":
                 wxtz_addr = os.getenv("WXTZ_ADDRESS")
                 if not wxtz_addr:
                     print("   ❌ [Exit Error] WXTZ address not set in environment.")
                     return False
                 bal = float(await self.wallet.get_token_balance(wxtz_addr))
-                if bal == 0.0:
-                    print(f"   ⚠️ [Exit] No WXTZ to close LONG position.")
-                    return True  # Already neutral
-                result = await self.trading.execute_swap("WXTZ", "USDC", bal)
-                return True if result else False
+                if bal > 0.0:
+                    exit_size = bal * scale_factor
+                    result = await self.trading.execute_swap("WXTZ", "USDC", exit_size)
+                    return True if result else False
+                return True
             elif self.current_position == "SHORT":
                 usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
                 if not usdc_addr:
                     print("   ❌ [Exit Error] USDC address not set in environment.")
                     return False
                 bal = float(await self.wallet.get_token_balance(usdc_addr))
-                if bal == 0.0:
-                    print(f"   ⚠️ [Exit] No USDC to close SHORT position.")
-                    return True  # Already neutral
-                # If you want to rebalance, you could implement logic here
-                # For now, just acknowledge
+                if bal > 0.0:
+                    exit_size = bal * scale_factor
+                    result = await self.trading.execute_swap("USDC", "WXTZ", exit_size)
+                    return True if result else False
                 return True
             else:
                 print(f"   ℹ️ [Exit] Already NEUTRAL. No position to close.")
