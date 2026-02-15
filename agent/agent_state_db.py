@@ -12,7 +12,7 @@ class AgentStateDB:
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
-                now = datetime.utcnow().isoformat()
+                now = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
                 cursor.execute("UPDATE AlphaNode SET lastPurchaseTime = ? WHERE title = ?", (now, node_title))
                 # Insert into AgentActivity with required fields only, including id
                 cursor.execute("""
@@ -49,7 +49,7 @@ class AgentStateDB:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            now = decided_at or datetime.utcnow().isoformat()
+            now = decided_at or datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
             # Insert all columns, set unused to None/NULL
             cursor.execute(
                 """

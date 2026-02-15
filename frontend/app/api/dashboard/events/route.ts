@@ -1,36 +1,35 @@
-import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-let clients: Response[] = [];
+export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
+export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
 
-  // Write initial headers for SSE
-  writer.write(encoder.encode("retry: 10000\n\n"));
+  const stream = new ReadableStream({
+    async start(controller) {
+      const sendEvent = (data: any) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
 
-  // Store client
-  clients.push(writer);
+      // Send initial connection message
+      sendEvent({ type: "system", message: "Live terminal connected." });
 
-  // Remove client on close
-  request.signal.addEventListener("abort", () => {
-    clients = clients.filter((c) => c !== writer);
-    writer.close();
+      // Keep connection alive
+      const keepAlive = setInterval(() => {
+        sendEvent({ type: "ping" });
+      }, 15000);
+
+      req.signal.addEventListener("abort", () => {
+        clearInterval(keepAlive);
+      });
+    },
   });
 
-  return new Response(readable, {
+  return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     },
   });
-}
-
-// Helper to broadcast events to all clients
-export function broadcastEvent(data: any) {
-  const encoder = new TextEncoder();
-  const msg = `data: ${JSON.stringify(data)}\n\n`;
-  clients.forEach((writer) => writer.write(encoder.encode(msg)));
 }
