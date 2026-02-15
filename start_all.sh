@@ -42,11 +42,14 @@ echo "📒 Starting Registry/Discovery Service..."
 # 2. Start Demo Provider Microservices (Unified)
 echo "📡 Starting Demo Node Providers..."
 if [ -f "$SCRIPT_DIR/server/start_demo_providers.js" ]; then
-    node "$SCRIPT_DIR/server/start_demo_providers.js" &
+        node "$SCRIPT_DIR/server/start_demo_providers.js" &
         DEMO_PROVIDERS_PID=$!
         echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID)"
 else
-        echo "   ❌ Error: start_demo_providers.js not found in $SCRIPT_DIR/server/"
+        cd "$SCRIPT_DIR/agent" && ./start_demo_providers.sh &
+        DEMO_PROVIDERS_PID=$!
+        echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID) (agent dir)"
+        cd "$SCRIPT_DIR"
 fi
 sleep 2
 

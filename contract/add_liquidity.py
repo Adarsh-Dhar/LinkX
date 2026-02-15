@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RPC_URL = os.getenv("RPC_URL")
-PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 USDC_ADDR = os.getenv("USDC_CONTRACT")
-WXTZ_ADDR = os.getenv("WXTZ_ADDRESS") 
+WXTZ_ADDR = os.getenv("WXTZ_ADDRESS")
 ROUTER_ADDR = os.getenv("VVS_ROUTER_ADDR")
 
 ERC20_ABI = [
@@ -30,6 +30,10 @@ ROUTER_ABI = [
 def main():
     print("💧 Adding Liquidity to USDC/TWXTZ Pool...")
     
+    print(f"[DEBUG] PRIVATE_KEY: {PRIVATE_KEY}")
+    print(f"[DEBUG] USDC_ADDR: {USDC_ADDR}")
+    print(f"[DEBUG] WXTZ_ADDR: {WXTZ_ADDR}")
+    print(f"[DEBUG] ROUTER_ADDR: {ROUTER_ADDR}")
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     account = w3.eth.account.from_key(PRIVATE_KEY)
     print(f"✅ Wallet: {account.address}")

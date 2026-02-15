@@ -35,7 +35,7 @@ export function DecisionLog() {
         </TableHeader>
         <TableBody>
           {decisions.length === 0 ? (
-            <TableRow><TableCell colSpan={3} className="text-center">No decisions yet.</TableCell></TableRow>
+            <TableRow key="no-data"><TableCell colSpan={3} className="text-center">No decisions yet.</TableCell></TableRow>
           ) : (
             decisions.map((d) => {
               let details = { action: "ANALYSIS", amount: "N/A" };

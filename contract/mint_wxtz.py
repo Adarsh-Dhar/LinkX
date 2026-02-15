@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RPC_URL = os.getenv("RPC_URL", "https://node.shadownet.etherlink.com")
-PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 WXTZ_ADDR = os.getenv("WXTZ_ADDRESS")
 
 # Try different mint function signatures

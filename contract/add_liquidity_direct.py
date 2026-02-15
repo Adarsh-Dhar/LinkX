@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RPC_URL = os.getenv("RPC_URL")
-PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 USDC_ADDR = Web3.to_checksum_address(os.getenv("USDC_CONTRACT").strip("'\""))
 WXTZ_ADDR = Web3.to_checksum_address(
     (os.getenv("WXTZ_ADDRESS") or "0x03a6A5223BF91016175cD95fd8776351843F4998").strip("'\"")
