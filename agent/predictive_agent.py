@@ -131,7 +131,12 @@ class PredictiveAgent:
                     if hasattr(self.trading, 'last_trade_id'):
                         trade_id = getattr(self.trading, 'last_trade_id', None)
                     self.state_db.record_trade_decision(
-                        context=decision.get('reasoning', "Strategy execution."),
+                        context={
+                            "action": decision.get('action', 'N/A'),
+                            "ticker": decision.get('ticker', 'N/A'),
+                            "signal": decision.get('confidence', 'N/A'),
+                            "reason": decision.get('reasoning', "Strategy execution.")
+                        },
                         trade_id=trade_id
                     )
                     print(f"   ✅ [Decision Log] Trade recorded successfully.")
@@ -173,7 +178,12 @@ class PredictiveAgent:
                 print(f"   ⚠️ [Trade Refused] Wallet USDC balance is zero. Cannot execute LONG.")
                 return False
             size = bal * confidence * 0.99
-            self.state_db.record_trade_decision(f"🚀 Executing {action} swap: {size} USDC -> WXTZ")
+            self.state_db.record_trade_decision({
+                "action": action,
+                "ticker": "USDC/WXTZ",
+                "signal": confidence,
+                "reason": f"Executing {action} swap of {size} USDC"
+            })
             result = await self.trading.execute_swap("USDC", "WXTZ", size)
             return True if result else False
         elif action == "SHORT":
@@ -186,7 +196,12 @@ class PredictiveAgent:
                 print(f"   ⚠️ [Trade Refused] Wallet WXTZ balance is zero. Cannot execute SHORT.")
                 return False
             size = bal * confidence * 0.99
-            self.state_db.record_trade_decision(f"🚀 Executing {action} swap: {size} WXTZ -> USDC")
+            self.state_db.record_trade_decision({
+                "action": action,
+                "ticker": "WXTZ/USDC",
+                "signal": confidence,
+                "reason": f"Executing {action} swap of {size} WXTZ"
+            })
             result = await self.trading.execute_swap("WXTZ", "USDC", size)
             return True if result else False
         elif action == "NEUTRAL":
@@ -203,7 +218,12 @@ class PredictiveAgent:
                 bal = float(await self.wallet.get_token_balance(wxtz_addr))
                 if bal > 0.0:
                     exit_size = bal * scale_factor
-                    self.state_db.record_trade_decision(f"🚀 Executing NEUTRAL swap: {exit_size} WXTZ -> USDC")
+                    self.state_db.record_trade_decision({
+                        "action": "NEUTRAL",
+                        "ticker": "WXTZ/USDC",
+                        "signal": scale_factor,
+                        "reason": f"Executing NEUTRAL swap of {exit_size} WXTZ"
+                    })
                     result = await self.trading.execute_swap("WXTZ", "USDC", exit_size)
                     return True if result else False
                 return True
@@ -215,7 +235,12 @@ class PredictiveAgent:
                 bal = float(await self.wallet.get_token_balance(usdc_addr))
                 if bal > 0.0:
                     exit_size = bal * scale_factor
-                    self.state_db.record_trade_decision(f"🚀 Executing NEUTRAL swap: {exit_size} USDC -> WXTZ")
+                    self.state_db.record_trade_decision({
+                        "action": "NEUTRAL",
+                        "ticker": "USDC/WXTZ",
+                        "signal": scale_factor,
+                        "reason": f"Executing NEUTRAL swap of {exit_size} USDC"
+                    })
                     result = await self.trading.execute_swap("USDC", "WXTZ", exit_size)
                     return True if result else False
                 return True

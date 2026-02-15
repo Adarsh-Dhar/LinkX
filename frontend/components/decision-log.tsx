@@ -38,7 +38,21 @@ export function DecisionLog() {
                   minute: '2-digit',
                   second: '2-digit'
                 }) : ''}
-              </span> <b>{entry.action}</b> on <b>{entry.token}</b> (Signal: {entry.signal}, Reason: {entry.reason})
+              </span>
+              {(() => {
+                let details = { action: "N/A", ticker: "N/A", signal: "N/A", reason: entry.context };
+                try {
+                  if (entry.context && typeof entry.context === 'string' && entry.context.startsWith('{')) {
+                    const parsed = JSON.parse(entry.context);
+                    details = { ...details, ...parsed };
+                  }
+                } catch (e) {}
+                return (
+                  <>
+                    <b>{details.action}</b> on <b>{details.ticker}</b> (Signal: {details.signal !== "N/A" ? `${(Number(details.signal) * 100).toFixed(0)}%` : "N/A"}, Reason: {details.reason})
+                  </>
+                );
+              })()}
             </div>
           ))
         )}

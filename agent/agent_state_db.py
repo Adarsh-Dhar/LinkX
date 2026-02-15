@@ -46,18 +46,24 @@ class AgentStateDB:
         Inserts all columns required by the Prisma schema, setting unused to NULL.
         """
         from uuid import uuid4
+        from datetime import datetime
+        import json
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            now = decided_at or datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
-            # Insert all columns, set unused to None/NULL
+            now = decided_at or (datetime.utcnow().isoformat(timespec='milliseconds') + 'Z')
+            # If context is a dictionary (structured), convert to JSON string
+            if isinstance(context, dict):
+                context_str = json.dumps(context)
+            else:
+                context_str = context
             cursor.execute(
                 """
                 INSERT INTO TradeDecision (
                     id, tradeId, dataLogId, context, decidedAt
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
-                (str(uuid4()), trade_id, data_log_id, context, now)
+                (str(uuid4()), trade_id, data_log_id, context_str, now)
             )
             conn.commit()
             conn.close()
