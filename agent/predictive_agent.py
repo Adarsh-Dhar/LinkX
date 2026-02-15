@@ -169,53 +169,59 @@ class PredictiveAgent:
     async def execute_move(self, action, confidence):
         # Minimum floor check: refuse to trade if balance * confidence is too small for DEX liquidity
         # Removed minimum trade size restrictions
-            # Get addresses from env
-            wxtz_addr = os.getenv("WXTZ_ADDRESS")
-            usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
+        # Get addresses from env
+        wxtz_addr = os.getenv("WXTZ_ADDRESS")
+        usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
 
-            # 1. Verify addresses are actually loaded
-            if not wxtz_addr or not usdc_addr:
-                print(f"   ❌ [DEBUG] Env Error: WXTZ={wxtz_addr}, USDC={usdc_addr}")
-                return False
-
-            if action == "LONG":
-                # LONG: Swap WXTZ -> USDC
-                token_in, token_out = "WXTZ", "USDC"
-                addr_in = wxtz_addr
-                if not addr_in:
-                    print("   ❌ [Trade Error] WXTZ_ADDRESS not set in environment. Cannot execute LONG.")
-                    return False
-            elif action == "SHORT":
-                # SHORT: Swap USDC -> WXTZ
-                token_in, token_out = "USDC", "WXTZ"
-                addr_in = usdc_addr
-                if not addr_in:
-                    print("   ❌ [Trade Error] USDC_ADDRESS not set in environment. Cannot execute SHORT.")
-                    return False
-            else:
-                print(f"   ❌ [Trade Error] Unknown action: {action}")
-                return False
-
-            # 2. Print balance before attempting
-            bal = float(await self.wallet.get_token_balance(addr_in))
-            print(f"   🔍 [DEBUG] Balance of {token_in}: {bal}")
-            if bal <= 0:
-                print(f"   ❌ [Trade Error] No {token_in} balance to go {action}")
-                return False
-            amount_in = bal * confidence * 0.99
-
-            # 3. Capture the swap result
-            result = await self.trading.execute_swap(token_in, token_out, amount_in)
-            if not result:
-                print(f"   ❌ [DEBUG] Blockchain Execution Failed. Check Gas (XTZ) or Router Allowance.")
-                return False
-
-            # Log structured data for the frontend
-            self.state_db.record_trade_decision({
-                "action": action,
-                "amount": f"{amount_in:.2f} {token_in}",
-                "ticker": f"{token_in}/{token_out}"
-            })
-            return True  # Explicitly return True so the caller knows it worked
+        # 1. Verify addresses are actually loaded
+        if not wxtz_addr or not usdc_addr:
+            print(f"   ❌ [DEBUG] Env Error: WXTZ={wxtz_addr}, USDC={usdc_addr}")
             return False
-            # ...rest of function...
+
+        if action == "LONG":
+            # LONG: Swap WXTZ -> USDC
+            token_in, token_out = "WXTZ", "USDC"
+            addr_in = wxtz_addr
+            if not addr_in:
+                print("   ❌ [Trade Error] WXTZ_ADDRESS not set in environment. Cannot execute LONG.")
+                return False
+        elif action == "SHORT":
+            # SHORT: Swap USDC -> WXTZ
+            token_in, token_out = "USDC", "WXTZ"
+            addr_in = usdc_addr
+            if not addr_in:
+                print("   ❌ [Trade Error] USDC_ADDRESS not set in environment. Cannot execute SHORT.")
+                return False
+        elif action == "NEUTRAL":
+            # Neutral means sell whichever bag we are holding back to 50/50 or dump.
+            # For now, let's just close the LONG if we are in one.
+            token_in, token_out = "WXTZ", "USDC"
+            addr_in = wxtz_addr
+        else:
+            print(f"   ❌ [Trade Error] Unknown action: {action}")
+            return False
+
+        # 2. Print balance before attempting
+        bal = float(await self.wallet.get_token_balance(addr_in))
+        print(f"   🔍 [DEBUG] Balance of {token_in}: {bal}")
+        if bal <= 0:
+            print(f"   ❌ [Trade Error] No {token_in} balance to go {action}")
+            return False
+
+        # Weight the trade by confidence (Use 1.0 for Neutral exits to fully close)
+        factor = confidence if action != "NEUTRAL" else 1.0
+        amount_in = bal * factor * 0.99
+
+        # 3. Capture the swap result
+        result = await self.trading.execute_swap(token_in, token_out, amount_in)
+        if not result:
+            print(f"   ❌ [DEBUG] Blockchain Execution Failed. Check Gas (XTZ) or Router Allowance.")
+            return False
+
+        # Log structured data for the frontend
+        self.state_db.record_trade_decision({
+            "action": action,
+            "amount": f"{amount_in:.2f} {token_in}",
+            "ticker": f"{token_in}/{token_out}"
+        })
+        return True  # Explicitly return True so the caller knows it worked
