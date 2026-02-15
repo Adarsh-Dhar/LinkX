@@ -38,11 +38,16 @@ sleep 2
 # 2. Start Registry/Discovery Service
 echo "📒 Starting Registry/Discovery Service..."
 
+
 # 2. Start Demo Provider Microservices (Unified)
 echo "📡 Starting Demo Node Providers..."
-"$SCRIPT_DIR/start_demo_providers.sh" &
-DEMO_PROVIDERS_PID=$!
-echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID)"
+if [ -f "$SCRIPT_DIR/server/start_demo_providers.js" ]; then
+        node "$SCRIPT_DIR/server/start_demo_providers.js" &
+        DEMO_PROVIDERS_PID=$!
+        echo "   ✅ Demo Providers Launched (PID: $DEMO_PROVIDERS_PID)"
+else
+        echo "   ❌ Error: start_demo_providers.js not found in $SCRIPT_DIR/server/"
+fi
 sleep 2
 
 # 3. (SKIPPED) Provider Microservices (legacy provider.js) are not used. All providers are now in demo_providers.js

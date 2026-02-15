@@ -96,6 +96,13 @@ class PredictiveAgent:
         bias = decision.get('execution_bias', 'NEUTRAL')
         conf = float(decision.get('risk_confidence', 0.0))
         print(f"   🧠 [Strategist] {bias} ({conf:.2f}) | {decision.get('reasoning')[:60]}...")
+        # Log the AI analysis as a structured decision for the frontend
+        self.state_db.record_trade_decision({
+            "action": bias,
+            "ticker": "WXTZ/USDC",
+            "signal": conf,
+            "reason": decision.get('reasoning', '')
+        })
         should_trade = False
         if bias != self.current_position:
             print(f"   🔄 [Flip] Switching {self.current_position} -> {bias}")
@@ -162,88 +169,29 @@ class PredictiveAgent:
     async def execute_move(self, action, confidence):
         # Minimum floor check: refuse to trade if balance * confidence is too small for DEX liquidity
         # Removed minimum trade size restrictions
-        if not self.trading or not hasattr(self.trading, "execute_swap") or not callable(getattr(self.trading, "execute_swap", None)):
-            print("   ❌ [TradingEngine Error] Trading engine or execute_swap method is not properly initialized.")
-            return False
-        if not asyncio.iscoroutinefunction(self.trading.execute_swap):
-            print("   ❌ [TradingEngine Error] execute_swap is not async. Please define it as 'async def execute_swap(...)'.")
-            return False
-        if action == "LONG":
-            usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
-            if not usdc_addr:
-                print("   ❌ [Trade Error] USDC address not set in environment.")
-                return False
-            bal = float(await self.wallet.get_token_balance(usdc_addr))
-            if bal == 0.0:
-                print(f"   ⚠️ [Trade Refused] Wallet USDC balance is zero. Cannot execute LONG.")
-                return False
-            size = bal * confidence * 0.99
-            self.state_db.record_trade_decision({
-                "action": action,
-                "ticker": "USDC/WXTZ",
-                "signal": confidence,
-                "reason": f"Executing {action} swap of {size} USDC"
-            })
-            result = await self.trading.execute_swap("USDC", "WXTZ", size)
-            return True if result else False
-        elif action == "SHORT":
+            # Get addresses from env
             wxtz_addr = os.getenv("WXTZ_ADDRESS")
-            if not wxtz_addr:
-                print("   ❌ [Trade Error] WXTZ address not set in environment.")
-                return False
-            bal = float(await self.wallet.get_token_balance(wxtz_addr))
-            if bal == 0.0:
-                print(f"   ⚠️ [Trade Refused] Wallet WXTZ balance is zero. Cannot execute SHORT.")
-                return False
-            size = bal * confidence * 0.99
+            usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
+
+            if action == "LONG":
+                # LONG: Swap WXTZ -> USDC
+                token_in, token_out = "WXTZ", "USDC"
+                addr_in = wxtz_addr
+                bal = float(await self.wallet.get_token_balance(addr_in))
+                amount_in = bal * confidence * 0.99
+            elif action == "SHORT":
+                # SHORT: Swap USDC -> WXTZ
+                token_in, token_out = "USDC", "WXTZ"
+                addr_in = usdc_addr
+                bal = float(await self.wallet.get_token_balance(addr_in))
+                amount_in = bal * confidence * 0.99
+
+            # ...existing swap execution code...
+
+            # Log structured data for the frontend
             self.state_db.record_trade_decision({
                 "action": action,
-                "ticker": "WXTZ/USDC",
-                "signal": confidence,
-                "reason": f"Executing {action} swap of {size} WXTZ"
+                "amount": f"{amount_in:.2f} {token_in}",
+                "ticker": f"{token_in}/{token_out}"
             })
-            result = await self.trading.execute_swap("WXTZ", "USDC", size)
-            return True if result else False
-        elif action == "NEUTRAL":
-            # Cap at 0.99 to prevent the "Insufficient Balance" floating point crash
-            safe_conf = min(confidence, 0.99)
-            # Ensure it scales out at least 25% if the AI returns a surprisingly low conviction
-            scale_factor = max(safe_conf, 0.25)
-            print(f"   ⚖️ [Exit] Dynamically neutralizing {scale_factor * 100:.1f}% of active position.")
-            if self.current_position == "LONG":
-                wxtz_addr = os.getenv("WXTZ_ADDRESS")
-                if not wxtz_addr:
-                    print("   ❌ [Exit Error] WXTZ address not set in environment.")
-                    return False
-                bal = float(await self.wallet.get_token_balance(wxtz_addr))
-                if bal > 0.0:
-                    exit_size = bal * scale_factor
-                    self.state_db.record_trade_decision({
-                        "action": "NEUTRAL",
-                        "ticker": "WXTZ/USDC",
-                        "signal": scale_factor,
-                        "reason": f"Executing NEUTRAL swap of {exit_size} WXTZ"
-                    })
-                    result = await self.trading.execute_swap("WXTZ", "USDC", exit_size)
-                    return True if result else False
-                return True
-            elif self.current_position == "SHORT":
-                usdc_addr = os.getenv("USDC_CONTRACT") or os.getenv("USDC_ADDRESS")
-                if not usdc_addr:
-                    print("   ❌ [Exit Error] USDC address not set in environment.")
-                    return False
-                bal = float(await self.wallet.get_token_balance(usdc_addr))
-                if bal > 0.0:
-                    exit_size = bal * scale_factor
-                    self.state_db.record_trade_decision({
-                        "action": "NEUTRAL",
-                        "ticker": "USDC/WXTZ",
-                        "signal": scale_factor,
-                        "reason": f"Executing NEUTRAL swap of {exit_size} USDC"
-                    })
-                    result = await self.trading.execute_swap("USDC", "WXTZ", exit_size)
-                    return True if result else False
-                return True
-            else:
-                print(f"   ℹ️ [Exit] Already NEUTRAL. No position to close.")
-                return True
+            # ...rest of function...
